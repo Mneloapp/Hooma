@@ -4,7 +4,6 @@ import { featuredProducts, products } from "@/data/products";
 import { Button } from "@/components/Button";
 import { FAQAccordion } from "@/components/FAQAccordion";
 import { Hero } from "@/components/Hero";
-import { HowItWorksSteps } from "@/components/HowItWorksSteps";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductGrid } from "@/components/ProductGrid";
 import { SectionTitle } from "@/components/SectionTitle";
@@ -18,12 +17,22 @@ export default function Home() {
     <>
       <Hero />
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <SectionTitle eyebrow="How it works" title="Full-size comfort starts compact." />
-        <HowItWorksSteps />
-      </section>
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <SectionTitle eyebrow="Featured" title="Designed for modern rooms, delivered for real buildings." />
         <ProductGrid products={featuredProducts.slice(0, 6)} />
+      </section>
+      <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="grid gap-8 rounded-[2rem] bg-hooma-text p-6 text-white md:grid-cols-[1.2fr_0.8fr] md:p-10">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.24em] text-white/55">How it works</p>
+            <h2 className="mt-4 max-w-2xl text-3xl font-semibold md:text-5xl">Big comfort arrives in a compact box.</h2>
+          </div>
+          <div className="flex flex-col justify-end gap-5">
+            <p className="text-sm leading-6 text-white/68">Choose your model, receive it compactly packed, open it, and let it expand into full-size comfort.</p>
+            <Button href="/how-it-works" variant="secondary" className="w-fit border-white/20 bg-white/10 text-white hover:border-white/50 hover:text-white">
+              See how it works
+            </Button>
+          </div>
+        </div>
       </section>
       <section className="bg-hooma-panel py-20">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Menu, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { useCart } from "./CartContext";
+import { BrandLogo } from "./BrandLogo";
 
 const nav = [
   ["Sofas", "/shop?category=Sofas"],
@@ -21,7 +22,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-hooma-text/10 bg-hooma-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="text-lg font-semibold tracking-[0.18em]">HOOMA</Link>
+        <BrandLogo className="w-[92px]" imageClassName="max-h-12" />
         <nav className="hidden items-center gap-7 text-sm text-hooma-muted lg:flex">
           {nav.map(([label, href]) => <Link key={label} href={href} className="hover:text-hooma-text">{label}</Link>)}
         </nav>

@@ -6,7 +6,7 @@ import { CartProvider } from "@/components/CartContext";
 import { CartDrawer } from "@/components/CartDrawer";
 
 export const metadata: Metadata = {
-  title: "HOOMA | Furniture, Reimagined",
+  title: "Hooma | Furniture, Reimagined",
   description: "Premium compressed furniture for modern living.",
 };
 

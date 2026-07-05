@@ -19,7 +19,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "Inter", "system-ui", "sans-serif"],
+        sans: ["Avenir Next", "Avenir", "Nunito Sans", "Inter", "system-ui", "sans-serif"],
       },
       boxShadow: {
         soft: "0 24px 70px rgba(23, 23, 23, 0.08)",
