@@ -1,8 +1,8 @@
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getProductBySlug, getRelatedProducts, products } from "@/data/products";
 import { Badge } from "@/components/Badge";
 import { FAQAccordion } from "@/components/FAQAccordion";
+import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductGrid } from "@/components/ProductGrid";
 import { SectionTitle } from "@/components/SectionTitle";
@@ -21,16 +21,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
-          <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-hooma-panel">
-            <Image src={product.heroImage} alt={product.hoomaName} fill priority className="object-cover" sizes="(min-width: 1024px) 55vw, 100vw" />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {product.galleryImages.map((image) => (
-              <div key={image} className="relative aspect-[4/3] overflow-hidden rounded-xl bg-hooma-panel">
-                <Image src={image} alt={product.hoomaName} fill className="object-cover" sizes="(min-width: 1024px) 25vw, 50vw" />
-              </div>
-            ))}
-          </div>
+          <ProductImageGallery images={[product.heroImage, ...product.galleryImages]} name={product.hoomaName} />
         </div>
         <div>
           <Badge>{product.category}</Badge>
