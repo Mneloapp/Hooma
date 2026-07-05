@@ -3,15 +3,21 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 export type CartItem = {
-  productId: string;
-  variantId: string;
+  product_id: string;
+  variant_id: string;
+  inventory_id?: string | null;
+  product_name: string;
   name: string;
   image: string;
+  sku: string;
+  size_label: string;
   fabric: string;
   color: string;
   orientation: string;
   quantity: number;
+  price?: number | null;
   pricePlaceholder: string;
+  price_placeholder?: string;
 };
 
 type CartContextValue = {
@@ -21,13 +27,14 @@ type CartContextValue = {
   closeCart: () => void;
   addItem: (item: CartItem) => void;
   updateQuantity: (key: string, quantity: number) => void;
+  clearCart: () => void;
   count: number;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const keyFor = (item: Pick<CartItem, "productId" | "variantId" | "fabric" | "color" | "orientation">) =>
-  [item.productId, item.variantId, item.fabric, item.color, item.orientation].join("|");
+const keyFor = (item: Pick<CartItem, "product_id" | "variant_id" | "fabric" | "color" | "orientation">) =>
+  [item.product_id, item.variant_id, item.fabric, item.color, item.orientation].join("|");
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -51,6 +58,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       },
       updateQuantity: (key, quantity) =>
         setItems((current) => current.map((item) => (keyFor(item) === key ? { ...item, quantity } : item)).filter((item) => item.quantity > 0)),
+      clearCart: () => setItems([]),
       count: items.reduce((sum, item) => sum + item.quantity, 0),
     }),
     [items, isOpen],

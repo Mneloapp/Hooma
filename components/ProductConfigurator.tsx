@@ -4,9 +4,11 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import type { Product, ProductVariant } from "@/data/products";
 import { Button } from "./Button";
+import { StockBadge, getStockMessage } from "./inventory/StockBadge";
 import { SwatchSelector } from "./SwatchSelector";
 import { VariantSelector } from "./VariantSelector";
 import { useCart } from "./CartContext";
+import type { StockStatus } from "@/lib/supabase/types";
 
 export function ProductConfigurator({ product, compact = false }: { product: Product; compact?: boolean }) {
   const [variant, setVariant] = useState<ProductVariant>(product.variants[0]);
@@ -15,6 +17,17 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
   const [orientation, setOrientation] = useState("Standard");
   const [quantity, setQuantity] = useState(1);
   const { addItem } = useCart();
+  const selectedInventory = useMemo(
+    () => ({
+      id: `${variant.id}-${fabric}-${color}-${orientation}`,
+      stock_status: "coming_soon" as StockStatus,
+      quantity_available: 0,
+      low_stock_threshold: 3,
+    }),
+    [variant.id, fabric, color, orientation],
+  );
+  const hasPrice = false;
+  const canAddToCart = selectedInventory.stock_status !== "out_of_stock";
 
   const specs = useMemo(
     () => [
@@ -55,29 +68,43 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
           ))}
           <p className="mt-3 text-xs text-hooma-muted">Selected: {fabric}, {color}. Final color may vary slightly depending on fabric and lighting.</p>
         </div>
+        <div className="flex items-center justify-between rounded-xl bg-white p-4">
+          <div>
+            <p className="text-sm font-medium">Stock</p>
+            <p className="mt-1 text-xs text-hooma-muted">{getStockMessage(selectedInventory)}</p>
+          </div>
+          <StockBadge status={selectedInventory.stock_status} />
+        </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-hooma-muted">Price</span>
           <span className="font-semibold">{variant.pricePlaceholder}</span>
         </div>
         <Button
           className="w-full"
+          disabled={!canAddToCart}
           onClick={() =>
             addItem({
-              productId: product.id,
-              variantId: variant.id,
+              product_id: product.id,
+              variant_id: variant.id,
+              inventory_id: selectedInventory.id,
+              product_name: product.hoomaName,
               name: product.hoomaName,
               image: variant.image,
+              sku: variant.sku,
+              size_label: variant.sizeLabel,
               fabric,
               color,
               orientation,
               quantity,
+              price: null,
               pricePlaceholder: variant.pricePlaceholder,
+              price_placeholder: variant.pricePlaceholder,
             })
           }
         >
-          Add to Cart
+          {canAddToCart ? "Add to Cart" : "Out of Stock"}
         </Button>
-        <Button href="/contact" variant="secondary" className="w-full">Request Consultation</Button>
+        {!hasPrice ? <Button href="/contact" variant="secondary" className="w-full">Request Consultation</Button> : null}
       </div>
     </div>
   );

@@ -31,10 +31,10 @@ export function CartDrawer() {
               </div>
               <div>
                 <div className="flex justify-between gap-3">
-                  <h3 className="font-medium">{item.name}</h3>
-                  <span className="text-sm text-hooma-muted">{item.pricePlaceholder}</span>
+                  <h3 className="font-medium">{item.product_name}</h3>
+                  <span className="text-sm text-hooma-muted">{item.price ?? item.pricePlaceholder}</span>
                 </div>
-                <p className="mt-1 text-xs text-hooma-muted">{item.fabric} / {item.color} / {item.orientation}</p>
+                <p className="mt-1 text-xs text-hooma-muted">{item.size_label} / {item.fabric} / {item.color} / {item.orientation}</p>
                 <div className="mt-3 flex items-center gap-3">
                   <button className="h-8 w-8 rounded-full border border-hooma-text/15" onClick={() => updateQuantity(keyFor(item), item.quantity - 1)}>-</button>
                   <span className="text-sm">{item.quantity}</span>
