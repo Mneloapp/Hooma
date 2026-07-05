@@ -5,7 +5,7 @@ import { useState } from "react";
 
 export const faqs = [
   ["How does compressed furniture work?", "The furniture is packed compactly for delivery, then expands after opening. Exact expansion timing can vary by model, room temperature, and fabric."],
-  ["Are prices available?", "Not yet. Product pages currently use request-price placeholders until HOOMA finalizes pricing."],
+  ["Are prices available?", "Not yet. Product pages currently use request-price placeholders until Hooma finalizes pricing."],
   ["Can I choose fabric and color?", "Yes. The configurator is prepared for fabric and color choices. Final availability should be confirmed before order."],
   ["Will the final color match the screen?", "Final color may vary slightly depending on fabric and lighting."],
 ];

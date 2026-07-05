@@ -5,19 +5,21 @@ import { Menu, ShoppingBag, UserRound } from "lucide-react";
 import { useState } from "react";
 import { useCart } from "./CartContext";
 import { BrandLogo } from "./BrandLogo";
-
-const nav = [
-  ["Sofas", "/shop?category=Sofas"],
-  ["Sofa Beds", "/shop?category=Sofa%20Beds"],
-  ["Lounge Chairs", "/shop?category=Lounge%20Chairs"],
-  ["Ottomans", "/shop?category=Ottomans"],
-  ["Pet Collection", "/shop?category=Pet%20Collection"],
-  ["How it works", "/how-it-works"],
-];
+import { LanguageToggle } from "./LanguageToggle";
+import { useLanguage } from "./LanguageProvider";
 
 export function Header() {
   const [open, setOpen] = useState(false);
   const { openCart, count } = useCart();
+  const { t } = useLanguage();
+  const nav = [
+    [t.header.sofas, "/shop?category=Sofas"],
+    [t.header.sofaBeds, "/shop?category=Sofa%20Beds"],
+    [t.header.loungeChairs, "/shop?category=Lounge%20Chairs"],
+    [t.header.ottomans, "/shop?category=Ottomans"],
+    [t.header.petCollection, "/shop?category=Pet%20Collection"],
+    [t.header.howItWorks, "/how-it-works"],
+  ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-hooma-text/10 bg-hooma-background/90 backdrop-blur-xl">
@@ -27,12 +29,15 @@ export function Header() {
           {nav.map(([label, href]) => <Link key={label} href={href} className="hover:text-hooma-text">{label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">
+          <div className="hidden lg:block">
+            <LanguageToggle />
+          </div>
           <Link
             href="/login"
             className="hidden min-h-10 items-center gap-2 rounded-full border border-hooma-text/10 bg-white/55 px-4 text-sm font-medium transition hover:border-hooma-accent hover:text-hooma-accent lg:inline-flex"
           >
             <UserRound size={16} />
-            Login
+            {t.header.login}
           </Link>
           <button onClick={openCart} aria-label="Open cart" className="relative rounded-full p-2 hover:bg-hooma-panel">
             <ShoppingBag size={20} />
@@ -46,9 +51,12 @@ export function Header() {
       {open ? (
         <nav className="grid gap-1 border-t border-hooma-text/10 px-4 py-4 text-sm lg:hidden">
           {nav.map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 hover:bg-hooma-panel">{label}</Link>)}
+          <div className="px-3 py-2">
+            <LanguageToggle />
+          </div>
           <Link href="/login" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-hooma-panel">
             <UserRound size={16} />
-            Login / Account
+            {t.header.loginAccount}
           </Link>
         </nav>
       ) : null}

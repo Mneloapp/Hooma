@@ -9,7 +9,7 @@ import { SectionTitle } from "@/components/SectionTitle";
 const details = [
   {
     title: "Compact by design",
-    copy: "HOOMA products are selected around a simple promise: large, comfortable furniture that can arrive in a more manageable package.",
+    copy: "Hooma products are selected around a simple promise: large, comfortable furniture that can arrive in a more manageable package.",
     icon: Box,
   },
   {
@@ -43,7 +43,7 @@ export default function HowItWorks() {
             <p className="text-sm font-medium uppercase tracking-[0.24em] text-hooma-accent">How it works</p>
             <h1 className="mt-5 text-5xl font-semibold leading-none md:text-7xl">From compact box to full-size comfort.</h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-hooma-muted">
-              HOOMA makes premium compressed furniture easier to bring home, unpack, and live with.
+              Hooma makes premium compressed furniture easier to bring home, unpack, and live with.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Button href="/shop">Shop collection</Button>
@@ -116,7 +116,7 @@ export default function HowItWorks() {
               <p className="mt-4 text-sm leading-6 text-hooma-muted">Large furniture can become a puzzle at the doorway, stairwell, or elevator.</p>
             </div>
             <div className="rounded-[2rem] bg-hooma-accent p-7 text-white">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-white/60">HOOMA delivery</p>
+              <p className="text-sm font-medium uppercase tracking-[0.24em] text-white/60">Hooma delivery</p>
               <h2 className="mt-4 text-3xl font-semibold">Compact first, comfort after opening.</h2>
               <p className="mt-4 text-sm leading-6 text-white/72">The package moves more easily, then expands into the piece you wanted.</p>
             </div>
