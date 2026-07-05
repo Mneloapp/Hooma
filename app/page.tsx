@@ -1,10 +1,9 @@
 import Image from "next/image";
 import { ArrowRight, Check } from "lucide-react";
-import { featuredProducts, products } from "@/data/products";
+import { featuredProducts } from "@/data/products";
 import { Button } from "@/components/Button";
 import { FAQAccordion } from "@/components/FAQAccordion";
 import { Hero } from "@/components/Hero";
-import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductGrid } from "@/components/ProductGrid";
 import { Reveal } from "@/components/Reveal";
 import { SectionTitle } from "@/components/SectionTitle";
@@ -12,8 +11,6 @@ import { SectionTitle } from "@/components/SectionTitle";
 const reasons = ["Fits through doors and elevators", "Easier delivery", "Smart packaging", "Premium comfort", "Modern design"];
 
 export default function Home() {
-  const previewProduct = products.find((product) => product.slug === "hooma-cotton") ?? products[0];
-
   return (
     <>
       <Hero />
@@ -56,19 +53,6 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </Reveal>
-        </div>
-      </section>
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <Reveal>
-          <SectionTitle eyebrow="Configurator" title="Preview your model before you order." copy="Choose size, fabric, color, orientation, and quantity. Prices remain request-only until launch." />
-        </Reveal>
-        <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
-          <Reveal className="relative min-h-[520px] overflow-hidden rounded-2xl bg-hooma-panel">
-            <Image src={previewProduct.heroImage} alt={previewProduct.hoomaName} fill className="object-cover" sizes="(min-width: 1024px) 55vw, 100vw" />
-          </Reveal>
-          <Reveal delay={120}>
-            <ProductConfigurator product={previewProduct} compact />
           </Reveal>
         </div>
       </section>
