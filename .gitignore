@@ -1,0 +1,7 @@
+.next/
+node_modules/
+.pnpm-store/
+tmp/
+tsconfig.tsbuildinfo
+.env*
+!.env.example
