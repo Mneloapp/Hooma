@@ -15,7 +15,7 @@ export function Header() {
   const { openCart, count } = useCart();
   const deliveryCities = ["თბილისი", "ბათუმი", "ქუთაისი", "რუსთავი", "გორი", "ზუგდიდი", "ფოთი", "თელავი", "სხვა ქალაქი"];
   const utilityLinks = [
-    ["დღის შეთავაზებები", "/#deals"],
+    ["დღის შეთავაზებები", "/deals"],
     ["როგორ შევუკვეთოთ?", "/how-it-works"],
     ["შეკვეთის ტრეკინგი", "/account/orders"],
     ["ინდივიდუალური შეკვეთა", "/account/custom-orders"],

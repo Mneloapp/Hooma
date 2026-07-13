@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
+import { ArrowRight, BadgePercent, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
 import { catalogCategories } from "@/data/catalog";
 import { products } from "@/data/products";
 import { Button } from "@/components/Button";
@@ -42,9 +42,14 @@ export default function Home() {
   return (
     <main className="bg-hooma-panel/60 pb-16">
       <div className="mx-auto max-w-[1480px] space-y-5 px-4 pt-5 sm:px-6 lg:px-8">
-        <div id="deals" className="scroll-mt-32">
-          <ProductShelf eyebrow="3D printed in Tbilisi" title={georgian ? "დღის შეთავაზებები" : "Today’s picks"} products={products.slice(0, 7)} href="/shop" />
-        </div>
+        <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-hooma-text text-white md:grid-cols-[1fr_auto] md:items-center">
+          <div className="p-6 sm:p-8">
+            <div className="flex items-center gap-3 text-[#c8d8bd]"><BadgePercent size={22} /><p className="text-xs font-semibold uppercase tracking-[0.18em]">Hooma daily deals</p></div>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{georgian ? "100 განსხვავებული პროდუქტი ყოველდღე −50%-ად" : "100 different products at 50% off every day"}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">{georgian ? "შეთავაზებები თბილისის დროით ყოველ დღე იცვლება. ფასდაკლება მოქმედებს მხოლოდ იმ დღის შერჩეულ პროდუქტებზე." : "Deals rotate every day on Tbilisi time and apply only to that day’s selected products."}</p>
+          </div>
+          <div className="border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8"><Button href="/deals" variant="secondary" className="border-white/15 bg-white text-hooma-text">{georgian ? "დღის შეთავაზებების ნახვა" : "See today’s deals"}<ArrowRight size={15} className="ml-2" /></Button></div>
+        </section>
 
         <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-gradient-to-r from-[#dbe6d5] via-[#f0efe8] to-[#e7d9ca] sm:grid-cols-3">
           {[

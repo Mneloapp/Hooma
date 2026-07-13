@@ -23,9 +23,11 @@ Required environment variables for persisted test orders:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+CRON_SECRET=
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. Never expose it through a `NEXT_PUBLIC_` variable.
+`CRON_SECRET` protects the daily-deal rotation endpoint. See `docs/daily-deals.md` for the 100-product, 50%-off rotation rules.
 
 Apply Supabase migrations in chronological order from `supabase/migrations`.
 
