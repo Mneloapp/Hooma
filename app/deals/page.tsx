@@ -40,7 +40,7 @@ export default async function DailyDealsPage() {
         {deals.length ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {deals.map((deal) => (
-              <Link key={`${deal.dealDate}-${deal.productId}`} href={`/product/${deal.slug}`} className="group overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
+              <Link key={`${deal.dealDate}-${deal.productId}`} href={`/deals/${deal.slug}`} className="group overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
                 <div className="relative aspect-[4/3] overflow-hidden bg-hooma-panel">
                   <Image src={deal.image} alt={deal.name} fill className="object-cover transition duration-500 group-hover:scale-[1.025]" sizes="(min-width: 1280px) 25vw, (min-width: 640px) 50vw, 100vw" />
                   <span className="absolute left-4 top-4 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow">−50%</span>

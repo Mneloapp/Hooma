@@ -12,6 +12,7 @@ type AuthState = {
 };
 
 const getString = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function loginAction(_state: AuthState, formData: FormData): Promise<AuthState> {
   const supabase = await createClient();
@@ -104,19 +105,57 @@ export async function createOrderAction(formData: FormData) {
   }
   if (!admin) return { ok: false, message: "Test order storage is not connected yet. Add the server-only Supabase service role key." };
 
-  const authoritativeItems = payload.items.map((item) => {
+  const authoritativeItems = await Promise.all(payload.items.map(async (item) => {
     const catalogProduct = products.find((product) => product.id === item.product_id);
-    const variant = catalogProduct?.variants.find((candidate) => candidate.id === item.variant_id);
     const quantity = Number(item.quantity);
-    if (!catalogProduct || !variant || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) return null;
-    const material = variant.availableMaterials.includes(item.material ?? "") ? item.material! : variant.availableMaterials[0];
-    const color = variant.availableColors.includes(item.color ?? "") ? item.color! : variant.availableColors[0];
-    return { catalogProduct, variant, quantity, material, color };
-  });
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) return null;
+
+    if (catalogProduct) {
+      const variant = catalogProduct.variants.find((candidate) => candidate.id === item.variant_id);
+      if (!variant) return null;
+      const material = variant.availableMaterials.includes(item.material ?? "") ? item.material! : variant.availableMaterials[0];
+      const color = variant.availableColors.includes(item.color ?? "") ? item.color! : variant.availableColors[0];
+      return { productId: null, variantId: null, productName: catalogProduct.hoomaName, variant, unitPrice: variant.price, quantity, material, color };
+    }
+
+    if (!uuidPattern.test(item.product_id) || !uuidPattern.test(item.variant_id)) return null;
+    const { data: variant, error: variantError } = await admin
+      .from("product_variants")
+      .select("id, product_id, sku, size_label, material, available_colors, is_active, products!inner(hooma_name, status, production_status)")
+      .eq("id", item.variant_id)
+      .eq("product_id", item.product_id)
+      .eq("is_active", true)
+      .eq("products.status", "active")
+      .eq("products.production_status", "approved")
+      .maybeSingle();
+    if (variantError || !variant) return null;
+
+    const { data: resolvedPrice, error: priceError } = await admin.rpc("resolve_catalog_price", {
+      requested_product_id: item.product_id,
+      requested_variant_id: item.variant_id,
+    });
+    if (priceError || typeof resolvedPrice !== "number" || resolvedPrice <= 0) return null;
+
+    const joinedProduct = Array.isArray(variant.products) ? variant.products[0] : variant.products;
+    const availableColors = Array.isArray(variant.available_colors) && variant.available_colors.length ? variant.available_colors : ["სტანდარტული"];
+    const availableMaterials = variant.material ? [variant.material] : ["სტანდარტული"];
+    const material = availableMaterials.includes(item.material ?? "") ? item.material! : availableMaterials[0];
+    const color = availableColors.includes(item.color ?? "") ? item.color! : availableColors[0];
+    return {
+      productId: item.product_id,
+      variantId: item.variant_id,
+      productName: joinedProduct.hooma_name,
+      variant: { sku: variant.sku, sizeLabel: variant.size_label || "Standard" },
+      unitPrice: resolvedPrice,
+      quantity,
+      material,
+      color,
+    };
+  }));
   if (authoritativeItems.some((item) => item === null)) return { ok: false, message: "One or more cart items are invalid." };
 
   const safeItems = authoritativeItems.filter((item): item is NonNullable<typeof item> => item !== null);
-  const subtotal = safeItems.reduce((sum, item) => sum + (item.variant.price ?? 0) * item.quantity, 0);
+  const subtotal = safeItems.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
 
   const { data: userData } = supabase ? await supabase.auth.getUser() : { data: { user: null } };
   const user = userData.user;
@@ -158,19 +197,19 @@ export async function createOrderAction(formData: FormData) {
   const { data: order, error } = await admin.from("orders").insert(orderInsert).select("id, tracking_code").single();
   if (error || !order) return { ok: false, message: error?.message ?? "Could not create order." };
 
-  const items = safeItems.map(({ catalogProduct, variant, quantity, material, color }) => ({
+  const items = safeItems.map(({ productId, variantId, productName, variant, unitPrice, quantity, material, color }) => ({
     order_id: order.id,
-    product_id: null,
-    variant_id: null,
+    product_id: productId,
+    variant_id: variantId,
     inventory_id: null,
-    product_name: catalogProduct.hoomaName,
+    product_name: productName,
     sku: variant.sku,
     size_label: variant.sizeLabel,
     material,
     color,
     quantity,
-    unit_price: variant.price,
-    total_price: variant.price === null ? null : variant.price * quantity,
+    unit_price: unitPrice,
+    total_price: unitPrice === null ? null : unitPrice * quantity,
   }));
 
   const { error: itemError } = await admin.from("order_items").insert(items);
