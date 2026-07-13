@@ -32,7 +32,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hooma-text/10 py-4 text-sm"><span className="font-medium">SKU: {defaultVariant.sku}</span><span className="text-hooma-muted">კატალოგის სატესტო პროდუქტი</span></div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {[[Clock3, "მზადება", `${product.leadTimeDays} სამუშაო დღე`], [Factory, "წარმოება", "თბილისი"], [Truck, "მიწოდება", "ტრეკინგით"]].map(([Icon, label, value]) => { const DetailIcon = Icon as typeof Clock3; return <div key={String(label)} className="rounded-xl border border-hooma-text/10 bg-white/65 p-4"><DetailIcon size={17} className="text-hooma-accent" /><p className="mt-3 text-xs text-hooma-muted">{String(label)}</p><p className="mt-1 text-sm font-medium">{String(value)}</p></div>; })}
+            {[[Clock3, "ვადა", `${product.leadTimeDays} სამუშაო დღე შეკვეთიდან მიწოდებამდე`], [Factory, "წარმოება", "თბილისი"], [Truck, "მიწოდება", "ტრეკინგით"]].map(([Icon, label, value]) => { const DetailIcon = Icon as typeof Clock3; return <div key={String(label)} className="rounded-xl border border-hooma-text/10 bg-white/65 p-4"><DetailIcon size={17} className="text-hooma-accent" /><p className="mt-3 text-xs text-hooma-muted">{String(label)}</p><p className="mt-1 text-sm font-medium">{String(value)}</p></div>; })}
           </div>
 
           <div className="mt-8">

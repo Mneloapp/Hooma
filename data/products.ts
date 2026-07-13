@@ -128,7 +128,7 @@ const product = ({
   price: null,
   pricePlaceholder,
   currency: "GEL",
-  deliveryEstimate: "მზადდება 3 სამუშაო დღეში",
+  deliveryEstimate: "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე",
   leadTimeDays: 3,
   estimatedPrintHours: printHours,
   licenseStatus: "not_required",

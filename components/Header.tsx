@@ -97,7 +97,7 @@ export function Header() {
           </button>
           <button type="button" onClick={() => setLocationOpen(true)} className="flex h-full shrink-0 items-center gap-1.5 px-2.5 transition hover:bg-white/10 xl:hidden"><MapPin size={14} className="text-[#c8d8bd]" />{deliveryCity}</button>
           {utilityLinks.map(([label, href], index) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${index === 0 ? "font-semibold text-[#d7e7cd]" : ""}`}>{label}</Link>)}
-          <span className="ml-auto hidden shrink-0 text-xs text-white/65 xl:block">შეკვეთიდან მესამე სამუშაო დღეს</span>
+          <span className="ml-auto hidden shrink-0 text-xs text-white/65 xl:block">3 სამუშაო დღე შეკვეთიდან მიწოდებამდე</span>
         </div>
       </div>
 

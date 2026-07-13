@@ -48,7 +48,7 @@ export default function Home() {
 
         <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-gradient-to-r from-[#dbe6d5] via-[#f0efe8] to-[#e7d9ca] sm:grid-cols-3">
           {[
-            [Clock3, georgian ? "მზადდება 3 სამუშაო დღეში" : "Ready in 3 business days", georgian ? "შეკვეთიდან მიწოდებამდე" : "From order to delivery"],
+            [Clock3, georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery", georgian ? "სტანდარტული კატალოგის შეკვეთებისთვის" : "For standard catalog orders"],
             [MapPin, georgian ? "დამზადებულია თბილისში" : "Made in Tbilisi", georgian ? "ადგილობრივი წარმოება" : "Local production"],
             [ShieldCheck, georgian ? "შემოწმებული ოპერატორის მიერ" : "Operator checked", georgian ? "ხარისხის კონტროლი ყველა შეკვეთაზე" : "Quality control on every order"],
           ].map(([Icon, title, copy], index) => { const InfoIcon = Icon as typeof Clock3; return <div key={String(title)} className={`flex items-center gap-3 px-5 py-4 ${index ? "border-t border-hooma-text/10 sm:border-l sm:border-t-0" : ""}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-hooma-accent"><InfoIcon size={18} /></span><div><h2 className="text-sm font-semibold">{String(title)}</h2><p className="mt-0.5 text-xs text-hooma-muted">{String(copy)}</p></div></div>; })}
@@ -77,7 +77,7 @@ export default function Home() {
             <Button href="/how-it-works" variant="secondary" className="mt-6">{georgian ? "როგორ შევუკვეთოთ?" : "How to order"}</Button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {[[PackageCheck, "1. შეკვეთა", "აირჩიე პროდუქტი, ფერი და მასალა"], [ShieldCheck, "2. დადასტურება", "ოპერატორი ამოწმებს კონფიგურაციას"], [Printer, "3. დამზადება", "პროდუქტი იბეჭდება შეკვეთისთვის"], [MapPin, "4. მიწოდება", "იღებ შეკვეთიდან მესამე სამუშაო დღეს"]].map(([Icon, title, copy]) => { const StepIcon = Icon as typeof Printer; return <div key={String(title)} className="rounded-xl bg-hooma-panel p-4"><StepIcon size={18} className="text-hooma-accent" /><h3 className="mt-3 text-sm font-semibold">{String(title)}</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">{String(copy)}</p></div>; })}
+            {[[PackageCheck, "1. შეკვეთა", "აირჩიე პროდუქტი, ფერი და მასალა"], [ShieldCheck, "2. დადასტურება", "ოპერატორი ამოწმებს კონფიგურაციას"], [Printer, "3. დამზადება", "პროდუქტი იბეჭდება შეკვეთისთვის"], [MapPin, "4. მიწოდება", "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"]].map(([Icon, title, copy]) => { const StepIcon = Icon as typeof Printer; return <div key={String(title)} className="rounded-xl bg-hooma-panel p-4"><StepIcon size={18} className="text-hooma-accent" /><h3 className="mt-3 text-sm font-semibold">{String(title)}</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">{String(copy)}</p></div>; })}
           </div>
         </section>
 

@@ -21,7 +21,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
       ["SKU", variant.sku],
       ["ზომები", variant.productDimensionsCm],
       ["მასალა", material],
-      ["მომზადება", `${product.leadTimeDays} სამუშაო დღე`],
+      ["ვადა", `${product.leadTimeDays} სამუშაო დღე შეკვეთიდან მიწოდებამდე`],
     ],
     [material, product.leadTimeDays, variant],
   );
@@ -74,7 +74,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
           კალათაში დამატება
         </Button>
         {!compact ? <button type="button" onClick={() => { addConfiguredItem(); openCart(); }} className="h-12 w-full rounded-full border border-hooma-text/15 bg-[#d9e6d2] text-sm font-semibold text-hooma-text transition hover:bg-[#cbdcc2]">შეუკვეთე ახლა — სატესტო</button> : null}
-        {!compact ? <div className="grid gap-2 border-t border-hooma-text/10 pt-4 text-xs text-hooma-muted">{[[Clock3, "მზადდება 3 სამუშაო დღეში"], [PackageCheck, "შეკვეთის სტატუსის ტრეკინგი"], [ShieldCheck, "ოპერატორის ხარისხის კონტროლი"]].map(([Icon, label]) => { const TrustIcon = Icon as typeof Clock3; return <p key={String(label)} className="flex items-center gap-2"><TrustIcon size={14} className="text-hooma-accent" />{String(label)}</p>; })}</div> : null}
+        {!compact ? <div className="grid gap-2 border-t border-hooma-text/10 pt-4 text-xs text-hooma-muted">{[[Clock3, "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"], [PackageCheck, "შეკვეთის სტატუსის ტრეკინგი"], [ShieldCheck, "ოპერატორის ხარისხის კონტროლი"]].map(([Icon, label]) => { const TrustIcon = Icon as typeof Clock3; return <p key={String(label)} className="flex items-center gap-2"><TrustIcon size={14} className="text-hooma-accent" />{String(label)}</p>; })}</div> : null}
         <p className="text-center text-xs leading-5 text-hooma-muted">სატესტო რეჟიმში შეკვეთა არ ითვლება გადახდილად და ბეჭდვა ავტომატურად არ დაიწყება.</p>
       </div>
     </div>

@@ -8,7 +8,7 @@ import { LanguageProvider } from "@/components/LanguageProvider";
 
 export const metadata: Metadata = {
   title: "Hooma | სასარგებლო ნივთები ყოველდღიურობისთვის",
-  description: "შეკვეთით დამზადებული სასარგებლო ნივთები. მზადდება თბილისში 3 სამუშაო დღეში.",
+  description: "შეკვეთით დამზადებული სასარგებლო ნივთები. 3 სამუშაო დღე შეკვეთიდან მიწოდებამდე.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

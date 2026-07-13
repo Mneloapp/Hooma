@@ -80,7 +80,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
 
           <div className="border-t border-hooma-text/10 py-5"><h3 className="text-sm font-semibold">მასალა</h3><div className="mt-3 grid gap-2 text-sm">{["PLA+", "PETG", "ASA", "TPU"].map((item) => <Link key={item} href={material === item ? buildHref({}, ["material"]) : buildHref({ material: item })} className="flex items-center gap-2 text-hooma-muted hover:text-hooma-text"><span className={cn("h-4 w-4 rounded border", material === item ? "border-hooma-accent bg-hooma-accent" : "border-hooma-text/20 bg-white")} />{item}</Link>)}</div></div>
 
-          <div className="border-t border-hooma-text/10 pt-5"><h3 className="text-sm font-semibold">მომზადების დრო</h3><p className="mt-3 flex items-center gap-2 text-sm text-hooma-muted"><span className="h-2 w-2 rounded-full bg-hooma-accent" />3 სამუშაო დღე</p></div>
+          <div className="border-t border-hooma-text/10 pt-5"><h3 className="text-sm font-semibold">მიწოდების ვადა</h3><p className="mt-3 flex items-start gap-2 text-sm leading-5 text-hooma-muted"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-hooma-accent" />3 სამუშაო დღე შეკვეთიდან მიწოდებამდე</p></div>
         </aside>
 
         <div className="min-w-0">
