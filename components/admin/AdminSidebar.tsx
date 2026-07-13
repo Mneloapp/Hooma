@@ -6,6 +6,7 @@ const items = [
   ["/admin/imports", "Import inbox"],
   ["/admin/inventory", "Inventory"],
   ["/admin/orders", "Orders"],
+  ["/admin/custom-orders", "Custom quotes"],
   ["/admin/production", "Production"],
   ["/admin/customers", "Customers"],
   ["/admin/settings", "Settings"],

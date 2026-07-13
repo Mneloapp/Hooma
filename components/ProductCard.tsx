@@ -10,7 +10,7 @@ export function ProductCard({ product, compact = false }: { product: Product; co
   const { language } = useLanguage();
 
   return (
-    <Link href={`/product/${product.slug}`} className="group block">
+    <Link href={product.categorySlug === "custom-parts" ? "/account/custom-orders" : `/product/${product.slug}`} className="group block">
       <div className={`overflow-hidden border border-hooma-text/10 bg-white/75 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-soft ${compact ? "rounded-2xl" : "rounded-[1.5rem]"}`}>
         <div className="relative aspect-[4/3] overflow-hidden bg-hooma-panel">
           <Image src={product.heroImage} alt={language === "ka" ? product.nameKa : product.hoomaName} fill className="object-cover transition duration-700 group-hover:scale-[1.025]" sizes="(min-width: 1024px) 33vw, 100vw" />

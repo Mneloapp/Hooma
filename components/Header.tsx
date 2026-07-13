@@ -16,11 +16,9 @@ export function Header() {
   const deliveryCities = ["თბილისი", "ბათუმი", "ქუთაისი", "რუსთავი", "გორი", "ზუგდიდი", "ფოთი", "თელავი", "სხვა ქალაქი"];
   const utilityLinks = [
     ["დღის შეთავაზებები", "/#deals"],
-    ["სასაჩუქრე ბარათები", "/shop?category=gifts-personalization"],
-    ["მომხმარებელთა მომსახურება", "/contact"],
     ["როგორ შევუკვეთოთ?", "/how-it-works"],
     ["შეკვეთის ტრეკინგი", "/account/orders"],
-    ["ინდივიდუალური შეკვეთა", "/shop?category=custom-parts"],
+    ["ინდივიდუალური შეკვეთა", "/account/custom-orders"],
   ];
 
   useEffect(() => {
@@ -123,7 +121,7 @@ export function Header() {
                       {category.nameKa}
                     </Link>
                     <div className="ml-12 mt-3 grid gap-2.5">
-                      {category.subcategories.map((subcategory) => <Link key={subcategory.slug} href={`/shop?category=${category.slug}&subcategory=${subcategory.slug}`} onClick={() => setOpen(false)} className="text-sm text-hooma-muted transition hover:text-hooma-accent">{subcategory.nameKa}</Link>)}
+                      {category.subcategories.map((subcategory) => <Link key={subcategory.slug} href={subcategory.slug === "request-part" ? "/account/custom-orders" : `/shop?category=${category.slug}&subcategory=${subcategory.slug}`} onClick={() => setOpen(false)} className="text-sm text-hooma-muted transition hover:text-hooma-accent">{subcategory.nameKa}</Link>)}
                     </div>
                   </div>
                 ))}
@@ -132,7 +130,7 @@ export function Header() {
                 <h3 className="font-semibold">დახმარება და პარამეტრები</h3>
                 <div className="mt-3 grid gap-3 text-sm text-hooma-muted">
                   <button type="button" onClick={() => { setOpen(false); setLocationOpen(true); }} className="flex items-center gap-2 text-left hover:text-hooma-accent"><MapPin size={15} />მიწოდების ქალაქი: {deliveryCity}</button>
-                  {utilityLinks.slice(2, 5).map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="hover:text-hooma-accent">{label}</Link>)}
+                  {utilityLinks.slice(1, 3).map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="hover:text-hooma-accent">{label}</Link>)}
                   <div className="pt-2"><LanguageToggle /></div>
                 </div>
               </div>

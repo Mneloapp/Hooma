@@ -35,6 +35,7 @@ Apply Supabase migrations in chronological order from `supabase/migrations`.
 - Georgian-first storefront and catalog preview
 - Cart and test checkout shell
 - Admin import inbox and production queue
+- Authenticated custom-part file upload and individual quote workflow
 - Source-license, production, tracking, payment, and audit database foundation
 - Server-authoritative test order validation
 

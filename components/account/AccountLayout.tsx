@@ -5,6 +5,7 @@ import type { Profile } from "@/lib/supabase/types";
 const links = [
   ["/account", "Overview"],
   ["/account/orders", "Orders"],
+  ["/account/custom-orders", "Custom requests"],
   ["/account/addresses", "Addresses"],
   ["/account/settings", "Settings"],
 ];
