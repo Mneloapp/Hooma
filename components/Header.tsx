@@ -2,24 +2,30 @@
 
 import Link from "next/link";
 import { ChevronDown, MapPin, Menu, Package, Search, ShoppingCart, UserRound, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { catalogCategories } from "@/data/catalog";
 import { useCart } from "./CartContext";
 import { BrandLogo } from "./BrandLogo";
 import { LanguageToggle } from "./LanguageToggle";
-import { useLanguage } from "./LanguageProvider";
 
 export function Header() {
   const [open, setOpen] = useState(false);
   const { openCart, count } = useCart();
-  const { t } = useLanguage();
-  const nav = [
-    [t.header.shop, "/shop"],
-    [t.header.home, "/shop?category=home-organization"],
-    [t.header.desk, "/shop?category=desk-tech"],
-    [t.header.kitchen, "/shop?category=kitchen"],
-    [t.header.kids, "/shop?category=kids-learning"],
-    [t.header.pets, "/shop?category=pets"],
+  const utilityLinks = [
+    ["დღის შეთავაზებები", "/#deals"],
+    ["სასაჩუქრე ბარათები", "/shop?category=gifts-personalization"],
+    ["მომხმარებელთა მომსახურება", "/contact"],
+    ["როგორ შევუკვეთოთ?", "/how-it-works"],
+    ["შეკვეთის ტრეკინგი", "/account/orders"],
+    ["ინდივიდუალური შეკვეთა", "/shop?category=custom-parts"],
   ];
+
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", closeOnEscape); };
+  }, [open]);
 
   const SearchForm = ({ mobile = false }: { mobile?: boolean }) => (
     <form action="/shop" className={`flex min-w-0 overflow-hidden rounded-xl bg-white ring-2 ring-transparent transition focus-within:ring-hooma-accent ${mobile ? "w-full" : "flex-1"}`}>
@@ -75,21 +81,47 @@ export function Header() {
           <button aria-label="Open categories" onClick={() => setOpen(!open)} className="flex h-full shrink-0 items-center gap-2 px-2.5 font-semibold transition hover:bg-white/10">
             {open ? <X size={18} /> : <Menu size={18} />}ყველა კატეგორია
           </button>
-          {nav.slice(1).map(([label, href]) => <Link key={label} href={href} className="flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10">{label}</Link>)}
-          <Link href="/shop?category=gifts-personalization" className="flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10">საჩუქრები</Link>
-          <Link href="/shop?category=custom-parts" className="flex h-full shrink-0 items-center px-2.5 font-semibold text-[#d7e7cd] transition hover:bg-white/10">{t.header.custom}</Link>
+          {utilityLinks.map(([label, href], index) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${index === 0 ? "font-semibold text-[#d7e7cd]" : ""}`}>{label}</Link>)}
           <span className="ml-auto hidden shrink-0 text-xs text-white/65 xl:block">შეკვეთიდან მესამე სამუშაო დღეს</span>
         </div>
       </div>
 
       {open ? (
-        <div className="absolute inset-x-0 border-b border-hooma-text/10 bg-hooma-background shadow-2xl">
-          <nav className="mx-auto grid max-w-7xl gap-2 px-4 py-5 text-sm sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
-            {nav.map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="rounded-xl border border-hooma-text/10 bg-white px-4 py-3 font-medium transition hover:border-hooma-accent/40 hover:text-hooma-accent">{label}</Link>)}
-            <Link href="/shop?category=gifts-personalization" onClick={() => setOpen(false)} className="rounded-xl border border-hooma-text/10 bg-white px-4 py-3 font-medium transition hover:border-hooma-accent/40 hover:text-hooma-accent">საჩუქრები და პერსონალიზაცია</Link>
-            <Link href="/shop?category=custom-parts" onClick={() => setOpen(false)} className="rounded-xl bg-hooma-accent px-4 py-3 font-medium text-white">{t.header.custom}</Link>
-            <div className="flex items-center justify-between rounded-xl border border-hooma-text/10 px-4 py-2 lg:hidden"><LanguageToggle /><Link href="/login" onClick={() => setOpen(false)} className="flex items-center gap-2"><UserRound size={16} />{t.header.loginAccount}</Link></div>
-          </nav>
+        <div className="fixed inset-0 z-50">
+          <button type="button" aria-label="Close categories" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
+          <aside aria-label="ყველა კატეგორია" className="absolute inset-y-0 left-0 flex w-[min(92vw,400px)] flex-col bg-hooma-background text-hooma-text shadow-2xl">
+            <div className="flex items-center justify-between bg-hooma-text px-5 py-4 text-white">
+              <Link href="/login" onClick={() => setOpen(false)} className="flex items-center gap-3 font-semibold"><span className="grid h-9 w-9 place-items-center rounded-full bg-white/10"><UserRound size={19} /></span>გამარჯობა, შედი</Link>
+              <button type="button" aria-label="Close categories" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-white/10"><X size={22} /></button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="border-b border-hooma-text/10 px-5 py-5">
+                <h2 className="text-xl font-semibold">პროდუქტების კატეგორიები</h2>
+                <Link href="/shop" onClick={() => setOpen(false)} className="mt-3 inline-flex text-sm font-medium text-hooma-accent hover:underline">მთელი კატალოგის ნახვა</Link>
+              </div>
+              <nav className="divide-y divide-hooma-text/10">
+                {catalogCategories.map((category) => (
+                  <div key={category.slug} className="px-5 py-5">
+                    <Link href={`/shop?category=${category.slug}`} onClick={() => setOpen(false)} className="group flex items-center gap-3 font-semibold transition hover:text-hooma-accent">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-hooma-panel text-hooma-accent"><category.icon size={18} /></span>
+                      {category.nameKa}
+                    </Link>
+                    <div className="ml-12 mt-3 grid gap-2.5">
+                      {category.subcategories.map((subcategory) => <Link key={subcategory.slug} href={`/shop?category=${category.slug}&subcategory=${subcategory.slug}`} onClick={() => setOpen(false)} className="text-sm text-hooma-muted transition hover:text-hooma-accent">{subcategory.nameKa}</Link>)}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+              <div className="border-t border-hooma-text/10 bg-white/55 px-5 py-5">
+                <h3 className="font-semibold">დახმარება და პარამეტრები</h3>
+                <div className="mt-3 grid gap-3 text-sm text-hooma-muted">
+                  {utilityLinks.slice(2, 5).map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="hover:text-hooma-accent">{label}</Link>)}
+                  <div className="pt-2"><LanguageToggle /></div>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       ) : null}
     </header>
