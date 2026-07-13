@@ -75,11 +75,11 @@ export function Header() {
           <div className="hidden min-w-0 flex-1 md:flex"><SearchForm /></div>
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
             <div className="hidden lg:block"><LanguageToggle /></div>
-            <Link href="/login" className="hidden items-center gap-2 rounded-lg px-2.5 py-2 text-xs transition hover:bg-white/10 sm:flex">
-              <UserRound size={18} /><span><span className="block text-white/55">გამარჯობა, შედი</span><strong className="font-medium">ანგარიში</strong></span>
+            <Link href="/login" aria-label="ანგარიში" className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 sm:flex">
+              <UserRound size={25} /><strong className="text-sm">ანგარიში</strong>
             </Link>
-            <Link href="/account/orders" className="hidden items-center gap-2 rounded-lg px-2.5 py-2 text-xs transition hover:bg-white/10 xl:flex">
-              <Package size={18} /><span><span className="block text-white/55">შენი</span><strong className="font-medium">შეკვეთები</strong></span>
+            <Link href="/account/orders" aria-label="შეკვეთები" className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 lg:flex">
+              <Package size={25} /><strong className="text-sm">შეკვეთები</strong>
             </Link>
             <button onClick={openCart} aria-label="Open cart" className="relative flex items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10">
               <ShoppingCart size={25} /><strong className="hidden text-sm sm:block">კალათა</strong>
@@ -106,7 +106,7 @@ export function Header() {
           <button type="button" aria-label="Close categories" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
           <aside aria-label="ყველა კატეგორია" className="absolute inset-y-0 left-0 flex w-[min(92vw,400px)] flex-col bg-hooma-background text-hooma-text shadow-2xl">
             <div className="flex items-center justify-between bg-hooma-text px-5 py-4 text-white">
-              <Link href="/login" onClick={() => setOpen(false)} className="flex items-center gap-3 font-semibold"><span className="grid h-9 w-9 place-items-center rounded-full bg-white/10"><UserRound size={19} /></span>გამარჯობა, შედი</Link>
+              <Link href="/login" onClick={() => setOpen(false)} className="flex items-center gap-3 font-semibold"><span className="grid h-9 w-9 place-items-center rounded-full bg-white/10"><UserRound size={19} /></span>ანგარიში</Link>
               <button type="button" aria-label="Close categories" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-white/10"><X size={22} /></button>
             </div>
 
