@@ -1,19 +1,5 @@
-import { Button } from "@/components/Button";
 import { SectionTitle } from "@/components/SectionTitle";
 
-export default function Contact() {
-  return (
-    <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
-      <SectionTitle eyebrow="Contact" title="Request a consultation." copy="Tell us which model, fabric, and room you are planning for." />
-      <div className="rounded-2xl bg-white p-6 md:p-8">
-        <div className="grid gap-4 md:grid-cols-2">
-          <input className="rounded-xl border border-hooma-text/10 bg-hooma-background px-4 py-3" placeholder="Name" />
-          <input className="rounded-xl border border-hooma-text/10 bg-hooma-background px-4 py-3" placeholder="Phone or email" />
-          <input className="rounded-xl border border-hooma-text/10 bg-hooma-background px-4 py-3 md:col-span-2" placeholder="Preferred model" />
-          <textarea className="min-h-36 rounded-xl border border-hooma-text/10 bg-hooma-background px-4 py-3 md:col-span-2" placeholder="Message" />
-        </div>
-        <Button className="mt-5">Send request</Button>
-      </div>
-    </section>
-  );
+export default function ContactPage() {
+  return <section className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8"><SectionTitle eyebrow="Custom request" title="გჭირდება კონკრეტული დეტალი?" copy="გამოგვიგზავნე ფოტო, ზომები, გამოყენების ადგილი და სასურველი მასალა. ოპერატორი შეაფასებს მოდელირებისა და დამზადების შესაძლებლობას." /><form className="mt-10 grid gap-4 rounded-[2rem] border border-hooma-text/10 bg-white/70 p-6 sm:grid-cols-2"><input placeholder="სახელი" className="rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /><input placeholder="ტელეფონი" className="rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /><input placeholder="ელფოსტა" className="rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent sm:col-span-2" /><textarea placeholder="აღწერე რა დეტალი გჭირდება და სად გამოიყენება" rows={6} className="rounded-[1.5rem] border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent sm:col-span-2" /><button type="button" className="rounded-full bg-hooma-text px-5 py-3 font-medium text-white sm:col-span-2">მოთხოვნის მომზადება</button><p className="text-xs leading-5 text-hooma-muted sm:col-span-2">ფორმის გაგზავნა ჩაირთვება Supabase Storage-სა და მოთხოვნების ცხრილთან დაკავშირების შემდეგ.</p></form></section>;
 }

@@ -3,11 +3,11 @@
 import { cn } from "@/lib/utils";
 
 const swatches: Record<string, string> = {
-  Ivory: "#E8E1D5",
-  Stone: "#9B978F",
-  Moss: "#6F7D5C",
-  Charcoal: "#292929",
-  Cocoa: "#7B6657",
+  "Warm white": "#EEEAE1",
+  Graphite: "#292929",
+  Sage: "#7B8B68",
+  Sand: "#D8C7AD",
+  Terracotta: "#B96F50",
 };
 
 export function SwatchSelector({
@@ -21,7 +21,7 @@ export function SwatchSelector({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const colorMode = label.toLowerCase().includes("color");
+  const colorMode = label.toLowerCase().includes("color") || label.includes("ფერი");
 
   return (
     <div>

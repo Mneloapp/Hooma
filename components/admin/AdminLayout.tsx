@@ -5,7 +5,7 @@ import { AdminTopbar } from "./AdminTopbar";
 
 export function AdminLayout({ children, profile }: { children: ReactNode; profile: Profile | null }) {
   return (
-    <div className="min-h-screen bg-hooma-bg text-hooma-text lg:flex">
+    <div className="min-h-screen bg-hooma-background text-hooma-text lg:flex">
       <AdminSidebar />
       <div className="min-w-0 flex-1">
         <AdminTopbar profile={profile} />

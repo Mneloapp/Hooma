@@ -1,25 +1,12 @@
-import { Armchair, Box, PackageOpen, Sparkles } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, PackageCheck, Printer } from "lucide-react";
 
 const steps = [
-  ["Choose your model", "Pick the sofa, lounger, ottoman, or pet piece that fits your room.", Armchair],
-  ["Delivered in a compact box", "Your selected model is packed for easier movement through doors and elevators.", Box],
-  ["Open and let it expand", "Unpack it in the room, give it time to recover shape, and position it where it belongs.", PackageOpen],
-  ["Enjoy full-size comfort", "Settle into generous proportions without the usual delivery friction.", Sparkles],
-];
+  ["აირჩიე", "იპოვე პროდუქტი და აირჩიე მასალა და ფერი.", ClipboardCheck],
+  ["დადასტურება", "ოპერატორი ამოწმებს შეკვეთას და წარმოების შესაძლებლობას.", CheckCircle2],
+  ["წარმოება", "შეკვეთა გადადის პრინტერის რიგში.", Printer],
+  ["მიწოდება", "ხარისხის კონტროლის შემდეგ პროდუქტი მზადაა მიწოდებისთვის.", PackageCheck],
+] as const;
 
 export function HowItWorksSteps({ detailed = false }: { detailed?: boolean }) {
-  return (
-    <div className={detailed ? "grid gap-4 md:grid-cols-2 lg:grid-cols-4" : "grid gap-4 md:grid-cols-4"}>
-      {steps.map(([label, copy, Icon], index) => (
-        <div key={label as string} className="rounded-2xl bg-white p-6">
-          <div className="mb-10 flex items-center justify-between">
-            <span className="text-sm text-hooma-muted">0{index + 1}</span>
-            <Icon className="text-hooma-accent" size={22} />
-          </div>
-          <h3 className="text-lg font-semibold">{label as string}</h3>
-          {detailed ? <p className="mt-3 text-sm leading-6 text-hooma-muted">{copy as string}</p> : null}
-        </div>
-      ))}
-    </div>
-  );
+  return <div className={`grid gap-4 ${detailed ? "lg:grid-cols-4" : "md:grid-cols-4"}`}>{steps.map(([title, copy, Icon], index) => <div key={title} className="rounded-2xl border border-hooma-text/10 bg-white/70 p-5"><span className="text-xs font-semibold text-hooma-accent">0{index + 1}</span><Icon size={20} className="mt-8 text-hooma-accent" /><h3 className="mt-5 font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-hooma-muted">{copy}</p></div>)}</div>;
 }

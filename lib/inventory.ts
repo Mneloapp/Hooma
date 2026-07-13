@@ -9,8 +9,7 @@ export type InventoryDisplayRow = {
   sku: string;
   size_label: string;
   color: string;
-  fabric: string;
-  orientation: string;
+  material: string;
   quantity_available: number;
   quantity_reserved: number;
   quantity_sold: number;
@@ -29,15 +28,14 @@ export const stockStatusLabels: Record<StockStatus, string> = {
 export function createInventorySeedRows(): InventoryDisplayRow[] {
   return products.flatMap((product) =>
     product.variants.map((variant) => ({
-      id: `${product.id}-${variant.id}-${variant.availableColors[0] ?? "TBD"}-${variant.availableFabrics[0] ?? "TBD"}`,
+      id: `${product.id}-${variant.id}-${variant.availableColors[0] ?? "TBD"}-${variant.availableMaterials[0] ?? "TBD"}`,
       product_id: product.id,
       variant_id: variant.id,
       product_name: product.hoomaName,
       sku: variant.sku,
       size_label: variant.sizeLabel,
       color: variant.availableColors[0] ?? "TBD",
-      fabric: variant.availableFabrics[0] ?? "TBD",
-      orientation: "Standard",
+      material: variant.availableMaterials[0] ?? "TBD",
       quantity_available: 0,
       quantity_reserved: 0,
       quantity_sold: 0,

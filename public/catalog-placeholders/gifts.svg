@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title">
+  <title id="title">Personalized gift product placeholder</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f1e5dc"/><stop offset="1" stop-color="#d8c7ad"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="725" rx="335" ry="50" fill="#2a231f" opacity=".12"/>
+  <rect x="355" y="375" width="490" height="325" rx="26" fill="#fbf7f0" stroke="#312822" stroke-width="18"/>
+  <rect x="315" y="305" width="570" height="110" rx="25" fill="#7b8b68"/>
+  <path d="M600 305v395" stroke="#d3a475" stroke-width="40"/>
+  <path d="M600 305c-155-5-205-135-105-145 70-7 105 60 105 145zm0 0c155-5 205-135 105-145-70-7-105 60-105 145z" fill="#d3a475"/>
+  <text x="70" y="92" font-family="Arial,sans-serif" font-size="30" letter-spacing="8" fill="#312822">HOOMA / PERSONAL</text>
+</svg>

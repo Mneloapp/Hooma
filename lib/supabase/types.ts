@@ -21,6 +21,7 @@ export type InventoryRow = {
   sku: string;
   color: string | null;
   fabric: string | null;
+  material: string | null;
   orientation: string | null;
   quantity_available: number;
   quantity_reserved: number;
@@ -65,6 +66,7 @@ export type OrderItemRow = {
   sku: string | null;
   size_label: string | null;
   fabric: string | null;
+  material: string | null;
   color: string | null;
   orientation: string | null;
   quantity: number;

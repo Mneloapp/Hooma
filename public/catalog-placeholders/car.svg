@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title">
+  <title id="title">Car accessory product placeholder</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#dfe3df"/><stop offset="1" stop-color="#b9c1b5"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="720" rx="390" ry="55" fill="#151a16" opacity=".16"/>
+  <path d="M300 570l70-170c18-45 60-75 108-75h244c48 0 90 30 108 75l70 170v105H300z" fill="#28302a"/>
+  <path d="M420 410h360l45 120H375z" fill="#dbe4da"/>
+  <circle cx="410" cy="660" r="58" fill="#161a17"/><circle cx="790" cy="660" r="58" fill="#161a17"/>
+  <rect x="522" y="545" width="156" height="85" rx="24" fill="#7b8b68"/>
+  <text x="70" y="92" font-family="Arial,sans-serif" font-size="30" letter-spacing="8" fill="#28302a">HOOMA / AUTO</text>
+</svg>

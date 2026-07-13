@@ -1,48 +1,66 @@
 "use client";
 
-import Image from "next/image";
-import { ArrowDown, Box, Sofa } from "lucide-react";
+import { ArrowDown, Box, CheckCircle2, Clock3, MapPin } from "lucide-react";
 import { Button } from "./Button";
-import { BrandLogo } from "./BrandLogo";
 import { useLanguage } from "./LanguageProvider";
 
 export function Hero() {
   const { t } = useLanguage();
 
   return (
-    <section className="relative min-h-[calc(100svh-4rem)] overflow-hidden bg-hooma-text text-white">
-      <Image src="/catalog-images/hooma-cotton.jpg" alt={t.hero.alt} fill priority className="hero-kenburns object-cover opacity-75" sizes="100vw" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent" />
-      <div className="absolute bottom-8 right-6 hidden w-72 rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-xl md:block">
-        <div className="flex items-center justify-between gap-4 text-xs text-white/65">
-          <span>{t.hero.compactBox}</span>
-          <span>{t.hero.fullComfort}</span>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15">
-            <Box size={22} />
+    <section className="relative overflow-hidden border-b border-hooma-text/10 bg-[#e9eee5]">
+      <div className="pointer-events-none absolute -right-28 -top-36 h-[34rem] w-[34rem] rounded-full border-[90px] border-white/50" />
+      <div className="pointer-events-none absolute -bottom-56 left-[38%] h-[34rem] w-[34rem] rounded-full bg-[#cbd8c3] blur-3xl" />
+      <div className="relative mx-auto grid min-h-[calc(100svh-4rem)] max-w-7xl items-center gap-14 px-4 py-16 sm:px-6 lg:grid-cols-[1.04fr_0.96fr] lg:px-8">
+        <div className="max-w-3xl">
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-hooma-text/10 bg-white/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-hooma-accent backdrop-blur">
+            <span className="h-2 w-2 rounded-full bg-hooma-accent" />
+            {t.hero.label}
           </div>
-          <div className="h-px flex-1 origin-left bg-white/60 pulse-line" />
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-hooma-text">
-            <Sofa size={24} />
-          </div>
-        </div>
-      </div>
-      <div className="relative mx-auto flex min-h-[calc(100svh-4rem)] max-w-7xl items-center px-4 pb-20 pt-16 sm:px-6 lg:px-8">
-        <div className="max-w-2xl">
-          <BrandLogo inverted className="mb-8 w-28 animate-[fade-slide-up_700ms_ease-out_both]" imageClassName="max-h-24" />
-          <p className="mb-5 animate-[fade-slide-up_760ms_ease-out_80ms_both] text-sm font-medium uppercase tracking-[0.28em] text-white/75">{t.hero.label}</p>
-          <h1 className="animate-[fade-slide-up_820ms_ease-out_160ms_both] text-5xl font-semibold leading-none md:text-7xl">{t.hero.headline}</h1>
-          <p className="mt-6 max-w-lg animate-[fade-slide-up_880ms_ease-out_240ms_both] text-lg leading-8 text-white/78">{t.hero.copy}</p>
-          <div className="mt-9 flex animate-[fade-slide-up_940ms_ease-out_320ms_both] flex-wrap gap-3">
+          <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-6xl lg:text-[5.6rem]">
+            {t.hero.headline}
+          </h1>
+          <p className="mt-7 max-w-xl text-lg leading-8 text-hooma-muted sm:text-xl">{t.hero.copy}</p>
+          <div className="mt-9 flex flex-wrap gap-3">
             <Button href="/shop">{t.hero.shop}</Button>
-            <Button href="/how-it-works" variant="secondary" className="border-white/30 bg-white/10 text-white hover:text-white">{t.hero.howItWorks}</Button>
+            <Button href="/shop?category=custom-parts" variant="secondary">{t.hero.custom}</Button>
+          </div>
+          <div className="mt-10 grid gap-3 text-sm text-hooma-muted sm:grid-cols-3">
+            {[
+              [Clock3, t.hero.promise],
+              [MapPin, t.hero.local],
+              [CheckCircle2, t.hero.tracked],
+            ].map(([Icon, label]) => {
+              const HeroIcon = Icon as typeof Clock3;
+              return (
+                <div key={String(label)} className="flex items-center gap-2.5">
+                  <HeroIcon size={17} className="shrink-0 text-hooma-accent" />
+                  <span>{String(label)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="relative mx-auto aspect-square w-full max-w-[34rem]">
+          <div className="absolute inset-[8%] rounded-[32%] bg-hooma-text shadow-[0_45px_100px_rgba(23,23,23,0.2)]" />
+          <div className="absolute inset-[15%] rotate-6 rounded-[28%] border border-white/10 bg-gradient-to-br from-[#394035] to-[#171a16]" />
+          <div className="absolute left-[23%] top-[19%] h-[50%] w-[54%] rounded-[4rem] border-[18px] border-[#d8e2d1] bg-transparent shadow-inner" />
+          <div className="absolute bottom-[17%] left-[18%] right-[18%] rounded-[2rem] border border-white/10 bg-white/10 p-5 text-white backdrop-blur-xl">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-white/50">Hooma production</p>
+                <p className="mt-2 text-lg font-medium">Made for your order</p>
+              </div>
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-hooma-text"><Box size={21} /></div>
+            </div>
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-3/4 rounded-full bg-[#c8d8bd]" /></div>
+            <div className="mt-3 flex items-center justify-between text-xs text-white/55"><span>Design</span><span>Make</span><span>Check</span><span>Deliver</span></div>
           </div>
         </div>
       </div>
-      <a href="#featured" aria-label="Scroll to featured products" className="absolute bottom-7 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/60 md:flex">
-        {t.hero.scroll}
-        <ArrowDown size={18} className="float-slow" />
+      <a href="#categories" aria-label="Scroll to categories" className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 text-hooma-muted md:block">
+        <ArrowDown size={20} className="float-slow" />
       </a>
     </section>
   );

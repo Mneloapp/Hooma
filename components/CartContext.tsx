@@ -11,9 +11,8 @@ export type CartItem = {
   image: string;
   sku: string;
   size_label: string;
-  fabric: string;
+  material: string;
   color: string;
-  orientation: string;
   quantity: number;
   price?: number | null;
   pricePlaceholder: string;
@@ -33,8 +32,8 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const keyFor = (item: Pick<CartItem, "product_id" | "variant_id" | "fabric" | "color" | "orientation">) =>
-  [item.product_id, item.variant_id, item.fabric, item.color, item.orientation].join("|");
+const keyFor = (item: Pick<CartItem, "product_id" | "variant_id" | "material" | "color">) =>
+  [item.product_id, item.variant_id, item.material, item.color].join("|");
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);

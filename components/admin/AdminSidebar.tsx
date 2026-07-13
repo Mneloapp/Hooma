@@ -3,8 +3,10 @@ import Link from "next/link";
 const items = [
   ["/admin", "Dashboard"],
   ["/admin/products", "Products"],
+  ["/admin/imports", "Import inbox"],
   ["/admin/inventory", "Inventory"],
   ["/admin/orders", "Orders"],
+  ["/admin/production", "Production"],
   ["/admin/customers", "Customers"],
   ["/admin/settings", "Settings"],
 ];

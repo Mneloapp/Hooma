@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title">
+  <title id="title">Kitchen product placeholder</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eee9df"/><stop offset="1" stop-color="#cfd7c8"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="720" rx="330" ry="48" fill="#1f281e" opacity=".12"/>
+  <path d="M385 330h430l-48 360H433z" fill="#f8f6ef" stroke="#263024" stroke-width="18"/>
+  <path d="M455 400h290M440 505h320M425 610h350" stroke="#7b8b68" stroke-width="16"/>
+  <circle cx="600" cy="285" r="58" fill="#263024"/>
+  <path d="M600 285v-95" stroke="#263024" stroke-width="24" stroke-linecap="round"/>
+  <text x="70" y="92" font-family="Arial,sans-serif" font-size="30" letter-spacing="8" fill="#263024">HOOMA / KITCHEN</text>
+</svg>
