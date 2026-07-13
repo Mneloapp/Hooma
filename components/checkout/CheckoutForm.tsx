@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/Button";
 import { useCart } from "@/components/CartContext";
 import { createOrderAction } from "@/app/auth/actions";
@@ -8,7 +8,12 @@ import { createOrderAction } from "@/app/auth/actions";
 export function CheckoutForm() {
   const { items, clearCart } = useCart();
   const [message, setMessage] = useState("");
+  const [city, setCity] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setCity(window.localStorage.getItem("hooma-delivery-city") ?? "");
+  }, []);
 
   function submit(formData: FormData) {
     const payload = {
@@ -41,7 +46,7 @@ export function CheckoutForm() {
           <label className="block text-sm font-medium">სახელი და გვარი<input name="full_name" required className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
           <label className="block text-sm font-medium">ტელეფონი<input name="guest_phone" required className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
           <label className="block text-sm font-medium">ელფოსტა<input name="guest_email" type="email" required className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
-          <label className="block text-sm font-medium">ქალაქი<input name="city" required className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
+          <label className="block text-sm font-medium">ქალაქი<input name="city" required value={city} onChange={(event) => setCity(event.target.value)} className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
         </div>
         <label className="block text-sm font-medium">მიწოდების მისამართი<input name="address_line_1" required className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
         <label className="block text-sm font-medium">შენიშვნა<textarea name="notes" rows={4} className="mt-2 w-full rounded-[1.5rem] border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
