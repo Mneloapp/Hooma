@@ -67,7 +67,7 @@ export function Header() {
     <header className="sticky top-0 z-40 shadow-[0_2px_12px_rgba(23,23,23,0.08)]">
       <div className="bg-hooma-text text-white">
         <div className="mx-auto flex min-h-[68px] max-w-[1480px] items-center gap-3 px-4 py-2 sm:px-6 lg:gap-5 lg:px-8">
-          <BrandLogo className="w-[94px] shrink-0 rounded-lg bg-white px-2" imageClassName="max-h-11" />
+          <BrandLogo inverted className="w-[94px] shrink-0" imageClassName="max-h-12" />
           <button type="button" onClick={() => setLocationOpen(true)} className="hidden shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition hover:bg-white/10 xl:flex">
             <MapPin size={18} className="text-[#c8d8bd]" />
             <span><span className="block text-white/55">მიწოდება</span><strong className="font-medium">{deliveryCity}</strong></span>
