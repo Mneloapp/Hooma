@@ -175,13 +175,13 @@ const positiveNumber = (formData: FormData, key: string, max: number) => {
 };
 
 function makerWorldImageUrls(value: unknown) {
-  const entries = String(value ?? "")
-    .split(/[\n,]+/)
+  const entries = Array.from(new Set(String(value ?? "")
+    .split(/\r?\n/)
     .map((item) => item.trim())
-    .filter(Boolean);
-  if (entries.length > 12) throw new Error("ერთ პროდუქტზე მაქსიმუმ 12 ფოტო-ბმულია დაშვებული.");
+    .filter(Boolean)))
+    .slice(0, 12);
 
-  return Array.from(new Set(entries.map((entry) => {
+  return entries.map((entry) => {
     const url = new URL(entry);
     const host = url.hostname.toLowerCase();
     if (url.protocol !== "https:" || !(host === "makerworld.bblmw.com" || host.endsWith(".bblmw.com"))) {
@@ -189,7 +189,7 @@ function makerWorldImageUrls(value: unknown) {
     }
     url.hash = "";
     return url.toString();
-  })));
+  });
 }
 
 function draftDatabaseError(message: string) {
