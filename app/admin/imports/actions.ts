@@ -241,6 +241,8 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
       description,
       images: submittedImages.length ? submittedImages : existingImages,
       canonical_url: importRecord.source_url,
+      selected_profile_id: clean(formData.get("source_profile_id"), 64) || currentMetadata.selected_profile_id || null,
+      selected_profile_name: clean(formData.get("source_profile_name"), 200) || currentMetadata.selected_profile_name || null,
       extraction: {
         ...(currentMetadata.extraction && typeof currentMetadata.extraction === "object" ? currentMetadata.extraction : {}),
         operator_reviewed_at: new Date().toISOString(),

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hooma Importer</title>
+    <style>
+      body { width: 340px; margin: 0; padding: 18px; background: #f4f1ea; color: #1e2922; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      h1 { margin: 0; font-size: 18px; } p { color: #667168; }
+      button { width: 100%; border: 0; border-radius: 12px; padding: 12px 14px; background: #1e2922; color: white; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: wait; }
+      #status { margin-top: 12px; padding: 12px; border-radius: 12px; background: white; white-space: pre-wrap; }
+      .ok { color: #17653a; } .error { color: #9e2f2f; }
+      dl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0; }
+      dt { color: #667168; } dd { margin: 0; font-weight: 600; text-align: right; }
+    </style>
+  </head>
+  <body>
+    <h1>Hooma MakerWorld Importer</h1>
+    <p>გვერდზე აირჩიე საჭირო Print Profile და მოიცადე, სანამ მონაცემები ჩაიტვირთება.</p>
+    <button id="extract">Hooma-ს მონაცემების მომზადება</button>
+    <div id="status">Importer მზადაა.</div>
+    <script src="popup.js"></script>
+  </body>
+</html>
