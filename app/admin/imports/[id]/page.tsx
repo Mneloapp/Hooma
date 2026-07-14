@@ -1,0 +1,32 @@
+import Link from "next/link";
+import { ArrowLeft, ExternalLink, ImageIcon } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ImportReviewForm } from "@/components/admin/ImportReviewForm";
+import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
+import { createClient } from "@/lib/supabase/server";
+
+export default async function ImportReviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = (await createClient()) as any;
+  if (!supabase) notFound();
+  const [importResult, categoryResult, materialResult, pricingResult] = await Promise.all([
+    supabase.from("source_imports").select("*").eq("id", id).maybeSingle(),
+    supabase.from("categories").select("id,parent_id,name_ka,sort_order").eq("is_active", true).order("sort_order"),
+    supabase.from("material_cost_profiles").select("*").eq("is_active", true).order("code"),
+    supabase.from("pricing_profiles").select("*").eq("is_default", true).maybeSingle(),
+  ]);
+  const item = importResult.data as any;
+  if (!item) notFound();
+  const parents = new Map<string, string>((categoryResult.data ?? []).filter((row: any) => !row.parent_id).map((row: any) => [row.id, row.name_ka]));
+  const categories = (categoryResult.data ?? []).map((row: any) => ({ id: row.id, name: row.parent_id ? `${parents.get(row.parent_id) ?? "კატეგორია"} → ${row.name_ka}` : row.name_ka }));
+  const metadata = item.extracted_metadata ?? {};
+  const images = Array.isArray(metadata.images) ? metadata.images.filter((value: unknown) => typeof value === "string" && value.startsWith("https://")).slice(0, 12) : [];
+  const defaultName = item.source_title || `MakerWorld ${item.source_model_id ?? "product"}`;
+  const defaultSlug = `makerworld-${item.source_model_id ?? item.id.slice(0, 8)}`.toLowerCase();
+  const pricing = pricingResult.data as PricingProfile | null;
+
+  return <div className="space-y-6"><Link href="/admin/imports" className="inline-flex items-center gap-2 text-sm text-hooma-muted"><ArrowLeft size={15} />Import queue</Link><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[0.25em] text-hooma-muted">MakerWorld review</p><h1 className="mt-3 text-4xl font-semibold">{defaultName}</h1><p className="mt-2 text-sm text-hooma-muted">Model ID: {item.source_model_id ?? "—"} · Status: {item.status}</p></div><a href={item.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-hooma-text/10 bg-white px-4 py-2.5 text-sm">წყაროს გახსნა<ExternalLink size={14} /></a></div>
+    <section className="rounded-[1.5rem] bg-white/75 p-6 shadow-soft"><h2 className="text-xl font-semibold">ავტომატურად მიღებული მონაცემები</h2><p className="mt-3 max-w-4xl text-sm leading-7 text-hooma-muted">{metadata.description || item.error_message || "აღწერა ავტომატურად ვერ მოიძებნა."}</p><div className="mt-5 flex gap-3 overflow-x-auto pb-2">{images.length ? images.map((image: string) => <div key={image} className="h-36 w-48 shrink-0 rounded-xl bg-hooma-panel bg-cover bg-center" style={{ backgroundImage: `url("${image.replace(/["\\\n\r]/g, "")}")` }} />) : <div className="grid h-36 w-full place-items-center rounded-xl bg-hooma-panel text-hooma-muted"><ImageIcon size={24} /></div>}</div><p className="mt-3 text-xs text-hooma-muted">სურათები ჯერ მხოლოდ წყაროს preview-ბმულებია და Hooma Storage-ში არ კოპირდება უფლებების დადასტურებამდე.</p></section>
+    {pricing ? <ImportReviewForm importId={id} defaultName={defaultName} defaultSlug={defaultSlug} categories={categories} materials={(materialResult.data ?? []) as MaterialCostProfile[]} pricing={pricing} /> : <div className="rounded-xl bg-amber-50 p-5 text-sm text-amber-900">ჯერ შეავსე Admin → Settings-ის ფასის პარამეტრები და გაუშვი ბოლო migration.</div>}
+  </div>;
+}
