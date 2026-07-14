@@ -192,6 +192,19 @@ function makerWorldImageUrls(value: unknown) {
   })));
 }
 
+function draftDatabaseError(message: string) {
+  if (message.includes("products_slug_key") || message.toLowerCase().includes("duplicate") && message.toLowerCase().includes("slug")) {
+    return "ეს Slug უკვე გამოყენებულია. შეცვალე Slug, მაგალითად ბოლოში დაუმატე Model ID.";
+  }
+  if (message.includes("product_sources") || message.includes("source_url")) {
+    return "ეს MakerWorld წყარო უკვე დაკავშირებულია სხვა პროდუქტთან. გახსენი არსებული პროდუქტი ან წაშალე ძველი Draft.";
+  }
+  if (message.includes("Verified rights require")) return "მონიშნული უფლებებისთვის შეავსე ლიცენზიის სახელი და მტკიცებულების URL.";
+  if (message.includes("Active category and material")) return "არჩეული კატეგორია ან მასალა აღარ არის აქტიური. თავიდან აირჩიე ორივე.";
+  if (message.includes("Material grams and print minutes")) return "წონა და ბეჭდვის დრო ნულზე მეტი უნდა იყოს.";
+  return `Draft ვერ შეიქმნა: ${clean(message, 300)}`;
+}
+
 export async function createProductDraftFromImportAction(_state: DraftActionState, formData: FormData): Promise<DraftActionState> {
   const profile = await requirePermission("catalog.manage");
   const admin = createAdminClient() as any;
@@ -224,10 +237,34 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
     };
     const { data: importRecord, error: importReadError } = await admin
       .from("source_imports")
-      .select("source_url,extracted_metadata")
+      .select("source_url,extracted_metadata,product_id")
       .eq("id", importId)
       .single();
     if (importReadError || !importRecord) throw new Error("MakerWorld Import ჩანაწერი ვერ მოიძებნა.");
+
+    if (importRecord.product_id && uuidPattern.test(String(importRecord.product_id))) {
+      revalidatePath("/admin/products");
+      return { ok: true, productId: String(importRecord.product_id), message: "ამ Import-იდან პროდუქტის Draft უკვე შექმნილია." };
+    }
+
+    const [{ data: existingSource }, { data: existingSlug }] = await Promise.all([
+      admin.from("product_sources").select("product_id").eq("platform", "makerworld").eq("source_url", importRecord.source_url).maybeSingle(),
+      admin.from("products").select("id").eq("slug", slug).maybeSingle(),
+    ]);
+    if (existingSource?.product_id) {
+      await admin.from("source_imports").update({
+        status: "approved",
+        product_id: existingSource.product_id,
+        reviewed_by: profile.id,
+        reviewed_at: new Date().toISOString(),
+        error_message: null,
+      }).eq("id", importId);
+      await admin.from("audit_log").insert({ actor_id: profile.id, action: "source_import_linked_to_existing_product", entity_type: "product", entity_id: existingSource.product_id, metadata: { source_import_id: importId } });
+      revalidatePath("/admin/imports");
+      revalidatePath("/admin/products");
+      return { ok: true, productId: String(existingSource.product_id), message: "ეს MakerWorld წყარო უკვე დამატებულია — იხსნება არსებული პროდუქტი." };
+    }
+    if (existingSlug?.id) return { ok: false, message: "ეს Slug უკვე გამოყენებულია. შეცვალე Slug, მაგალითად ბოლოში დაუმატე Model ID." };
 
     const currentMetadata = importRecord.extracted_metadata && typeof importRecord.extracted_metadata === "object"
       ? importRecord.extracted_metadata
@@ -275,7 +312,7 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
       confirmed_commercial_use: formData.get("commercial_use_allowed") === "on",
       confirmed_media_use: formData.get("media_use_allowed") === "on",
     });
-    if (error || !data) return { ok: false, message: error?.message ?? "Product Draft ვერ შეიქმნა." };
+    if (error || !data) return { ok: false, message: error ? draftDatabaseError(error.message) : "Product Draft ვერ შეიქმნა." };
     revalidatePath("/admin/imports");
     revalidatePath("/admin/products");
     return { ok: true, productId: String(data), message: "პროდუქტის Draft შეიქმნა. გამოქვეყნებამდე საჭიროა სატესტო ბეჭდვა და საბოლოო დამტკიცება." };

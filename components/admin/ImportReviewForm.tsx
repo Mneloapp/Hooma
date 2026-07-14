@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { CheckCircle2, ClipboardPaste, LockKeyhole } from "lucide-react";
 import { createProductDraftFromImportAction } from "@/app/admin/imports/actions";
@@ -119,7 +120,7 @@ export function ImportReviewForm({ importId, sourceUrl, sourceModelId, defaultNa
 
     <section className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-6"><div className="flex items-center gap-2"><LockKeyhole size={18} /><h2 className="text-xl font-semibold">3. ლიცენზია და ფოტოების უფლება</h2></div><p className="mt-2 text-sm leading-6 text-amber-900/75">Checkbox მონიშნე მხოლოდ მაშინ, როდესაც წყაროს ლიცენზია ან ავტორის წერილობითი ნებართვა ნამდვილად შეამოწმე. დაუდასტურებელი Draft ვერ გამოქვეყნდება.</p><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">ლიცენზიის სახელი<input name="license_name" placeholder="მაგ. CC BY 4.0 / Creator permission" className={inputClass} /></label><label className="text-sm font-medium">ლიცენზიის ან მტკიცებულების URL<input name="license_url" type="url" className={inputClass} /></label><label className="flex items-start gap-3 rounded-xl bg-white/70 p-4 text-sm"><input name="commercial_use_allowed" type="checkbox" className="mt-1" /><span><strong className="block">კომერციული გამოყენება ნებადართულია</strong><span className="mt-1 block text-xs text-hooma-muted">დაბეჭდილი პროდუქტის გაყიდვის უფლება დადასტურებულია.</span></span></label><label className="flex items-start gap-3 rounded-xl bg-white/70 p-4 text-sm"><input name="media_use_allowed" type="checkbox" className="mt-1" /><span><strong className="block">ფოტოების გამოყენება ნებადართულია</strong><span className="mt-1 block text-xs text-hooma-muted">წყაროს სურათების Hooma-ზე ჩვენების უფლება დადასტურებულია.</span></span></label></div></section>
 
-    {state.message ? <div className={`rounded-xl p-4 text-sm ${state.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{state.ok ? <CheckCircle2 size={16} className="mr-2 inline" /> : null}{state.message}{state.productId ? <span className="ml-2 font-semibold">ID: {state.productId.slice(0, 8)}</span> : null}</div> : null}
+    {state.message ? <div className={`rounded-xl p-4 text-sm ${state.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{state.ok ? <CheckCircle2 size={16} className="mr-2 inline" /> : null}{state.message}{state.productId ? <Link href={`/admin/products/${state.productId}`} className="ml-2 font-semibold underline">პროდუქტის გახსნა</Link> : null}</div> : null}
     <button disabled={pending || !materials.length || !categories.length} className="w-full rounded-xl bg-hooma-text px-6 py-4 font-semibold text-white disabled:opacity-45">{pending ? "Draft იქმნება..." : "პროდუქტის Draft-ის შექმნა"}</button>
   </form>;
 }
