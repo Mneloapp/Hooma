@@ -20,6 +20,15 @@ function validateMakerWorldUrl(value: string) {
   return url;
 }
 
+function makerWorldIdentity(url: URL) {
+  const match = url.pathname.match(/\/models\/(\d+)(?:-([^/?#]+))?/i);
+  const modelId = match?.[1] ?? url.pathname.match(/model[_/-](\d+)/i)?.[1] ?? null;
+  let titleSegment = match?.[2] ?? "";
+  try { titleSegment = decodeURIComponent(titleSegment); } catch { titleSegment = match?.[2] ?? ""; }
+  const inferredTitle = titleSegment ? clean(titleSegment.replace(/[-_]+/g, " "), 240) : "";
+  return { modelId, inferredTitle };
+}
+
 async function fetchAllowedHtml(initialUrl: URL) {
   let current = initialUrl;
   for (let redirect = 0; redirect < 4; redirect += 1) {
@@ -82,7 +91,7 @@ function extractPublicMetadata(html: string, url: URL) {
   const images = Array.from(new Set(rawImages.map((value) => {
     try { return new URL(value, url).toString(); } catch { return ""; }
   }).filter((value) => value.startsWith("https://")))).slice(0, 12);
-  const modelId = url.pathname.match(/\/models\/(\d+)/i)?.[1] ?? url.pathname.match(/model[_/-](\d+)/i)?.[1] ?? null;
+  const modelId = makerWorldIdentity(url).modelId;
 
   return {
     title: clean(first("og:title") || first("twitter:title") || titleTag, 240),
@@ -111,10 +120,14 @@ export async function createMakerWorldImportAction(_state: ImportActionState, fo
     return { ok: false, message: error instanceof Error ? error.message : "ბმული არასწორია." };
   }
 
+  const identity = makerWorldIdentity(url);
+
   const baseRow = {
     source_url: url.toString(),
     platform: "makerworld",
     status: "submitted",
+    source_model_id: identity.modelId,
+    ...(identity.inferredTitle ? { source_title: identity.inferredTitle } : {}),
     submitted_by: profile.id,
     error_message: null,
   };
@@ -144,7 +157,13 @@ export async function createMakerWorldImportAction(_state: ImportActionState, fo
     await admin.from("source_imports").update({ status: "needs_review", error_message: message }).eq("id", importRow.id);
     await admin.from("audit_log").insert({ actor_id: profile.id, action: "makerworld_metadata_extraction_failed", entity_type: "source_import", entity_id: importRow.id, metadata: { source_url: url.toString(), error: message } });
     revalidatePath("/admin/imports");
-    return { ok: true, importId: importRow.id, message: `ბმული შენახულია, მაგრამ ავტომატური წაკითხვა ვერ დასრულდა: ${message}` };
+    return {
+      ok: true,
+      importId: importRow.id,
+      message: message.includes("HTTP 403")
+        ? "MakerWorld-მა ავტომატური წაკითხვა შეზღუდა. ბმული და Model ID შენახულია — შეავსე დარჩენილი მონაცემები გადამოწმების გვერდზე."
+        : `ბმული შენახულია, მაგრამ ავტომატური წაკითხვა ვერ დასრულდა: ${message}`,
+    };
   }
 }
 
@@ -154,6 +173,24 @@ const positiveNumber = (formData: FormData, key: string, max: number) => {
   if (!Number.isFinite(value) || value <= 0 || value > max) throw new Error(`${key} არასწორია.`);
   return value;
 };
+
+function makerWorldImageUrls(value: unknown) {
+  const entries = String(value ?? "")
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (entries.length > 12) throw new Error("ერთ პროდუქტზე მაქსიმუმ 12 ფოტო-ბმულია დაშვებული.");
+
+  return Array.from(new Set(entries.map((entry) => {
+    const url = new URL(entry);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || !(host === "makerworld.bblmw.com" || host.endsWith(".bblmw.com"))) {
+      throw new Error("ფოტოს ბმული MakerWorld-ის HTTPS მისამართი უნდა იყოს (makerworld.bblmw.com).");
+    }
+    url.hash = "";
+    return url.toString();
+  })));
+}
 
 export async function createProductDraftFromImportAction(_state: DraftActionState, formData: FormData): Promise<DraftActionState> {
   const profile = await requirePermission("catalog.manage");
@@ -172,6 +209,8 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
   if (nameEn.length < 2 || nameKa.length < 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return { ok: false, message: "შეავსე ორივე სახელი და სწორი ინგლისური slug." };
 
   try {
+    const description = clean(formData.get("description"), 3_000);
+    const submittedImages = makerWorldImageUrls(formData.get("image_urls"));
     const grams = positiveNumber(formData, "material_grams", 1_000_000);
     const minutes = Math.round(positiveNumber(formData, "print_minutes", 1_000_000));
     const plateCount = Math.round(positiveNumber(formData, "plate_count", 100));
@@ -183,6 +222,38 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
       z: positiveNumber(formData, "dimension_z", 100_000),
       unit: "mm",
     };
+    const { data: importRecord, error: importReadError } = await admin
+      .from("source_imports")
+      .select("source_url,extracted_metadata")
+      .eq("id", importId)
+      .single();
+    if (importReadError || !importRecord) throw new Error("MakerWorld Import ჩანაწერი ვერ მოიძებნა.");
+
+    const currentMetadata = importRecord.extracted_metadata && typeof importRecord.extracted_metadata === "object"
+      ? importRecord.extracted_metadata
+      : {};
+    const existingImages = Array.isArray(currentMetadata.images)
+      ? currentMetadata.images.filter((value: unknown) => typeof value === "string").slice(0, 12)
+      : [];
+    const reviewedMetadata = {
+      ...currentMetadata,
+      title: nameEn,
+      description,
+      images: submittedImages.length ? submittedImages : existingImages,
+      canonical_url: importRecord.source_url,
+      extraction: {
+        ...(currentMetadata.extraction && typeof currentMetadata.extraction === "object" ? currentMetadata.extraction : {}),
+        operator_reviewed_at: new Date().toISOString(),
+      },
+    };
+    const { error: metadataUpdateError } = await admin.from("source_imports").update({
+      source_title: nameEn,
+      extracted_metadata: reviewedMetadata,
+      status: "metadata_ready",
+      error_message: null,
+    }).eq("id", importId);
+    if (metadataUpdateError) throw new Error("პროდუქტის აღწერა და ფოტოები ვერ შეინახა.");
+
     const { data, error } = await admin.rpc("create_product_draft_from_import", {
       import_uuid: importId,
       actor_uuid: profile.id,
