@@ -6,7 +6,17 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
   const protectedPath = pathname.startsWith("/admin") || pathname.startsWith("/account");
-  if (!protectedPath || !isSupabaseConfigured()) return response;
+  if (!protectedPath) return response;
+
+  const redirectToLogin = () => {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(url);
+  };
+
+  if (!isSupabaseConfigured()) return redirectToLogin();
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -22,12 +32,7 @@ export async function middleware(request: NextRequest) {
   });
 
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
+  if (!userData.user) return redirectToLogin();
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", userData.user.id).single();
   if (pathname.startsWith("/admin") && profile?.role !== "admin") {

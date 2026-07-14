@@ -20,7 +20,8 @@ export async function loginAction(_state: AuthState, formData: FormData): Promis
 
   const email = getString(formData, "email");
   const password = getString(formData, "password");
-  const next = getString(formData, "next") || "/";
+  const requestedNext = getString(formData, "next");
+  const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/account";
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) return { message: error.message };
