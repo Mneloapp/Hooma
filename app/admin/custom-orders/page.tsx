@@ -1,5 +1,7 @@
 import { Download, FileBox, ShieldCheck, WalletCards } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { redirect } from "next/navigation";
 import { quoteCustomRequestAction } from "./actions";
 
 type QuoteFile = { id: string; storage_path: string; original_name: string; size_bytes: number; signedUrl?: string };
@@ -23,15 +25,17 @@ type QuoteRequest = {
 const formatBytes = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 
 export default async function AdminCustomOrdersPage() {
-  const supabase = (await createClient()) as any;
-  const { data } = supabase
-    ? await supabase.from("custom_quote_requests").select("*, custom_quote_files(*)").order("created_at", { ascending: true })
+  const profile = await requirePermission("quotes.manage");
+  if (!profile) redirect("/login?next=/admin/custom-orders");
+  const admin = createAdminClient() as any;
+  const { data } = admin
+    ? await admin.from("custom_quote_requests").select("*, custom_quote_files(*)").order("created_at", { ascending: true })
     : { data: [] };
   const requests = (data ?? []) as QuoteRequest[];
 
-  if (supabase) {
+  if (admin) {
     await Promise.all(requests.flatMap((request) => (request.custom_quote_files ?? []).map(async (file) => {
-      const { data: signed } = await supabase.storage.from("custom-quote-files").createSignedUrl(file.storage_path, 900);
+      const { data: signed } = await admin.storage.from("custom-quote-files").createSignedUrl(file.storage_path, 900);
       file.signedUrl = signed?.signedUrl;
     })));
   }

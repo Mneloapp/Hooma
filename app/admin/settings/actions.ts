@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/supabase/server";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const numberInRange = (formData: FormData, key: string, min: number, max: number) => {
@@ -12,7 +12,7 @@ const numberInRange = (formData: FormData, key: string, min: number, max: number
 };
 
 export async function saveMaterialCostAction(formData: FormData) {
-  const profile = await requireRole("admin");
+  const profile = await requirePermission("pricing.manage");
   const admin = createAdminClient() as any;
   const id = String(formData.get("id") ?? "");
   if (!profile || !admin || !uuidPattern.test(id)) return;
@@ -29,7 +29,7 @@ export async function saveMaterialCostAction(formData: FormData) {
 }
 
 export async function savePricingProfileAction(formData: FormData) {
-  const profile = await requireRole("admin");
+  const profile = await requirePermission("pricing.manage");
   const admin = createAdminClient() as any;
   const id = String(formData.get("id") ?? "");
   if (!profile || !admin || !uuidPattern.test(id)) return;

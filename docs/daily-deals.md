@@ -9,7 +9,7 @@ Selection uses the least recently featured products first. Products that have ne
 ## Required setup
 
 1. Apply `supabase/migrations/20260714000200_daily_deals.sql`.
-2. Set `SUPABASE_SERVICE_ROLE_KEY` and a strong `CRON_SECRET` in Vercel.
+2. Set `SUPABASE_SECRET_KEY` and a strong `CRON_SECRET` in Vercel.
 3. Keep the Vercel schedule at `0 20 * * *` (20:00 UTC is 00:00 in Tbilisi).
 4. Only products with `status = active`, `production_status = approved`, an active variant, and a numeric price are eligible.
 

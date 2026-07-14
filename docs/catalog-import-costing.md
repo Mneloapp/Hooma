@@ -23,4 +23,4 @@ The final price adds configured VAT and rounds upward to the configured step. Ev
 
 ## Required setup
 
-Apply `supabase/migrations/20260714000300_catalog_import_costing.sql`, configure `SUPABASE_SERVICE_ROLE_KEY`, and ensure the operator profile has the `admin` role.
+Apply `supabase/migrations/20260714000300_catalog_import_costing.sql`, configure `SUPABASE_SECRET_KEY`, and ensure the operator profile has the `admin` role.

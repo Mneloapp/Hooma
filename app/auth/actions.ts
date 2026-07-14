@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { products } from "@/data/products";
@@ -14,6 +15,16 @@ type AuthState = {
 const getString = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const safeNextPath = (value: string, fallback = "/account") => value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : fallback;
+
+async function siteOrigin() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${protocol}://${host}`;
+}
+
 export async function loginAction(_state: AuthState, formData: FormData): Promise<AuthState> {
   const supabase = await createClient();
   if (!supabase) return { message: "Supabase is not configured yet." };
@@ -21,12 +32,30 @@ export async function loginAction(_state: AuthState, formData: FormData): Promis
   const email = getString(formData, "email");
   const password = getString(formData, "password");
   const requestedNext = getString(formData, "next");
-  const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/account";
+  const next = safeNextPath(requestedNext);
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) return { message: error.message };
+  if (error) return { message: "ელფოსტა ან პაროლი არასწორია." };
+  const { data } = await supabase.auth.getUser();
+  if (data.user) await (supabase as any).from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", data.user.id);
   revalidatePath("/", "layout");
   redirect(next);
+}
+
+export async function googleLoginAction(formData: FormData) {
+  const supabase = await createClient();
+  const next = safeNextPath(getString(formData, "next"));
+  if (!supabase) redirect(`/login?error=config&next=${encodeURIComponent(next)}`);
+
+  const callback = new URL("/auth/callback", await siteOrigin());
+  callback.searchParams.set("next", next);
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: callback.toString() },
+  });
+
+  if (error || !data.url) redirect(`/login?error=google&next=${encodeURIComponent(next)}`);
+  redirect(data.url);
 }
 
 export async function signupAction(_state: AuthState, formData: FormData): Promise<AuthState> {
@@ -45,7 +74,7 @@ export async function signupAction(_state: AuthState, formData: FormData): Promi
   });
 
   if (error) return { message: error.message };
-  return { ok: true, message: "Account created. Please check your email if confirmation is enabled." };
+  return { ok: true, message: "ანგარიში შეიქმნა. თუ ელფოსტის დადასტურება ჩართულია, შეამოწმე შემოსული წერილები." };
 }
 
 export async function logoutAction() {
@@ -105,6 +134,14 @@ export async function createOrderAction(formData: FormData) {
     return { ok: false, message: "Please complete the required contact and delivery fields." };
   }
   if (!admin) return { ok: false, message: "Test order storage is not connected yet. Add the server-only Supabase service role key." };
+  if (!supabase) return { ok: false, message: "შეკვეთის გასაფორმებლად ანგარიშში შესვლაა საჭირო." };
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) return { ok: false, message: "შეკვეთის გასაფორმებლად ჯერ ანგარიშში შედი." };
+  const { data: customer } = await supabase.from("customers").select("id").eq("profile_id", user.id).maybeSingle();
+  if (!customer?.id) return { ok: false, message: "მომხმარებლის პროფილი ვერ მოიძებნა. გამოდი ანგარიშიდან და ხელახლა შედი." };
+  const customerId = customer.id;
 
   const authoritativeItems = await Promise.all(payload.items.map(async (item) => {
     const catalogProduct = products.find((product) => product.id === item.product_id);
@@ -112,11 +149,9 @@ export async function createOrderAction(formData: FormData) {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) return null;
 
     if (catalogProduct) {
-      const variant = catalogProduct.variants.find((candidate) => candidate.id === item.variant_id);
-      if (!variant) return null;
-      const material = variant.availableMaterials.includes(item.material ?? "") ? item.material! : variant.availableMaterials[0];
-      const color = variant.availableColors.includes(item.color ?? "") ? item.color! : variant.availableColors[0];
-      return { productId: null, variantId: null, productName: catalogProduct.hoomaName, variant, unitPrice: variant.price, quantity, material, color };
+      // Local preview cards are never orderable. Every catalog order must retain
+      // real product/variant UUIDs so production receives its reviewed source.
+      return null;
     }
 
     if (!uuidPattern.test(item.product_id) || !uuidPattern.test(item.variant_id)) return null;
@@ -158,15 +193,6 @@ export async function createOrderAction(formData: FormData) {
   const safeItems = authoritativeItems.filter((item): item is NonNullable<typeof item> => item !== null);
   const subtotal = safeItems.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
 
-  const { data: userData } = supabase ? await supabase.auth.getUser() : { data: { user: null } };
-  const user = userData.user;
-  let customerId: string | null = null;
-
-  if (user) {
-    const { data: customer } = await supabase.from("customers").select("id").eq("profile_id", user.id).maybeSingle();
-    customerId = customer?.id ?? null;
-  }
-
   const promisedAt = new Date();
   let businessDays = 0;
   while (businessDays < 3) {
@@ -177,7 +203,7 @@ export async function createOrderAction(formData: FormData) {
 
   const orderInsert = {
     customer_id: customerId,
-    guest_email: payload.guest_email ?? null,
+    guest_email: user.email ?? payload.guest_email ?? null,
     guest_phone: payload.guest_phone ?? null,
     status: "pending",
     payment_status: "unpaid",
@@ -229,5 +255,6 @@ export async function createOrderAction(formData: FormData) {
   });
 
   revalidatePath("/admin/orders");
+  revalidatePath("/account/orders");
   return { ok: true, message: `სატესტო შეკვეთა მიღებულია. ტრეკინგის კოდი: ${order.tracking_code}` };
 }

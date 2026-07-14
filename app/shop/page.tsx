@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Filter, Search, SlidersHorizontal, X } from "lucide-react";
 import { catalogCategories, getCategory } from "@/data/catalog";
-import { products } from "@/data/products";
 import { ProductGrid } from "@/components/ProductGrid";
+import { getStorefrontCatalog } from "@/lib/storefront-catalog";
 import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 type ShopParams = { category?: string; subcategory?: string; q?: string; material?: string; sort?: string };
 
@@ -12,6 +14,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
   const { category, subcategory, q = "", material, sort = "featured" } = params;
   const selectedCategory = category ? getCategory(category) : undefined;
   const query = q.trim().toLocaleLowerCase("ka-GE");
+  const products = await getStorefrontCatalog();
 
   const buildHref = (changes: Partial<ShopParams>, clear: Array<keyof ShopParams> = []) => {
     const next = new URLSearchParams();

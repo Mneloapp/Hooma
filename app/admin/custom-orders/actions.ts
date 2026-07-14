@@ -1,15 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, requireRole } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const getString = (formData: FormData, key: string, max = 2000) => String(formData.get(key) ?? "").trim().slice(0, max);
 
 export async function quoteCustomRequestAction(formData: FormData) {
-  const profile = await requireRole("admin");
+  const profile = await requirePermission("quotes.manage");
   if (!profile) return;
-  const supabase = (await createClient()) as any;
-  if (!supabase) return;
+  const admin = createAdminClient() as any;
+  if (!admin) return;
 
   const requestId = getString(formData, "request_id", 36);
   const quotedPrice = Number(getString(formData, "quoted_price", 32));
@@ -22,7 +23,7 @@ export async function quoteCustomRequestAction(formData: FormData) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  const { error } = await supabase
+  const { error } = await admin
     .from("custom_quote_requests")
     .update({
       status: "quoted",
@@ -39,7 +40,7 @@ export async function quoteCustomRequestAction(formData: FormData) {
     .in("status", ["submitted", "under_review", "needs_information"]);
 
   if (!error) {
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       actor_id: profile.id,
       action: "custom_quote_created",
       entity_type: "custom_quote_request",

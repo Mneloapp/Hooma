@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/supabase/server";
 
 export type ImportActionState = { ok?: boolean; message?: string; importId?: string };
 export type DraftActionState = { ok?: boolean; message?: string; productId?: string };
@@ -99,7 +99,7 @@ function extractPublicMetadata(html: string, url: URL) {
 }
 
 export async function createMakerWorldImportAction(_state: ImportActionState, formData: FormData): Promise<ImportActionState> {
-  const profile = await requireRole("admin");
+  const profile = await requirePermission("catalog.manage");
   if (!profile) return { ok: false, message: "ამ მოქმედებისთვის ადმინისტრატორის ანგარიშია საჭირო." };
   const admin = createAdminClient() as any;
   if (!admin) return { ok: false, message: "Supabase service role ჯერ არ არის დაკავშირებული." };
@@ -156,7 +156,7 @@ const positiveNumber = (formData: FormData, key: string, max: number) => {
 };
 
 export async function createProductDraftFromImportAction(_state: DraftActionState, formData: FormData): Promise<DraftActionState> {
-  const profile = await requireRole("admin");
+  const profile = await requirePermission("catalog.manage");
   const admin = createAdminClient() as any;
   if (!profile || !admin) return { ok: false, message: "ადმინისტრატორის სესია ან Supabase service role ვერ მოიძებნა." };
 

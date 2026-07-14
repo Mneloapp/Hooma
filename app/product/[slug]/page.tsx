@@ -1,21 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, ChevronRight, Clock3, Factory, ShieldCheck, Truck } from "lucide-react";
-import { getProductBySlug, getRelatedProducts, products } from "@/data/products";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductShelf } from "@/components/ProductShelf";
+import { getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
 
-export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = getProductBySlug(slug);
+  const [product, products] = await Promise.all([getStorefrontProductBySlug(slug), getStorefrontCatalog()]);
   if (!product) notFound();
   const defaultVariant = product.variants[0];
-  const related = getRelatedProducts(product);
+  const related = products.filter((item) => item.category === product.category && item.id !== product.id).slice(0, 3);
   const recommendations = related.length >= 3 ? related : products.filter((item) => item.id !== product.id).slice(0, 5);
 
   return (
@@ -29,7 +27,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <Link href={`/shop?category=${product.categorySlug}`} className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent hover:underline">{product.category}</Link>
           <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] sm:text-4xl">{product.nameKa}</h1>
           <p className="mt-4 text-base leading-7 text-hooma-muted">{product.shortDescriptionKa}</p>
-          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hooma-text/10 py-4 text-sm"><span className="font-medium">SKU: {defaultVariant.sku}</span><span className="text-hooma-muted">კატალოგის სატესტო პროდუქტი</span></div>
+          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hooma-text/10 py-4 text-sm"><span className="font-medium">SKU: {defaultVariant.sku}</span><span className="text-hooma-muted">{product.isOrderable ? "წარმოებისთვის დამტკიცებული" : "კატალოგის სატესტო პროდუქტი"}</span></div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {[[Clock3, "ვადა", `${product.leadTimeDays} სამუშაო დღე შეკვეთიდან მიწოდებამდე`], [Factory, "წარმოება", "თბილისი"], [Truck, "მიწოდება", "ტრეკინგით"]].map(([Icon, label, value]) => { const DetailIcon = Icon as typeof Clock3; return <div key={String(label)} className="rounded-xl border border-hooma-text/10 bg-white/65 p-4"><DetailIcon size={17} className="text-hooma-accent" /><p className="mt-3 text-xs text-hooma-muted">{String(label)}</p><p className="mt-1 text-sm font-medium">{String(value)}</p></div>; })}

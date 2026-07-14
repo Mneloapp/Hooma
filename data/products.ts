@@ -51,6 +51,7 @@ export type Product = {
   licenseStatus: "not_required" | "pending" | "verified";
   sourcePlatform: "hooma" | "makerworld" | "other";
   sourceCreator?: string;
+  isOrderable: boolean;
 };
 
 const colors = ["Warm white", "Graphite", "Sage", "Sand", "Terracotta"];
@@ -133,6 +134,7 @@ const product = ({
   estimatedPrintHours: printHours,
   licenseStatus: "not_required",
   sourcePlatform: "hooma",
+  isOrderable: false,
 });
 
 export const products: Product[] = [

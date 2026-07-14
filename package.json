@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "db:migrations": "supabase migration list --linked",
+    "db:push:dry-run": "supabase db push --linked --dry-run",
+    "db:push": "supabase db push --linked",
     "start": "next start",
     "lint": "next lint"
   },
@@ -23,6 +26,7 @@
     "@types/react-dom": "^19.0.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
+    "supabase": "^2.109.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"
   }

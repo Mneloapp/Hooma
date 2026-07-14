@@ -15,6 +15,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
   const [color, setColor] = useState(product.availableColors[0] ?? "Warm white");
   const [quantity, setQuantity] = useState(1);
   const { addItem, openCart } = useCart();
+  const orderable = product.isOrderable && product.sourcePlatform === "makerworld";
 
   const specs = useMemo(
     () => [
@@ -26,7 +27,9 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
     [material, product.leadTimeDays, variant],
   );
 
-  const addConfiguredItem = () => addItem({
+  const addConfiguredItem = () => {
+    if (!orderable) return;
+    addItem({
     product_id: product.id,
     variant_id: variant.id,
     inventory_id: null,
@@ -41,7 +44,8 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
     price: variant.price,
     pricePlaceholder: variant.pricePlaceholder,
     price_placeholder: variant.pricePlaceholder,
-  });
+    });
+  };
 
   return (
     <div className={compact ? "rounded-2xl bg-white p-5" : "rounded-2xl border border-hooma-text/15 bg-white p-5 shadow-sm lg:sticky lg:top-32"}>
@@ -70,12 +74,13 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
         <Button
           className="w-full"
           onClick={addConfiguredItem}
+          disabled={!orderable}
         >
-          კალათაში დამატება
+          {orderable ? "კალათაში დამატება" : "დამტკიცებამდე მიუწვდომელია"}
         </Button>
-        {!compact ? <button type="button" onClick={() => { addConfiguredItem(); openCart(); }} className="h-12 w-full rounded-full border border-hooma-text/15 bg-[#d9e6d2] text-sm font-semibold text-hooma-text transition hover:bg-[#cbdcc2]">შეუკვეთე ახლა — სატესტო</button> : null}
+        {!compact && orderable ? <button type="button" onClick={() => { addConfiguredItem(); openCart(); }} className="h-12 w-full rounded-full border border-hooma-text/15 bg-[#d9e6d2] text-sm font-semibold text-hooma-text transition hover:bg-[#cbdcc2]">შეუკვეთე ახლა — სატესტო</button> : null}
         {!compact ? <div className="grid gap-2 border-t border-hooma-text/10 pt-4 text-xs text-hooma-muted">{[[Clock3, "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"], [PackageCheck, "შეკვეთის სტატუსის ტრეკინგი"], [ShieldCheck, "ოპერატორის ხარისხის კონტროლი"]].map(([Icon, label]) => { const TrustIcon = Icon as typeof Clock3; return <p key={String(label)} className="flex items-center gap-2"><TrustIcon size={14} className="text-hooma-accent" />{String(label)}</p>; })}</div> : null}
-        <p className="text-center text-xs leading-5 text-hooma-muted">სატესტო რეჟიმში შეკვეთა არ ითვლება გადახდილად და ბეჭდვა ავტომატურად არ დაიწყება.</p>
+        <p className="text-center text-xs leading-5 text-hooma-muted">{orderable ? "სატესტო რეჟიმში შეკვეთა არ ითვლება გადახდილად და ბეჭდვა ავტომატურად არ დაიწყება." : "ეს დემო პროდუქტი შეკვეთაში ვერ დაემატება. ხელმისაწვდომი გახდება MakerWorld წყაროს, ფასისა და წარმოების პროფილის დამტკიცების შემდეგ."}</p>
       </div>
     </div>
   );
