@@ -3,7 +3,7 @@ export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9
 const workflowErrors: Array<[string, string]> = [
   ["PRODUCTION_FORBIDDEN", "ამ მოქმედებისთვის წარმოების ოპერატორის უფლებაა საჭირო."],
   ["PAYMENT_REQUIRED", "რეალური შეკვეთა გადახდის დადასტურებამდე წარმოებაში ვერ გადავა."],
-  ["PRODUCT_NOT_PRODUCTION_READY", "პროდუქტის წარმოების სტატუსი ან MakerWorld-ის კომერციული უფლება დასადასტურებელია."],
+  ["PRODUCT_NOT_PRODUCTION_READY", "პროდუქტი წარმოებისთვის ჯერ მზად არ არის."],
   ["SOURCE_NOT_VERIFIED", "ამ პროდუქტის დადასტურებული MakerWorld წყარო ვერ მოიძებნა."],
   ["ORDER_HAS_NO_ITEMS", "შეკვეთაში პროდუქტი არ არის."],
   ["ORDER_NOT_FOUND", "შეკვეთა ვერ მოიძებნა."],

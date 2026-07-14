@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ImageIcon, ShieldCheck } from "lucide-react";
+import { ArrowRight, ImageIcon, ShieldCheck } from "lucide-react";
 import { MakerWorldImportForm } from "@/components/admin/MakerWorldImportForm";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,7 +35,6 @@ export default async function ImportInboxPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <MakerWorldImportForm />
         <aside className="space-y-4">
-          <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 text-amber-950"><AlertTriangle size={20} /><h2 className="mt-5 font-semibold">ლიცენზიის ბარიერი</h2><p className="mt-2 text-sm leading-6 text-amber-900/75">ფოტოები მონახაზში მხოლოდ preview-ბმულებად შემოდის. პროდუქტი ვერ გამოქვეყნდება, სანამ კომერციული გამოყენებისა და მედიის უფლება დადასტურებული არ არის.</p></div>
           <div className="rounded-[1.5rem] border border-hooma-text/10 bg-white/75 p-5"><ShieldCheck size={20} className="text-hooma-accent" /><h2 className="mt-5 font-semibold">ადმინისტრატორის კონტროლი</h2><p className="mt-2 text-sm leading-6 text-hooma-muted">ავტომატიზაცია ქმნის Draft-ს. კატეგორიას, დამზადებადობას, თვითღირებულებას, მარჟასა და გამოქვეყნებას ადასტურებს ადმინისტრატორი.</p></div>
         </aside>
       </div>

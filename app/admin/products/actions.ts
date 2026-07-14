@@ -58,26 +58,6 @@ function refreshCatalog(productId: string) {
   revalidatePath(`/admin/products/${productId}`);
 }
 
-export async function reviewProductRightsAction(_state: PublicationState, formData: FormData): Promise<PublicationState> {
-  const context = await ownerCatalogContext(formData);
-  if ("error" in context) return { ok: false, message: context.error };
-  const licenseName = String(formData.get("license_name") ?? "").trim().slice(0, 200);
-  const licenseUrl = String(formData.get("license_url") ?? "").trim().slice(0, 2_000);
-  const commercialAllowed = formData.get("commercial_use_allowed") === "on";
-  const mediaAllowed = formData.get("media_use_allowed") === "on";
-  const { error } = await context.admin.rpc("review_catalog_source_rights", {
-    requested_product_id: context.productId,
-    requested_license_name: licenseName,
-    requested_license_url: licenseUrl,
-    requested_commercial_allowed: commercialAllowed,
-    requested_media_allowed: mediaAllowed,
-    actor_profile_id: context.profile.id,
-  });
-  if (error) return { ok: false, message: error.message.includes("HTTPS") ? "მიუთითე ლიცენზიის ან ნებართვის სრული HTTPS ბმული." : error.message.includes("name is required") ? "მიუთითე ლიცენზიის ან ნებართვის სახელი." : "უფლებების გადაწყვეტილება ვერ შეინახა." };
-  refreshCatalog(context.productId);
-  return { ok: true, message: commercialAllowed && mediaAllowed ? "უფლებები დადასტურებულია." : "უფლებები Pending სტატუსით შეინახა." };
-}
-
 export async function setProductProductionApprovalAction(_state: PublicationState, formData: FormData): Promise<PublicationState> {
   const context = await ownerCatalogContext(formData);
   if ("error" in context) return { ok: false, message: context.error };
@@ -105,7 +85,7 @@ export async function setProductPublicationAction(_state: PublicationState, form
     const message = error.message.includes("Production approval")
       ? "ჯერ დაადასტურე წარმოების მზადყოფნა."
       : error.message.includes("commercial and media rights")
-        ? "ჯერ შეინახე კომერციული და მედიის უფლებების გადაწყვეტილება."
+        ? "პროდუქტი საჯაროდ გამოსაქვეყნებლად ჯერ მზად არ არის."
         : error.message.includes("priced variant")
           ? "პროდუქტს აქტიური გასაყიდი ფასი სჭირდება."
           : "გამოქვეყნების გადაწყვეტილება ვერ შესრულდა.";

@@ -12,7 +12,7 @@ export function ProductEditor({ product }: { product: Product }) {
       <label className="block text-sm font-medium lg:col-span-2">Georgian description<textarea defaultValue={product.shortDescriptionKa} rows={3} className="mt-2 w-full rounded-[1.5rem] border border-hooma-text/10 px-4 py-3" /></label>
       <label className="block text-sm font-medium lg:col-span-2">English description<textarea defaultValue={product.shortDescription} rows={3} className="mt-2 w-full rounded-[1.5rem] border border-hooma-text/10 px-4 py-3" /></label>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 lg:col-span-2">
-        Publishing must stay disabled until source rights, commercial-use license, production profile, cost, safety notes, and test print are approved.
+        Publishing stays disabled until the production profile, cost, safety notes, and test print are approved.
       </div>
     </div>
   );

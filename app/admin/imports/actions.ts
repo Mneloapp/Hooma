@@ -151,7 +151,7 @@ export async function createMakerWorldImportAction(_state: ImportActionState, fo
     }).eq("id", importRow.id);
     await admin.from("audit_log").insert({ actor_id: profile.id, action: "makerworld_metadata_extracted", entity_type: "source_import", entity_id: importRow.id, metadata: { source_url: url.toString(), image_count: extracted.images.length } });
     revalidatePath("/admin/imports");
-    return { ok: true, importId: importRow.id, message: "Metadata მიღებულია. ახლა გადაამოწმე ტექნიკური მონაცემები და ლიცენზია." };
+    return { ok: true, importId: importRow.id, message: "Metadata მიღებულია. ახლა გადაამოწმე პროდუქტისა და ტექნიკური პროფილის მონაცემები." };
   } catch (error) {
     const message = error instanceof Error ? clean(error.message, 500) : "Metadata ავტომატურად ვერ წამოვიღეთ.";
     await admin.from("source_imports").update({ status: "needs_review", error_message: message }).eq("id", importRow.id);
@@ -199,7 +199,6 @@ function draftDatabaseError(message: string) {
   if (message.includes("product_sources") || message.includes("source_url")) {
     return "ეს MakerWorld წყარო უკვე დაკავშირებულია სხვა პროდუქტთან. გახსენი არსებული პროდუქტი ან წაშალე ძველი Draft.";
   }
-  if (message.includes("Verified rights require")) return "მონიშნული უფლებებისთვის შეავსე ლიცენზიის სახელი და მტკიცებულების URL.";
   if (message.includes("Active category and material")) return "არჩეული კატეგორია ან მასალა აღარ არის აქტიური. თავიდან აირჩიე ორივე.";
   if (message.includes("Material grams and print minutes")) return "წონა და ბეჭდვის დრო ნულზე მეტი უნდა იყოს.";
   return `Draft ვერ შეიქმნა: ${clean(message, 300)}`;
@@ -307,10 +306,10 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
       selected_margin_percent: margin,
       selected_plate_count: plateCount,
       selected_dimensions: dimensions,
-      selected_license_name: clean(formData.get("license_name"), 200),
-      selected_license_url: clean(formData.get("license_url"), 2_000),
-      confirmed_commercial_use: formData.get("commercial_use_allowed") === "on",
-      confirmed_media_use: formData.get("media_use_allowed") === "on",
+      selected_license_name: null,
+      selected_license_url: null,
+      confirmed_commercial_use: false,
+      confirmed_media_use: false,
     });
     if (error || !data) return { ok: false, message: error ? draftDatabaseError(error.message) : "Product Draft ვერ შეიქმნა." };
     revalidatePath("/admin/imports");
