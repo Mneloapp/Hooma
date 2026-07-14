@@ -1,5 +1,4 @@
 import {
-  Blocks,
   CarFront,
   Gift,
   House,
@@ -111,20 +110,6 @@ export const catalogCategories: CatalogCategory[] = [
       { slug: "seasonal", name: "Seasonal", nameKa: "სეზონური" },
     ],
   },
-  {
-    slug: "custom-parts",
-    name: "Custom Parts",
-    nameKa: "ინდივიდუალური დეტალები",
-    description: "Replacement pieces, adapters, brackets, and made-to-fit requests.",
-    icon: Blocks,
-    subcategories: [
-      { slug: "replacement-parts", name: "Replacement parts", nameKa: "შემცვლელი დეტალები" },
-      { slug: "adapters", name: "Adapters", nameKa: "ადაპტერები" },
-      { slug: "mounts-brackets", name: "Mounts & brackets", nameKa: "სამაგრები და კრონშტეინები" },
-      { slug: "request-part", name: "Request a part", nameKa: "დეტალის შეკვეთა" },
-    ],
-  },
 ];
 
 export const getCategory = (slug: string) => catalogCategories.find((category) => category.slug === slug);
-

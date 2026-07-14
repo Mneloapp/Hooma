@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowRight, BadgePercent, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
 import { catalogCategories } from "@/data/catalog";
 import { products } from "@/data/products";
@@ -11,33 +10,7 @@ import { useLanguage } from "@/components/LanguageProvider";
 export default function Home() {
   const { language } = useLanguage();
   const georgian = language === "ka";
-  const deskProducts = products.filter((item) => item.categorySlug === "desk-tech");
-  const homeProducts = products.filter((item) => ["home-organization", "kitchen"].includes(item.categorySlug));
-  const personalProducts = products.filter((item) => ["pets", "kids-learning", "custom-parts"].includes(item.categorySlug));
-  const primaryDepartments = [catalogCategories[0], catalogCategories[1], catalogCategories[2], catalogCategories[7]];
-  const secondaryDepartments = [catalogCategories[3], catalogCategories[4], catalogCategories[5], catalogCategories[6]];
-
-  const DepartmentCards = ({ categories }: { categories: typeof catalogCategories }) => (
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-      {categories.map((category) => (
-        <section key={category.slug} className="flex min-h-[300px] flex-col rounded-[1.25rem] border border-hooma-text/10 bg-white/85 p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-hooma-panel text-hooma-accent"><category.icon size={20} /></span>
-            <h2 className="text-lg font-semibold leading-6">{georgian ? category.nameKa : category.name}</h2>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-2.5">
-            {category.subcategories.map((subcategory) => (
-              <Link key={subcategory.slug} href={`/shop?category=${category.slug}&subcategory=${subcategory.slug}`} className="group flex min-h-20 flex-col justify-between rounded-xl bg-hooma-background p-3 text-xs leading-5 text-hooma-muted transition hover:bg-hooma-panel hover:text-hooma-text">
-                <span>{georgian ? subcategory.nameKa : subcategory.name}</span>
-                <ArrowRight size={13} className="mt-2 text-hooma-accent transition group-hover:translate-x-1" />
-              </Link>
-            ))}
-          </div>
-          <Link href={`/shop?category=${category.slug}`} className="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-medium text-hooma-accent hover:underline">{georgian ? "ყველას ნახვა" : "See all"}<ArrowRight size={14} /></Link>
-        </section>
-      ))}
-    </div>
-  );
+  const catalogProducts = products.filter((item) => item.categorySlug !== "custom-parts");
 
   return (
     <main className="bg-hooma-panel/60 pb-16">
@@ -59,20 +32,24 @@ export default function Home() {
           ].map(([Icon, title, copy], index) => { const InfoIcon = Icon as typeof Clock3; return <div key={String(title)} className={`flex items-center gap-3 px-5 py-4 ${index ? "border-t border-hooma-text/10 sm:border-l sm:border-t-0" : ""}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-hooma-accent"><InfoIcon size={18} /></span><div><h2 className="text-sm font-semibold">{String(title)}</h2><p className="mt-0.5 text-xs text-hooma-muted">{String(copy)}</p></div></div>; })}
         </section>
 
-        <DepartmentCards categories={primaryDepartments} />
-
-        <ProductShelf eyebrow="Popular now" title={georgian ? "პოპულარული პროდუქტები" : "Popular products"} products={products.slice(1)} />
+        <ProductShelf eyebrow="Popular now" title={georgian ? "პოპულარული პროდუქტები" : "Popular products"} products={catalogProducts} />
 
         <section className="grid gap-5 rounded-[1.25rem] bg-hooma-text p-6 text-white md:grid-cols-[1fr_auto] md:items-center lg:p-8">
           <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8d8bd]">Custom made by Hooma</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{georgian ? "ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ." : "Can’t find the part you need? We’ll make it."}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">{georgian ? "გამოგვიგზავნე ფოტო, ზომები ან არსებული მოდელი — ოპერატორი შეაფასებს დამზადების შესაძლებლობას და ვადას." : "Send a photo, dimensions, or an existing model and our operator will review feasibility and timing."}</p></div>
           <Button href="/account/custom-orders" variant="secondary" className="border-white/15 bg-white text-hooma-text">{georgian ? "ინდივიდუალური შეკვეთა" : "Request a custom part"}<ArrowRight size={15} className="ml-2" /></Button>
         </section>
 
-        {deskProducts.length ? <ProductShelf title={georgian ? "სამუშაო სივრცე და ტექნიკა" : "Desk & tech"} products={deskProducts} href="/shop?category=desk-tech" /> : null}
-
-        <DepartmentCards categories={secondaryDepartments} />
-
-        {homeProducts.length ? <ProductShelf title={georgian ? "სახლისა და სამზარეულოსთვის" : "For home & kitchen"} products={homeProducts} href="/shop?category=home-organization" /> : null}
+        <div className="space-y-5">
+          {catalogCategories.map((category) => (
+            <ProductShelf
+              key={category.slug}
+              eyebrow={georgian ? "კატეგორია" : "Category"}
+              title={georgian ? category.nameKa : category.name}
+              products={catalogProducts.filter((item) => item.categorySlug === category.slug)}
+              href={`/shop?category=${category.slug}`}
+            />
+          ))}
+        </div>
 
         <section className="grid gap-5 rounded-[1.25rem] bg-white/80 p-6 shadow-sm lg:grid-cols-[0.9fr_1.1fr] lg:p-8">
           <div>
@@ -86,7 +63,6 @@ export default function Home() {
           </div>
         </section>
 
-        {personalProducts.length ? <ProductShelf title={georgian ? "პერსონალური და ინდივიდუალური" : "Personal & custom"} products={personalProducts} href="/shop?category=custom-parts" /> : null}
       </div>
     </main>
   );

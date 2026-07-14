@@ -22,7 +22,8 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
     return value ? `/shop?${value}` : "/shop";
   };
 
-  const filtered = products
+  const catalogProducts = products.filter((product) => product.categorySlug !== "custom-parts");
+  const filtered = catalogProducts
     .filter((product) => {
       if (category && product.categorySlug !== category) return false;
       if (subcategory && product.subcategorySlug !== subcategory) return false;
@@ -40,6 +41,28 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
     });
 
   const activeFilters = [q ? `ძიება: ${q}` : null, selectedCategory?.nameKa, subcategory ? selectedCategory?.subcategories.find((item) => item.slug === subcategory)?.nameKa : null, material].filter(Boolean);
+
+  const CategoryTree = ({ mobile = false }: { mobile?: boolean }) => (
+    <nav className={cn("grid text-sm", mobile ? "max-h-[55vh] gap-1 overflow-y-auto pr-1" : "gap-1")}>
+      <Link href={buildHref({}, ["category", "subcategory"])} className={cn("rounded-lg px-2 py-2 transition", !category ? "bg-hooma-panel font-semibold text-hooma-accent" : "text-hooma-muted hover:bg-hooma-panel/70 hover:text-hooma-text")}>ყველა კატეგორია</Link>
+      {catalogCategories.map((item) => {
+        const CategoryIcon = item.icon;
+        const selected = category === item.slug;
+        return (
+          <div key={item.slug} className="border-t border-hooma-text/10 pt-2 first:border-0">
+            <Link href={buildHref({ category: item.slug }, ["subcategory"])} className={cn("flex items-center gap-2 rounded-lg px-2 py-2 font-semibold transition", selected ? "bg-hooma-panel text-hooma-accent" : "text-hooma-text hover:bg-hooma-panel/70")}>
+              <CategoryIcon size={16} className="shrink-0" />{item.nameKa}
+            </Link>
+            <div className="mb-2 ml-6 grid border-l border-hooma-text/10 pl-3">
+              {item.subcategories.map((child) => (
+                <Link key={child.slug} href={buildHref({ category: item.slug, subcategory: child.slug })} className={cn("rounded-md px-2 py-1.5 text-[13px] leading-5 transition", selected && subcategory === child.slug ? "bg-hooma-accent/10 font-semibold text-hooma-accent" : "text-hooma-muted hover:bg-hooma-panel/70 hover:text-hooma-text")}>{child.nameKa}</Link>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </nav>
+  );
 
   return (
     <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
@@ -65,18 +88,13 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
       </div>
 
       <div className="mt-5 grid items-start gap-7 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="hidden rounded-2xl border border-hooma-text/10 bg-white/65 p-5 lg:block lg:sticky lg:top-32">
+        <aside className="hidden max-h-[calc(100vh-9rem)] overflow-y-auto rounded-2xl border border-hooma-text/10 bg-white/65 p-5 lg:block lg:sticky lg:top-32">
           <div className="flex items-center gap-2 border-b border-hooma-text/10 pb-4"><Filter size={17} /><h2 className="font-semibold">ფილტრები</h2></div>
 
           <div className="py-5">
             <h3 className="text-sm font-semibold">კატეგორია</h3>
-            <div className="mt-3 grid gap-2 text-sm">
-              <Link href={buildHref({}, ["category", "subcategory"])} className={!category ? "font-semibold text-hooma-accent" : "text-hooma-muted hover:text-hooma-text"}>ყველა კატეგორია</Link>
-              {catalogCategories.map((item) => <Link key={item.slug} href={buildHref({ category: item.slug }, ["subcategory"])} className={category === item.slug ? "font-semibold text-hooma-accent" : "text-hooma-muted hover:text-hooma-text"}>{item.nameKa}</Link>)}
-            </div>
+            <div className="mt-3"><CategoryTree /></div>
           </div>
-
-          {selectedCategory ? <div className="border-t border-hooma-text/10 py-5"><h3 className="text-sm font-semibold">ქვეკატეგორია</h3><div className="mt-3 grid gap-2 text-sm"><Link href={buildHref({}, ["subcategory"])} className={!subcategory ? "font-semibold text-hooma-accent" : "text-hooma-muted hover:text-hooma-text"}>ყველა</Link>{selectedCategory.subcategories.map((item) => <Link key={item.slug} href={buildHref({ subcategory: item.slug })} className={subcategory === item.slug ? "font-semibold text-hooma-accent" : "text-hooma-muted hover:text-hooma-text"}>{item.nameKa}</Link>)}</div></div> : null}
 
           <div className="border-t border-hooma-text/10 py-5"><h3 className="text-sm font-semibold">მასალა</h3><div className="mt-3 grid gap-2 text-sm">{["PLA+", "PETG", "ASA", "TPU"].map((item) => <Link key={item} href={material === item ? buildHref({}, ["material"]) : buildHref({ material: item })} className="flex items-center gap-2 text-hooma-muted hover:text-hooma-text"><span className={cn("h-4 w-4 rounded border", material === item ? "border-hooma-accent bg-hooma-accent" : "border-hooma-text/20 bg-white")} />{item}</Link>)}</div></div>
 
@@ -91,7 +109,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
                 <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-hooma-text/10 bg-white px-3 py-2 text-sm"><SlidersHorizontal size={15} />ფილტრები</summary>
                 <div className="absolute left-0 top-12 z-20 w-72 rounded-2xl border border-hooma-text/10 bg-white p-4 shadow-xl">
                   <p className="text-sm font-semibold">კატეგორია</p>
-                  <div className="mt-3 grid max-h-52 gap-2 overflow-y-auto text-sm"><Link href={buildHref({}, ["category", "subcategory"])} className={!category ? "font-semibold text-hooma-accent" : "text-hooma-muted"}>ყველა კატეგორია</Link>{catalogCategories.map((item) => <Link key={item.slug} href={buildHref({ category: item.slug }, ["subcategory"])} className={category === item.slug ? "font-semibold text-hooma-accent" : "text-hooma-muted"}>{item.nameKa}</Link>)}</div>
+                  <div className="mt-3"><CategoryTree mobile /></div>
                   <p className="mt-4 border-t border-hooma-text/10 pt-4 text-sm font-semibold">მასალა</p>
                   <div className="mt-3 flex flex-wrap gap-2">{["PLA+", "PETG", "ASA", "TPU"].map((item) => <Link key={item} href={material === item ? buildHref({}, ["material"]) : buildHref({ material: item })} className={cn("rounded-full border px-3 py-1.5 text-xs", material === item ? "border-hooma-accent bg-hooma-accent text-white" : "border-hooma-text/10 text-hooma-muted")}>{item}</Link>)}</div>
                 </div>

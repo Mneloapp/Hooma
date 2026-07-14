@@ -24,6 +24,9 @@ create table if not exists public.daily_deal_items (
 
 create index if not exists idx_daily_deal_items_product_date on public.daily_deal_items(product_id, deal_date desc);
 
+-- Custom work remains an account-based quote service, not a storefront category.
+update public.categories set is_active = false where slug = 'custom-parts';
+
 drop trigger if exists set_daily_deal_batches_updated_at on public.daily_deal_batches;
 create trigger set_daily_deal_batches_updated_at before update on public.daily_deal_batches
 for each row execute function public.set_updated_at();
@@ -86,6 +89,11 @@ begin
     ) chosen_variant
     where p.status = 'active'
       and p.production_status = 'approved'
+      and coalesce(p.category, '') <> 'Custom Parts'
+      and not exists (
+        select 1 from public.categories product_category
+        where product_category.id = p.category_id and product_category.slug = 'custom-parts'
+      )
       and not exists (
         select 1 from public.daily_deal_items today
         where today.deal_date = $1 and today.product_id = p.id
