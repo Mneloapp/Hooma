@@ -39,11 +39,11 @@ export async function deleteProductDraftAction(_state: DeleteProductState, formD
   return { ok: true, message: "Draft პროდუქტი წაიშალა." };
 }
 
-async function ownerCatalogContext(formData: FormData) {
+async function catalogAdminContext(formData: FormData) {
   const profile = await requirePermission("catalog.manage");
   const admin = createAdminClient() as any;
   const productId = String(formData.get("product_id") ?? "");
-  if (!profile || !admin || profile.role !== "owner") return { error: "ამ მოქმედებას მხოლოდ Owner ასრულებს." } as const;
+  if (!profile || !admin || !["owner", "admin"].includes(profile.role)) return { error: "ამ მოქმედებას მხოლოდ Admin ან Owner ასრულებს." } as const;
   if (!uuidPattern.test(productId)) return { error: "პროდუქტის ID არასწორია." } as const;
   return { profile, admin, productId } as const;
 }
@@ -58,22 +58,8 @@ function refreshCatalog(productId: string) {
   revalidatePath(`/admin/products/${productId}`);
 }
 
-export async function setProductProductionApprovalAction(_state: PublicationState, formData: FormData): Promise<PublicationState> {
-  const context = await ownerCatalogContext(formData);
-  if ("error" in context) return { ok: false, message: context.error };
-  const approved = formData.get("approved") === "true";
-  const { error } = await context.admin.rpc("set_catalog_production_approval", {
-    requested_product_id: context.productId,
-    requested_approved: approved,
-    actor_profile_id: context.profile.id,
-  });
-  if (error) return { ok: false, message: error.message.includes("priced technical variant") ? "ჯერ საჭიროა ფასი, მასალა, წონა, დრო და ფირფიტების რაოდენობა." : "წარმოების გადაწყვეტილება ვერ შეინახა." };
-  refreshCatalog(context.productId);
-  return { ok: true, message: approved ? "წარმოება დამტკიცებულია." : "წარმოება შეჩერებულია." };
-}
-
 export async function setProductPublicationAction(_state: PublicationState, formData: FormData): Promise<PublicationState> {
-  const context = await ownerCatalogContext(formData);
+  const context = await catalogAdminContext(formData);
   if ("error" in context) return { ok: false, message: context.error };
   const publish = formData.get("publish") === "true";
   const { error } = await context.admin.rpc("set_catalog_publication", {
@@ -82,12 +68,10 @@ export async function setProductPublicationAction(_state: PublicationState, form
     actor_profile_id: context.profile.id,
   });
   if (error) {
-    const message = error.message.includes("Production approval")
-      ? "ჯერ დაადასტურე წარმოების მზადყოფნა."
-      : error.message.includes("commercial and media rights")
+    const message = error.message.includes("commercial and media rights")
         ? "პროდუქტი საჯაროდ გამოსაქვეყნებლად ჯერ მზად არ არის."
-        : error.message.includes("priced variant")
-          ? "პროდუქტს აქტიური გასაყიდი ფასი სჭირდება."
+        : error.message.includes("priced technical variant") || error.message.includes("priced variant")
+          ? "პროდუქტს ფასი და შევსებული ტექნიკური მონაცემები სჭირდება."
           : "გამოქვეყნების გადაწყვეტილება ვერ შესრულდა.";
     return { ok: false, message };
   }
