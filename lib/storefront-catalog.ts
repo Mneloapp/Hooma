@@ -84,7 +84,6 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       .from("product_sources")
       .select("product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed")
       .in("product_id", productIds)
-      .eq("platform", "makerworld")
       .in("license_status", ["verified", "not_required"])
       .eq("commercial_use_allowed", true)
       .eq("media_use_allowed", true),
@@ -95,7 +94,10 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const variantsByProduct = new Map<string, any[]>();
   for (const variant of variantRows ?? []) variantsByProduct.set(variant.product_id, [...(variantsByProduct.get(variant.product_id) ?? []), variant]);
   const sourceByProduct = new Map<string, any>();
-  for (const source of sourceRows ?? []) if (safeSourceUrl(source.source_url) && !sourceByProduct.has(source.product_id)) sourceByProduct.set(source.product_id, source);
+  for (const source of sourceRows ?? []) {
+    const sourceAllowed = source.platform === "hooma" || (source.platform === "makerworld" && safeSourceUrl(source.source_url));
+    if (sourceAllowed && !sourceByProduct.has(source.product_id)) sourceByProduct.set(source.product_id, source);
+  }
 
   const catalog = productRows.flatMap((row: any): Product[] => {
     const source = sourceByProduct.get(row.id);
@@ -160,7 +162,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       leadTimeDays: Number(row.lead_time_business_days || 3),
       estimatedPrintHours: row.estimated_print_minutes ? Number(row.estimated_print_minutes) / 60 : null,
       licenseStatus: source.license_status === "not_required" ? "not_required" : "verified",
-      sourcePlatform: "makerworld",
+      sourcePlatform: source.platform === "hooma" ? "hooma" : "makerworld",
       sourceCreator: source.creator_name || undefined,
       isOrderable: true,
     }];

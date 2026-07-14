@@ -15,7 +15,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
   const [color, setColor] = useState(product.availableColors[0] ?? "Warm white");
   const [quantity, setQuantity] = useState(1);
   const { addItem, openCart } = useCart();
-  const orderable = product.isOrderable && product.sourcePlatform === "makerworld";
+  const orderable = product.isOrderable && product.sourcePlatform !== "other";
 
   const specs = useMemo(
     () => [
