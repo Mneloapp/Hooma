@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { products as previewProducts, type Product, type ProductCategory, type ProductVariant } from "@/data/products";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requirePermission } from "@/lib/supabase/server";
 
 type CategoryRow = { id: string; parent_id: string | null; slug: string; name_en: string; name_ka: string };
 
@@ -172,4 +173,84 @@ export async function getStorefrontProductBySlug(slug: string) {
   const catalog = await getStorefrontCatalog();
   return catalog.find((product) => product.slug === slug)
     ?? previewProducts.find((product) => product.slug === slug);
+}
+
+export async function getAdminPreviewProductById(productId: string): Promise<Product | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId)) return null;
+  const profile = await requirePermission("catalog.manage");
+  const admin = createAdminClient() as any;
+  if (!profile || !admin) return null;
+
+  const [{ data: row }, { data: categoryRows }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
+    admin.from("products").select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes").eq("id", productId).maybeSingle(),
+    admin.from("categories").select("id,parent_id,slug,name_en,name_ka").eq("is_active", true),
+    admin.from("product_variants").select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,is_active").eq("product_id", productId).eq("is_active", true),
+    admin.from("product_sources").select("platform,creator_name").eq("product_id", productId).limit(1),
+  ]);
+  if (!row) return null;
+
+  const categories = new Map(((categoryRows ?? []) as CategoryRow[]).map((category) => [category.id, category]));
+  const selectedCategory = row.category_id ? categories.get(row.category_id) : null;
+  const parentCategory = selectedCategory?.parent_id ? categories.get(selectedCategory.parent_id) : selectedCategory;
+  const categorySlug = parentCategory?.slug ?? "home-organization";
+  const subcategory = selectedCategory?.parent_id ? selectedCategory : null;
+  const placeholder = categoryPlaceholders[categorySlug] ?? "/catalog-placeholders/home.svg";
+  const heroImage = safeCatalogImage(row.hero_image, placeholder);
+  const galleryImages: string[] = Array.from(new Set<string>((Array.isArray(row.gallery_images) ? row.gallery_images : []).map((image: unknown) => safeCatalogImage(image, heroImage))));
+  const rawVariants = (variantRows ?? []).filter((variant: any) => Number(variant.price ?? row.base_price) > 0);
+  if (!rawVariants.length) return null;
+
+  const variants: ProductVariant[] = rawVariants.map((variant: any) => {
+    const material = typeof variant.material === "string" && variant.material ? variant.material : "PLA+";
+    const availableColors = Array.isArray(variant.available_colors) && variant.available_colors.length ? variant.available_colors : ["სტანდარტული"];
+    return {
+      id: variant.id,
+      sku: variant.sku,
+      sizeLabel: variant.size_label || "Standard",
+      layoutLabel: variant.layout_label || "Catalog preview",
+      productDimensionsCm: dimensionLabel(variant.product_dimensions_cm),
+      packingDimensionsCm: dimensionLabel(variant.packing_dimensions_cm),
+      grossWeightKg: variant.gross_weight_kg === null ? "—" : String(variant.gross_weight_kg),
+      image: safeCatalogImage(variant.image, heroImage),
+      price: Number(variant.price ?? row.base_price),
+      pricePlaceholder: variant.price_placeholder || row.price_placeholder || "ფასი დამტკიცებულია",
+      availableColors,
+      availableMaterials: [material],
+    };
+  });
+  const availableMaterials = Array.from(new Set(variants.flatMap((variant) => variant.availableMaterials)));
+  const availableColors = Array.from(new Set(variants.flatMap((variant) => variant.availableColors)));
+  const price = Math.min(...variants.map((variant) => variant.price ?? Number.POSITIVE_INFINITY));
+  const source = sourceRows?.[0];
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    hoomaName: row.hooma_name,
+    nameKa: row.name_ka || row.hooma_name,
+    category: categoryNames[categorySlug] ?? "Home & Organization",
+    categorySlug,
+    subcategory: subcategory?.name_en || parentCategory?.name_en || "Catalog",
+    subcategorySlug: subcategory?.slug || categorySlug,
+    shortDescription: row.short_description || "Made on demand by Hooma.",
+    shortDescriptionKa: row.short_description_ka || row.short_description || "პროდუქტი მზადდება შეკვეთის შემდეგ.",
+    longDescription: row.long_description || row.short_description || "",
+    heroImage,
+    galleryImages: galleryImages.length ? galleryImages : [heroImage],
+    variants,
+    availableMaterials,
+    availableColors,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    isFeatured: Boolean(row.is_featured),
+    price: Number.isFinite(price) ? price : Number(row.base_price),
+    pricePlaceholder: row.price_placeholder || "ფასი დამტკიცებულია",
+    currency: "GEL",
+    deliveryEstimate: row.delivery_estimate || "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე",
+    leadTimeDays: Number(row.lead_time_business_days || 3),
+    estimatedPrintHours: row.estimated_print_minutes ? Number(row.estimated_print_minutes) / 60 : null,
+    licenseStatus: "pending",
+    sourcePlatform: source?.platform === "makerworld" ? "makerworld" : source?.platform === "hooma" ? "hooma" : "other",
+    sourceCreator: source?.creator_name || undefined,
+    isOrderable: false,
+  };
 }

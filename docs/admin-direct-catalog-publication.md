@@ -11,3 +11,7 @@ Publishing also sets `production_status` to `approved` after the technical check
 - Customers and ordinary authenticated users cannot execute the database function.
 - Inactive staff profiles and roles other than `admin` or `owner` are rejected.
 - Public source eligibility remains enforced in the database and is not exposed as a customer-facing workflow.
+
+## Draft storefront preview
+
+Catalog staff can open a Draft in the customer product-page layout without publishing it. The preview loader verifies `catalog.manage` before the service-role query, validates the product UUID, keeps `isOrderable` false, and never includes the Draft in the anonymous catalog query. An unauthenticated visitor receives a not-found response for the preview URL.

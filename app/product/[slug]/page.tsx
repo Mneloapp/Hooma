@@ -1,16 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, ChevronRight, Clock3, Factory, ShieldCheck, Truck } from "lucide-react";
+import { Check, ChevronRight, Clock3, Factory, FlaskConical, ShieldCheck, Truck } from "lucide-react";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductShelf } from "@/components/ProductShelf";
-import { getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
+import { getAdminPreviewProductById, getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }) {
   const { slug } = await params;
-  const [product, products] = await Promise.all([getStorefrontProductBySlug(slug), getStorefrontCatalog()]);
+  const { preview: previewId } = await searchParams;
+  const [previewProduct, products] = await Promise.all([
+    previewId ? getAdminPreviewProductById(previewId) : Promise.resolve(null),
+    getStorefrontCatalog(),
+  ]);
+  if (previewId && (!previewProduct || previewProduct.slug !== slug)) notFound();
+  const product = previewProduct ?? await getStorefrontProductBySlug(slug);
   if (!product) notFound();
   const defaultVariant = product.variants[0];
   const related = products.filter((item) => item.category === product.category && item.id !== product.id).slice(0, 3);
@@ -18,6 +24,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
+      {previewProduct ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-950"><FlaskConical size={19} className="mt-0.5 shrink-0" /><div><p className="font-semibold">Admin-ის სატესტო Preview</p><p className="mt-1 text-sm leading-6 text-blue-900/75">ეს Draft მხოლოდ ავტორიზებულ თანამშრომელს უჩანს. კალათაში დამატება და შეკვეთა გამორთულია.</p></div></div> : null}
       <nav aria-label="Breadcrumb" className="mb-5 flex items-center gap-1.5 overflow-x-auto text-xs text-hooma-muted hide-scrollbar"><Link href="/" className="hover:text-hooma-text">მთავარი</Link><ChevronRight size={13} /><Link href="/shop" className="hover:text-hooma-text">კატალოგი</Link><ChevronRight size={13} /><Link href={`/shop?category=${product.categorySlug}`} className="hover:text-hooma-text">{product.category}</Link><ChevronRight size={13} /><span className="truncate text-hooma-text">{product.nameKa}</span></nav>
 
       <section className="grid items-start gap-7 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,0.9fr)_330px] xl:gap-10">

@@ -80,7 +80,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
         </Button>
         {!compact && orderable ? <button type="button" onClick={() => { addConfiguredItem(); openCart(); }} className="h-12 w-full rounded-full border border-hooma-text/15 bg-[#d9e6d2] text-sm font-semibold text-hooma-text transition hover:bg-[#cbdcc2]">შეუკვეთე ახლა — სატესტო</button> : null}
         {!compact ? <div className="grid gap-2 border-t border-hooma-text/10 pt-4 text-xs text-hooma-muted">{[[Clock3, "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"], [PackageCheck, "შეკვეთის სტატუსის ტრეკინგი"], [ShieldCheck, "ოპერატორის ხარისხის კონტროლი"]].map(([Icon, label]) => { const TrustIcon = Icon as typeof Clock3; return <p key={String(label)} className="flex items-center gap-2"><TrustIcon size={14} className="text-hooma-accent" />{String(label)}</p>; })}</div> : null}
-        <p className="text-center text-xs leading-5 text-hooma-muted">{orderable ? "სატესტო რეჟიმში შეკვეთა არ ითვლება გადახდილად და ბეჭდვა ავტომატურად არ დაიწყება." : "ეს დემო პროდუქტი შეკვეთაში ვერ დაემატება. ხელმისაწვდომი გახდება MakerWorld წყაროს, ფასისა და წარმოების პროფილის დამტკიცების შემდეგ."}</p>
+        <p className="text-center text-xs leading-5 text-hooma-muted">{orderable ? "სატესტო რეჟიმში შეკვეთა არ ითვლება გადახდილად და ბეჭდვა ავტომატურად არ დაიწყება." : "ეს სატესტო Preview შეკვეთაში ვერ დაემატება და ანონიმურ მომხმარებელს არ უჩანს."}</p>
       </div>
     </div>
   );
