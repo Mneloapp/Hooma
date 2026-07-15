@@ -1,11 +1,15 @@
 export type ProductCategory =
-  | "Home & Organization"
-  | "Desk & Tech"
-  | "Kitchen"
-  | "Kids & Learning"
-  | "Pets"
-  | "Car Accessories"
-  | "Gifts & Personalization"
+  | "3D Printer"
+  | "Art"
+  | "Education"
+  | "Fashion"
+  | "Hobby & DIY"
+  | "Household"
+  | "Miniatures"
+  | "Props & Cosplay"
+  | "Tools"
+  | "Toys & Games"
+  | "Generative 3D Model"
   | "Custom Parts";
 
 export type ProductVariant = {
@@ -148,10 +152,10 @@ export const products: Product[] = [
     slug: "orbit-phone-stand",
     hoomaName: "Hooma Orbit Stand",
     nameKa: "Hooma Orbit ტელეფონის სადგამი",
-    category: "Desk & Tech",
-    categorySlug: "desk-tech",
-    subcategory: "Phone stands",
-    subcategorySlug: "phone-stands",
+    category: "Hobby & DIY",
+    categorySlug: "hobbies-diy",
+    subcategory: "Electronics",
+    subcategorySlug: "electronics",
     shortDescription: "A sculptural phone stand for focused desks and clear video calls.",
     shortDescriptionKa: "სკულპტურული ტელეფონის სადგამი მოწესრიგებული სამუშაო სივრცისა და ვიდეოზარებისთვის.",
     image: "/catalog-placeholders/desk-tech.svg",
@@ -165,10 +169,10 @@ export const products: Product[] = [
     slug: "arc-cable-dock",
     hoomaName: "Hooma Arc Cable Dock",
     nameKa: "Hooma Arc კაბელის დამჭერი",
-    category: "Desk & Tech",
-    categorySlug: "desk-tech",
-    subcategory: "Cable management",
-    subcategorySlug: "cable-management",
+    category: "Hobby & DIY",
+    categorySlug: "hobbies-diy",
+    subcategory: "Electronics",
+    subcategorySlug: "electronics",
     shortDescription: "A weighted cable dock that keeps daily charging lines within reach.",
     shortDescriptionKa: "კაბელის კომპაქტური დამჭერი, რომელიც დამტენს ყოველთვის ხელმისაწვდომ ადგილზე ინარჩუნებს.",
     image: "/catalog-placeholders/desk-tech.svg",
@@ -182,10 +186,10 @@ export const products: Product[] = [
     slug: "grid-drawer-organizer",
     hoomaName: "Hooma Grid Organizer",
     nameKa: "Hooma Grid უჯრის ორგანაიზერი",
-    category: "Home & Organization",
-    categorySlug: "home-organization",
-    subcategory: "Storage & organizers",
-    subcategorySlug: "storage-organizers",
+    category: "Tools",
+    categorySlug: "tools",
+    subcategory: "Organizers",
+    subcategorySlug: "organizers",
     shortDescription: "Modular trays that turn mixed drawers into an adjustable system.",
     shortDescriptionKa: "მოდულური უჯრები, რომლებიც უწესრიგო სივრცეს მოქნილ სისტემად გარდაქმნის.",
     image: "/catalog-placeholders/home.svg",
@@ -199,10 +203,10 @@ export const products: Product[] = [
     slug: "pour-coffee-station",
     hoomaName: "Hooma Pour Station",
     nameKa: "Hooma Pour ყავის სადგამი",
-    category: "Kitchen",
-    categorySlug: "kitchen",
-    subcategory: "Coffee & bar",
-    subcategorySlug: "coffee-bar",
+    category: "Household",
+    categorySlug: "household",
+    subcategory: "Other Household Models",
+    subcategorySlug: "other-household-models",
     shortDescription: "A clean station for filters, measuring tools, and a calmer coffee ritual.",
     shortDescriptionKa: "ფილტრებისა და აქსესუარების სადგამი ყოველდღიური ყავის რიტუალისთვის.",
     image: "/catalog-placeholders/kitchen.svg",
@@ -216,10 +220,10 @@ export const products: Product[] = [
     slug: "builder-shape-puzzle",
     hoomaName: "Hooma Builder Puzzle",
     nameKa: "Hooma Builder ფორმების ფაზლი",
-    category: "Kids & Learning",
-    categorySlug: "kids-learning",
+    category: "Toys & Games",
+    categorySlug: "toys-games",
     subcategory: "Puzzles",
-    subcategorySlug: "puzzles",
+    subcategorySlug: "toy-puzzles",
     shortDescription: "A guided shape puzzle prepared for age and safety review before release.",
     shortDescriptionKa: "ფორმების შემეცნებითი ფაზლი, რომელიც გამოშვებამდე ასაკობრივ და უსაფრთხოების შემოწმებას გაივლის.",
     image: "/catalog-placeholders/kids.svg",
@@ -234,10 +238,10 @@ export const products: Product[] = [
     slug: "pet-name-tag",
     hoomaName: "Hooma Pet Name Tag",
     nameKa: "Hooma ცხოველის სახელიანი მედალიონი",
-    category: "Pets",
-    categorySlug: "pets",
-    subcategory: "Personalized accessories",
-    subcategorySlug: "pet-personalized",
+    category: "Household",
+    categorySlug: "household",
+    subcategory: "Pets",
+    subcategorySlug: "household-pets",
     shortDescription: "A lightweight personalized tag with readable contact details.",
     shortDescriptionKa: "მსუბუქი პერსონალიზებული მედალიონი მკაფიო საკონტაქტო ინფორმაციით.",
     image: "/catalog-placeholders/pets.svg",
@@ -252,10 +256,10 @@ export const products: Product[] = [
     slug: "car-console-tray",
     hoomaName: "Hooma Console Tray",
     nameKa: "Hooma ავტომობილის კონსოლის უჯრა",
-    category: "Car Accessories",
-    categorySlug: "car-accessories",
-    subcategory: "Console organizers",
-    subcategorySlug: "console-organizers",
+    category: "Hobby & DIY",
+    categorySlug: "hobbies-diy",
+    subcategory: "Vehicles",
+    subcategorySlug: "vehicles",
     shortDescription: "A model-specific organizer concept measured to fit the vehicle precisely.",
     shortDescriptionKa: "კონკრეტული ავტომობილის მოდელზე ზუსტად მორგებული კონსოლის ორგანაიზერი.",
     image: "/catalog-placeholders/car.svg",

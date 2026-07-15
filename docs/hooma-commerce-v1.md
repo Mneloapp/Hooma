@@ -25,14 +25,19 @@ Build a Georgian-first online store where a customer finds a useful product by c
 
 | Category | Subcategories |
 | --- | --- |
-| Home & Organization | Storage & organizers; Hooks & mounts; Bathroom; Plant accessories |
-| Desk & Tech | Phone stands; Laptop & tablet stands; Cable management; Gaming accessories |
-| Kitchen | Organizers; Tools & helpers; Coffee & bar; Storage |
-| Kids & Learning | Montessori; Puzzles; Creative toys; Desk accessories |
-| Pets | Feeding; Organization; Toys; Personalized accessories |
-| Car Accessories | Console organizers; Mounts; Storage; Utility parts |
-| Gifts & Personalization | Name products; Desk gifts; Home gifts; Seasonal |
-| Custom Parts | Replacement parts; Adapters; Mounts & brackets; Request a part |
+| 3D პრინტერი | 3D პრინტერის აქსესუარები; 3D პრინტერის ნაწილები; სატესტო მოდელები |
+| ხელოვნება | 2D ხელოვნება; მონეტები და სამკერდე ნიშნები; ნიშნები და ლოგოები; ქანდაკებები; სხვა ხელოვნების მოდელები |
+| განათლება | ბიოლოგია; ქიმია; ინჟინერია; გეოგრაფია; მათემატიკა; ფიზიკა და ასტრონომია; სხვა საგანმანათლებლო მოდელები |
+| მოდა | ჩანთები; ტანსაცმელი; საყურეები; ფეხსაცმელი; სათვალე; სამკაულები; ბეჭდები; სხვა მოდის მოდელები |
+| ჰობი და საკუთარი ხელით კეთება | ელექტრონიკა; მუსიკა; RC; რობოტიკა; სპორტი და ღია ცის ქვეშ; მანქანები; სხვა ჰობი და საკუთარი ხელით კეთების მოდელები |
+| საყოფაცხოვრებო | დეკორი; დღესასწაულები; ბაღი; ოფისი; შინაური ცხოველები; სხვა სახლის მოდელები |
+| მინიატურები | ცხოველები; არქიტექტურა; არსებები; ხალხი; სხვა მინიატურები |
+| რეკვიზიტები და კოსფლეი | კოსტიუმები; ნიღბები და ჩაფხუტები; კოსფლეის იარაღები; სხვა რეკვიზიტები და კოსფლეი |
+| ხელსაწყოები | გაჯეტები; ხელის ხელსაწყოები; ჩარჩოები; საზომი ინსტრუმენტები; სამედიცინო ინსტრუმენტები; ორგანიზატორები; სხვა ინსტრუმენტები |
+| სათამაშოები და თამაშები | სამაგიდო თამაშები; პერსონაჟები; გარე სათამაშოები; თავსატეხები; სამშენებლო ნაკრებები; სხვა სათამაშოები და თამაშები |
+| გენერაციული 3D მოდელი | — |
+
+ინდივიდუალური შეკვეთა კატალოგისგან განცალკევებული ავტორიზებული workflow-ია და საჯარო კატეგორიად არ ჩანს.
 
 ## System boundaries
 
@@ -89,4 +94,3 @@ flowchart TD
 - Automatic print start without operator approval
 - Customer-visible printer camera stream
 - Production pricing until print-time, material, failure allowance, packaging, and delivery costs are validated
-

@@ -8,23 +8,32 @@ import { requirePermission } from "@/lib/supabase/server";
 type CategoryRow = { id: string; parent_id: string | null; slug: string; name_en: string; name_ka: string };
 
 const categoryNames: Record<string, ProductCategory> = {
-  "home-organization": "Home & Organization",
-  "desk-tech": "Desk & Tech",
-  kitchen: "Kitchen",
-  "kids-learning": "Kids & Learning",
-  pets: "Pets",
-  "car-accessories": "Car Accessories",
-  "gifts-personalization": "Gifts & Personalization",
+  "3d-printer": "3D Printer",
+  art: "Art",
+  education: "Education",
+  fashion: "Fashion",
+  "hobbies-diy": "Hobby & DIY",
+  household: "Household",
+  miniatures: "Miniatures",
+  "props-cosplay": "Props & Cosplay",
+  tools: "Tools",
+  "toys-games": "Toys & Games",
+  "generative-3d-model": "Generative 3D Model",
   "custom-parts": "Custom Parts",
 };
 
 const categoryPlaceholders: Record<string, string> = {
-  "home-organization": "/catalog-placeholders/home.svg",
-  "desk-tech": "/catalog-placeholders/desk-tech.svg",
-  kitchen: "/catalog-placeholders/kitchen.svg",
-  "kids-learning": "/catalog-placeholders/kids.svg",
-  pets: "/catalog-placeholders/pets.svg",
-  "car-accessories": "/catalog-placeholders/car.svg",
+  "3d-printer": "/catalog-placeholders/desk-tech.svg",
+  art: "/catalog-placeholders/home.svg",
+  education: "/catalog-placeholders/kids.svg",
+  fashion: "/catalog-placeholders/custom.svg",
+  "hobbies-diy": "/catalog-placeholders/desk-tech.svg",
+  household: "/catalog-placeholders/home.svg",
+  miniatures: "/catalog-placeholders/custom.svg",
+  "props-cosplay": "/catalog-placeholders/custom.svg",
+  tools: "/catalog-placeholders/home.svg",
+  "toys-games": "/catalog-placeholders/kids.svg",
+  "generative-3d-model": "/catalog-placeholders/custom.svg",
   "custom-parts": "/catalog-placeholders/custom.svg",
 };
 
@@ -98,7 +107,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       .eq("status", "active")
       .eq("production_status", "approved")
       .order("created_at", { ascending: false }),
-    admin.from("categories").select("id,parent_id,slug,name_en,name_ka").eq("is_active", true),
+    admin.from("categories").select("id,parent_id,slug,name_en,name_ka"),
   ]);
   if (productError || categoryError || !productRows?.length) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
 
@@ -136,7 +145,8 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
 
     const selectedCategory = row.category_id ? categories.get(row.category_id) : null;
     const parentCategory = selectedCategory?.parent_id ? categories.get(selectedCategory.parent_id) : selectedCategory;
-    const categorySlug = parentCategory?.slug ?? "home-organization";
+    const categorySlug = parentCategory?.slug ?? "household";
+    if (categorySlug === "custom-parts") return [];
     const subcategory = selectedCategory?.parent_id ? selectedCategory : null;
     const placeholder = categoryPlaceholders[categorySlug] ?? "/catalog-placeholders/home.svg";
     const heroImage = safeCatalogImage(row.hero_image, placeholder);
@@ -172,7 +182,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       slug: row.slug,
       hoomaName: row.hooma_name,
       nameKa: row.name_ka || row.hooma_name,
-      category: categoryNames[categorySlug] ?? "Home & Organization",
+      category: categoryNames[categorySlug] ?? "Household",
       categorySlug,
       subcategory: subcategory?.name_en || parentCategory?.name_en || "Catalog",
       subcategorySlug: subcategory?.slug || categorySlug,
@@ -217,7 +227,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
 
   const [{ data: row }, { data: categoryRows }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
     admin.from("products").select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes").eq("id", productId).maybeSingle(),
-    admin.from("categories").select("id,parent_id,slug,name_en,name_ka").eq("is_active", true),
+    admin.from("categories").select("id,parent_id,slug,name_en,name_ka"),
     admin.from("product_variants").select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active").eq("product_id", productId).eq("is_active", true),
     admin.from("product_sources").select("platform,creator_name").eq("product_id", productId).limit(1),
   ]);
@@ -226,7 +236,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
   const categories = new Map(((categoryRows ?? []) as CategoryRow[]).map((category) => [category.id, category]));
   const selectedCategory = row.category_id ? categories.get(row.category_id) : null;
   const parentCategory = selectedCategory?.parent_id ? categories.get(selectedCategory.parent_id) : selectedCategory;
-  const categorySlug = parentCategory?.slug ?? "home-organization";
+  const categorySlug = parentCategory?.slug ?? "household";
   const subcategory = selectedCategory?.parent_id ? selectedCategory : null;
   const placeholder = categoryPlaceholders[categorySlug] ?? "/catalog-placeholders/home.svg";
   const heroImage = safeCatalogImage(row.hero_image, placeholder);
@@ -264,7 +274,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
     slug: row.slug,
     hoomaName: row.hooma_name,
     nameKa: row.name_ka || row.hooma_name,
-    category: categoryNames[categorySlug] ?? "Home & Organization",
+    category: categoryNames[categorySlug] ?? "Household",
     categorySlug,
     subcategory: subcategory?.name_en || parentCategory?.name_en || "Catalog",
     subcategorySlug: subcategory?.slug || categorySlug,

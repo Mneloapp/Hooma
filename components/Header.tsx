@@ -69,13 +69,7 @@ export function Header() {
       <div className="relative hidden border-r border-hooma-text/10 bg-hooma-panel sm:block">
         <select id={mobile ? "mobile-category" : "desktop-category"} name="category" defaultValue="" className="h-11 max-w-36 appearance-none bg-transparent py-0 pl-3 pr-8 text-xs text-hooma-muted outline-none">
           <option value="">ყველა კატეგორია</option>
-          <option value="home-organization">სახლი</option>
-          <option value="desk-tech">ტექნიკა</option>
-          <option value="kitchen">სამზარეულო</option>
-          <option value="kids-learning">ბავშვები</option>
-          <option value="pets">ცხოველები</option>
-          <option value="car-accessories">ავტომობილი</option>
-          <option value="gifts-personalization">საჩუქრები</option>
+          {catalogCategories.map((category) => <option key={category.slug} value={category.slug}>{category.nameKa}</option>)}
         </select>
         <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-hooma-muted" />
       </div>
