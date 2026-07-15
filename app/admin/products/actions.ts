@@ -11,15 +11,17 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 function deleteError(message: string) {
   if (message.includes("active live order")) return "Archived პროდუქტს აქტიური რეალური შეკვეთა უკავშირდება და მის დასრულებამდე ან გაუქმებამდე ვერ წაიშლება.";
+  if (message.includes("deal history and must be archived")) return "პროდუქტს დღის შეთავაზებების ისტორია აქვს. უსაფრთხო წაშლამდე ჯერ გადაიყვანე Archived სტატუსში.";
   if (message.includes("must be archived")) return "პროდუქტი შეკვეთაშია გამოყენებული. უსაფრთხო წაშლამდე ჯერ გადაიყვანე Archived სტატუსში.";
   if (message.includes("snapshot is incomplete")) return "შეკვეთის ისტორიულ ჩანაწერში პროდუქტის snapshot არასრულია და უსაფრთხო წაშლა ვერ შესრულდება.";
   if (message.includes("referenced by an order")) return "პროდუქტი შეკვეთის ისტორიასთანაა დაკავშირებული და უსაფრთხო წაშლა ვერ შესრულდა.";
-  if (message.includes("deal history")) return "პროდუქტს დღის შეთავაზებების ისტორია აქვს და მისი წაშლა აღარ შეიძლება.";
+  if (message.includes("deal history")) return "დღის შეთავაზებების ისტორიის უსაფრთხო გასუფთავება ვერ შესრულდა.";
   if (message.includes("Only Draft")) return "მხოლოდ Draft სტატუსის პროდუქტის წაშლა შეიძლება.";
   if (message.includes("Some requested products")) return "ერთ-ერთი მონიშნული პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია. განაახლე გვერდი და სცადე თავიდან.";
   if (message.includes("not found")) return "პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია.";
   if (message.includes("Between 1 and 100")) return "ერთ ოპერაციაში მონიშნე 1-დან 100-მდე პროდუქტი.";
   if (message.includes("Owner, Admin, or Catalog Manager")) return "პროდუქტის წაშლა მხოლოდ Owner-ს, Admin-ს ან კატალოგის მენეჯერს შეუძლია.";
+  if (message.includes("delete_catalog_products_v2") || message.includes("schema cache")) return "გაუშვი ბოლო Supabase migration და სცადე თავიდან.";
   return "პროდუქტის წაშლა ვერ დასრულდა. სცადე თავიდან.";
 }
 
@@ -38,7 +40,7 @@ async function deleteCatalogProducts(productIds: string[]) {
 
   const { data: productMedia, error: mediaReadError } = await admin.from("products").select("id,hero_image,gallery_images,video_url").in("id", uniqueIds);
   if (mediaReadError) return { ok: false, message: "პროდუქტების მედიის შემოწმება ვერ მოხერხდა." } as const;
-  const { data, error } = await admin.rpc("delete_catalog_products", {
+  const { data, error } = await admin.rpc("delete_catalog_products_v2", {
     requested_product_ids: uniqueIds,
     actor_profile_id: profile.id,
   });
@@ -58,12 +60,14 @@ async function deleteCatalogProducts(productIds: string[]) {
   revalidatePath("/admin/products");
   revalidatePath("/admin/imports");
   const deletedCount = Number(data?.deleted_count ?? uniqueIds.length);
+  const removedDailyDealCount = Number(data?.removed_daily_deal_count ?? 0);
+  const dealMessage = removedDailyDealCount ? ` Daily Deals-ის ${removedDailyDealCount} კავშირი გასუფთავდა.` : "";
   return {
     ok: true,
     deletedCount,
     message: storageResult.error
-      ? `${deletedCount} პროდუქტი წაიშალა, თუმცა მედიის ნაწილის გასუფთავება ვერ დასრულდა.`
-      : `${deletedCount} პროდუქტი წარმატებით წაიშალა.`,
+      ? `${deletedCount} პროდუქტი წაიშალა.${dealMessage} თუმცა მედიის ნაწილის გასუფთავება ვერ დასრულდა.`
+      : `${deletedCount} პროდუქტი წარმატებით წაიშალა.${dealMessage}`,
   } as const;
 }
 

@@ -56,7 +56,7 @@ export function CatalogProductTable({ products, canDelete }: { products: Catalog
 
     {confirming && selectedProducts.length ? <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950">
       <h2 className="font-semibold">ნამდვილად წავშალოთ {selectedProducts.length} პროდუქტი?</h2>
-      <p className="mt-2 text-sm leading-6 text-red-900/75">ეს მოქმედება შეუქცევადია. Archived პროდუქტი, რომელსაც მხოლოდ სატესტო ან დასრულებული შეკვეთა უკავშირდება, წაიშლება და შეკვეთაში მისი snapshot დარჩება. აქტიური რეალური შეკვეთა და დღის შეთავაზებების ისტორია კვლავ დაცულია.</p>
+      <p className="mt-2 text-sm leading-6 text-red-900/75">ეს მოქმედება შეუქცევადია. Archived პროდუქტის სატესტო/დასრულებული შეკვეთის snapshot დარჩება, ხოლო მისი Daily Deals კავშირები audit ჩანაწერის შექმნის შემდეგ გასუფთავდება. აქტიური რეალური შეკვეთა კვლავ დაცულია.</p>
       <p className="mt-3 text-xs leading-5 text-red-900/65">{selectedProducts.slice(0, 4).map((product) => product.name).join(" · ")}{selectedProducts.length > 4 ? ` · და კიდევ ${selectedProducts.length - 4}` : ""}</p>
       {state.message && !state.ok ? <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-sm text-red-800">{state.message}</p> : null}
       <div className="mt-4 flex flex-wrap gap-2">
