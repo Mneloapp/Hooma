@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 
 export type DeleteProductState = { ok?: boolean; message?: string };
+export type BulkDeleteProductState = { ok?: boolean; message?: string; deletedCount?: number };
 export type PublicationState = { ok?: boolean; message?: string };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -12,8 +13,59 @@ function deleteError(message: string) {
   if (message.includes("referenced by an order")) return "პროდუქტი შეკვეთაში უკვე გამოიყენება და მისი წაშლა აღარ შეიძლება — გადაიყვანე Archived სტატუსში.";
   if (message.includes("deal history")) return "პროდუქტს დღის შეთავაზებების ისტორია აქვს და მისი წაშლა აღარ შეიძლება.";
   if (message.includes("Only Draft")) return "მხოლოდ Draft სტატუსის პროდუქტის წაშლა შეიძლება.";
+  if (message.includes("Some requested products")) return "ერთ-ერთი მონიშნული პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია. განაახლე გვერდი და სცადე თავიდან.";
   if (message.includes("not found")) return "პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია.";
+  if (message.includes("Between 1 and 100")) return "ერთ ოპერაციაში მონიშნე 1-დან 100-მდე პროდუქტი.";
+  if (message.includes("Owner, Admin, or Catalog Manager")) return "პროდუქტის წაშლა მხოლოდ Owner-ს, Admin-ს ან კატალოგის მენეჯერს შეუძლია.";
   return "პროდუქტის წაშლა ვერ დასრულდა. სცადე თავიდან.";
+}
+
+const deletionRoles = ["owner", "admin", "catalog_manager"];
+
+async function deleteCatalogProducts(productIds: string[]) {
+  const profile = await requirePermission("catalog.manage");
+  const admin = createAdminClient() as any;
+  if (!profile || !admin || !deletionRoles.includes(profile.role)) {
+    return { ok: false, message: "პროდუქტის წაშლა მხოლოდ Owner-ს, Admin-ს ან კატალოგის მენეჯერს შეუძლია." } as const;
+  }
+  const uniqueIds = Array.from(new Set(productIds));
+  if (!uniqueIds.length || uniqueIds.length > 100 || uniqueIds.some((id) => !uuidPattern.test(id))) {
+    return { ok: false, message: "მონიშნული პროდუქტების სია არასწორია." } as const;
+  }
+
+  const { data: productMedia, error: mediaReadError } = await admin.from("products").select("id,hero_image,gallery_images,video_url").in("id", uniqueIds);
+  if (mediaReadError) return { ok: false, message: "პროდუქტების მედიის შემოწმება ვერ მოხერხდა." } as const;
+  const { data, error } = await admin.rpc("delete_catalog_products", {
+    requested_product_ids: uniqueIds,
+    actor_profile_id: profile.id,
+  });
+  if (error) return { ok: false, message: deleteError(error.message) } as const;
+
+  const mediaPaths = Array.from(new Set((productMedia ?? []).flatMap((product: any) => [
+    productMediaPath(product.hero_image),
+    ...(Array.isArray(product.gallery_images) ? product.gallery_images.map(productMediaPath) : []),
+    productMediaPath(product.video_url),
+  ]).filter((path: unknown): path is string => typeof path === "string" && Boolean(path))));
+  const storageResult = mediaPaths.length ? await admin.storage.from("product-media").remove(mediaPaths) : { error: null };
+
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/deals");
+  revalidatePath("/product/[slug]", "page");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/imports");
+  const deletedCount = Number(data?.deleted_count ?? uniqueIds.length);
+  return {
+    ok: true,
+    deletedCount,
+    message: storageResult.error
+      ? `${deletedCount} პროდუქტი წაიშალა, თუმცა მედიის ნაწილის გასუფთავება ვერ დასრულდა.`
+      : `${deletedCount} პროდუქტი წარმატებით წაიშალა.`,
+  } as const;
+}
+
+export async function deleteCatalogProductsAction(_state: BulkDeleteProductState, formData: FormData): Promise<BulkDeleteProductState> {
+  return deleteCatalogProducts(formData.getAll("product_ids").map(String));
 }
 
 function productMediaPath(value: unknown) {
@@ -29,34 +81,10 @@ function productMediaPath(value: unknown) {
 }
 
 export async function deleteProductDraftAction(_state: DeleteProductState, formData: FormData): Promise<DeleteProductState> {
-  const profile = await requirePermission("catalog.manage");
-  const admin = createAdminClient() as any;
   const productId = String(formData.get("product_id") ?? "");
-  if (!profile || !admin || !["owner", "admin"].includes(profile.role)) {
-    return { ok: false, message: "Draft პროდუქტის წაშლა მხოლოდ Owner-ს ან Admin-ს შეუძლია." };
-  }
   if (!uuidPattern.test(productId)) return { ok: false, message: "პროდუქტის ID არასწორია." };
-
-  const { data: productMedia } = await admin.from("products").select("hero_image,gallery_images,video_url").eq("id", productId).maybeSingle();
-  const { error } = await admin.rpc("delete_catalog_draft", {
-    requested_product_id: productId,
-    actor_profile_id: profile.id,
-  });
-  if (error) return { ok: false, message: deleteError(error.message) };
-
-  const mediaPaths = Array.from(new Set([
-    productMediaPath(productMedia?.hero_image),
-    ...(Array.isArray(productMedia?.gallery_images) ? productMedia.gallery_images.map(productMediaPath) : []),
-    productMediaPath(productMedia?.video_url),
-  ].filter((path): path is string => Boolean(path))));
-  if (mediaPaths.length) await admin.storage.from("product-media").remove(mediaPaths);
-
-  revalidatePath("/");
-  revalidatePath("/shop");
-  revalidatePath("/deals");
-  revalidatePath("/admin/products");
-  revalidatePath("/admin/imports");
-  return { ok: true, message: "Draft პროდუქტი წაიშალა." };
+  const result = await deleteCatalogProducts([productId]);
+  return { ok: result.ok, message: result.message };
 }
 
 async function catalogAdminContext(formData: FormData) {
