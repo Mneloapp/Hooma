@@ -23,7 +23,6 @@ export type HoomaClipperDraft = {
       material: string | null;
       weightGrams: number | null;
       printTimeMinutes: number | null;
-      dimensionsMm: { x: number | null; y: number | null; z: number | null } | null;
       marginPercent: number | null;
       colorMode: HoomaClipperColorMode;
       colors: string[];
@@ -66,7 +65,6 @@ export function parseHoomaClipperDraft(value: unknown): HoomaClipperDraft {
   const product = isRecord(value.product) ? value.product : {};
   const media = isRecord(product.media) ? product.media : {};
   const technical = isRecord(product.technical) ? product.technical : {};
-  const dimensions = isRecord(technical.dimensionsMm) ? technical.dimensionsMm : null;
   const sourceUrl = cleanUrl(source.url);
   if (!sourceUrl) throw new Error("იმპორტის ფაილში წყაროს სწორი ბმული არ არის.");
 
@@ -104,13 +102,6 @@ export function parseHoomaClipperDraft(value: unknown): HoomaClipperDraft {
         material: cleanText(technical.material, 120),
         weightGrams: cleanNumber(technical.weightGrams, 0.01, 1_000_000),
         printTimeMinutes: cleanNumber(technical.printTimeMinutes, 1, 999_999),
-        dimensionsMm: dimensions
-          ? {
-              x: cleanNumber(dimensions.x, 0.01, 1_000_000),
-              y: cleanNumber(dimensions.y, 0.01, 1_000_000),
-              z: cleanNumber(dimensions.z, 0.01, 1_000_000),
-            }
-          : null,
         marginPercent: cleanNumber(technical.marginPercent, 0, 99.99),
         colorMode,
         colors,

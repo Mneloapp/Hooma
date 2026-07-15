@@ -117,21 +117,6 @@
       : Math.max(1, Math.round(Number(clock[1]) * 60 + Number(clock[2])));
   }
 
-  const dimensionText = bodyText.match(/(?:dimensions?|model\s*size|object\s*size|bounding\s*box)[^\n\r]{0,140}/i)?.[0]
-    ?? bodyText.match(/\d+(?:[.,]\d+)?\s*[x×*]\s*\d+(?:[.,]\d+)?\s*[x×*]\s*\d+(?:[.,]\d+)?\s*(?:mm|cm|in(?:ch(?:es)?)?)/i)?.[0]
-    ?? "";
-  const dimensionMatch = dimensionText.match(/(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(mm|cm|in(?:ch(?:es)?)?)?/i);
-  let dimensionsMm = null;
-  if (dimensionMatch) {
-    const unit = dimensionMatch[4]?.toLowerCase() ?? "mm";
-    const scale = unit === "cm" ? 10 : unit.startsWith("in") ? 25.4 : 1;
-    dimensionsMm = {
-      x: round(number(dimensionMatch[1]) * scale),
-      y: round(number(dimensionMatch[2]) * scale),
-      z: round(number(dimensionMatch[3]) * scale),
-    };
-  }
-
   const categoryHint = clean(
     product?.category
       ?? product?.additionalType
@@ -145,7 +130,6 @@
   if (!material) warnings.push("მასალის ტიპი ვერ მოიძებნა.");
   if (!weightGrams) warnings.push("წონა ვერ მოიძებნა.");
   if (!printTimeMinutes) warnings.push("ბეჭდვის დრო ვერ მოიძებნა.");
-  if (!dimensionsMm) warnings.push("ზომები ვერ მოიძებნა.");
   warnings.push("გამოქვეყნებამდე გადაამოწმე მონაცემები, მედიის ხარისხი და გამოყენების უფლება.");
 
   return {
@@ -166,7 +150,6 @@
         material,
         weightGrams,
         printTimeMinutes,
-        dimensionsMm,
         marginPercent: null,
         colorMode: "customer_choice",
         colors: [],

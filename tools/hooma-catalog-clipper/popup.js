@@ -1,3 +1,18 @@
+const PRODUCT_COLORS = [
+  { name: "თეთრი", hex: "#EEEAE1" },
+  { name: "შავი", hex: "#292929" },
+  { name: "ნაცრისფერი", hex: "#7C7F82" },
+  { name: "ბეჟი", hex: "#D8C7AD" },
+  { name: "წითელი", hex: "#C74943" },
+  { name: "ლურჯი", hex: "#3E6F9E" },
+  { name: "მწვანე", hex: "#6E8263" },
+  { name: "ყვითელი", hex: "#E2B84C" },
+  { name: "ნარინჯისფერი", hex: "#D77A3D" },
+  { name: "იისფერი", hex: "#785C8E" },
+  { name: "ვარდისფერი", hex: "#D491A6" },
+  { name: "ყავისფერი", hex: "#795548" },
+];
+
 const elements = {
   extract: document.querySelector("#extract"),
   status: document.querySelector("#status"),
@@ -8,9 +23,8 @@ const elements = {
   material: document.querySelector("#material"),
   weight: document.querySelector("#weight"),
   time: document.querySelector("#time"),
-  x: document.querySelector("#x"),
-  y: document.querySelector("#y"),
-  z: document.querySelector("#z"),
+  colors: document.querySelector("#colors"),
+  colorHint: document.querySelector("#color-hint"),
   images: document.querySelector("#images"),
   imageCount: document.querySelector("#image-count"),
   videoLink: document.querySelector("#video-link"),
@@ -27,25 +41,57 @@ const show = (message, type = "") => {
 };
 const numeric = (element) => element.value === "" ? null : Number(element.value);
 const selectedImages = () => Array.from(elements.images.querySelectorAll('input[type="checkbox"]:checked')).map((item) => item.value).slice(0, 12);
+const selectedColors = () => Array.from(elements.colors.querySelectorAll('input[type="checkbox"]:checked')).map((item) => item.value);
+const selectedColorMode = () => document.querySelector('input[name="color-mode"]:checked')?.value === "fixed_multicolor" ? "fixed_multicolor" : "customer_choice";
 const slug = (value) => String(value || "hooma-product").toLowerCase().normalize("NFKD").replace(/[^a-z0-9\u10a0-\u10ff]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "hooma-product";
 
 function syncDraft() {
   if (!draft) return null;
-  const x = numeric(elements.x);
-  const y = numeric(elements.y);
-  const z = numeric(elements.z);
+  const colorMode = selectedColorMode();
+  const colors = selectedColors();
+  const minimumColors = colorMode === "fixed_multicolor" ? 2 : 1;
+  if (colors.length < minimumColors) {
+    show(colorMode === "fixed_multicolor" ? "AMS პროდუქტისთვის მონიშნე მინიმუმ ორი ფერი." : "მონიშნე მინიმუმ ერთი ფერი.", "error");
+    return null;
+  }
   draft.product.name = elements.name.value.trim() || null;
   draft.product.description = elements.description.value.trim() || null;
   draft.product.media.imageUrls = selectedImages();
   draft.product.technical.material = elements.material.value.trim() || null;
   draft.product.technical.weightGrams = numeric(elements.weight);
   draft.product.technical.printTimeMinutes = numeric(elements.time);
-  draft.product.technical.dimensionsMm = x || y || z ? { x, y, z } : null;
+  draft.product.technical.colorMode = colorMode;
+  draft.product.technical.colors = colors;
   return draft;
 }
 
 function updateImageCount() {
   elements.imageCount.textContent = `${selectedImages().length} არჩეული`;
+}
+
+function updateColorHint() {
+  elements.colorHint.textContent = selectedColorMode() === "fixed_multicolor"
+    ? "მონიშნე AMS-ის ფიქსირებულ კომბინაციაში შემავალი მინიმუმ ორი ფერი."
+    : "მონიშნე მომხმარებლისთვის ხელმისაწვდომი მინიმუმ ერთი ფერი.";
+}
+
+function renderColorOptions() {
+  elements.colors.replaceChildren();
+  PRODUCT_COLORS.forEach((color) => {
+    const label = document.createElement("label");
+    label.className = "color-option";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = color.name;
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.backgroundColor = color.hex;
+    const name = document.createElement("span");
+    name.className = "color-name";
+    name.textContent = color.name;
+    label.append(checkbox, swatch, name);
+    elements.colors.append(label);
+  });
 }
 
 async function downloadJson(data, saveAs, folderName = slug(data.product.name)) {
@@ -66,9 +112,12 @@ function render(data) {
   elements.material.value = technical.material ?? "";
   elements.weight.value = technical.weightGrams ?? "";
   elements.time.value = technical.printTimeMinutes ?? "";
-  elements.x.value = technical.dimensionsMm?.x ?? "";
-  elements.y.value = technical.dimensionsMm?.y ?? "";
-  elements.z.value = technical.dimensionsMm?.z ?? "";
+  const colorMode = technical.colorMode === "fixed_multicolor" ? "fixed_multicolor" : "customer_choice";
+  const modeInput = document.querySelector(`input[name="color-mode"][value="${colorMode}"]`);
+  if (modeInput) modeInput.checked = true;
+  const importedColors = new Set(Array.isArray(technical.colors) ? technical.colors : []);
+  elements.colors.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => { checkbox.checked = importedColors.has(checkbox.value); });
+  updateColorHint();
   elements.images.replaceChildren();
   data.product.media.imageUrls.forEach((url, index) => {
     const label = document.createElement("label");
@@ -104,6 +153,9 @@ function render(data) {
   elements.form.hidden = false;
   updateImageCount();
 }
+
+renderColorOptions();
+document.querySelectorAll('input[name="color-mode"]').forEach((input) => input.addEventListener("change", updateColorHint));
 
 elements.extract.addEventListener("click", async () => {
   elements.extract.disabled = true;

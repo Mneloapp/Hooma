@@ -16,18 +16,24 @@
     <div id="status" role="status">კლიპერი მზადაა.</div>
 
     <form id="draft" hidden>
-      <label>სახელი<input id="name" maxlength="160" /></label>
-      <label>აღწერა<textarea id="description" maxlength="3000" rows="4"></textarea></label>
+      <p class="hint">პაკეტის Hooma-ში იმპორტისას სახელი და აღწერა Google Translate-ით უსაფრთხოდ ითარგმნება ქართულად. აქ შეგიძლია წყაროს ტექსტიც წინასწარ ჩაასწორო.</p>
+      <label>სახელი → Hooma ქართულად შეინახავს<input id="name" maxlength="160" /></label>
+      <label>აღწერა → Hooma ქართულად შეინახავს<textarea id="description" maxlength="3000" rows="4"></textarea></label>
       <div class="grid three">
         <label>მასალა<input id="material" maxlength="120" placeholder="PLA" /></label>
         <label>წონა, გ<input id="weight" type="number" min="0" step="0.01" /></label>
         <label>დრო, წთ<input id="time" type="number" min="0" step="1" /></label>
       </div>
-      <div class="grid three">
-        <label>X, მმ<input id="x" type="number" min="0" step="0.01" /></label>
-        <label>Y, მმ<input id="y" type="number" min="0" step="0.01" /></label>
-        <label>Z, მმ<input id="z" type="number" min="0" step="0.01" /></label>
-      </div>
+
+      <section>
+        <strong>ფერის რეჟიმი</strong>
+        <div class="color-modes">
+          <label class="mode-option"><input type="radio" name="color-mode" value="customer_choice" checked /><span><b>ერთფერიანი</b><small>მომხმარებელი ირჩევს ერთ ფერს</small></span></label>
+          <label class="mode-option"><input type="radio" name="color-mode" value="fixed_multicolor" /><span><b>მრავალფერიანი · AMS</b><small>ფიქსირებული კომბინაცია, როგორც ფოტოზე</small></span></label>
+        </div>
+        <p id="color-hint" class="hint">მონიშნე მომხმარებლისთვის ხელმისაწვდომი მინიმუმ ერთი ფერი.</p>
+        <div id="colors" class="colors"></div>
+      </section>
 
       <section>
         <div class="section-title"><strong>ფოტოები</strong><span id="image-count">0 არჩეული</span></div>

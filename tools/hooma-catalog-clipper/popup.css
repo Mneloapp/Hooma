@@ -29,6 +29,18 @@ section { padding-top: 3px; }
 .image-option:has(input:checked) { border-color: #bb6f44; }
 .image-option img { width: 100%; height: 100%; object-fit: cover; }
 .image-option input { position: absolute; top: 5px; right: 5px; width: 17px; height: 17px; margin: 0; accent-color: #bb6f44; }
+.color-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; }
+.mode-option { display: flex; gap: 8px; min-height: 62px; border: 1px solid #1e29221c; border-radius: 10px; background: white; padding: 9px; cursor: pointer; }
+.mode-option:has(input:checked) { border-color: #bb6f44; background: #fff9f5; }
+.mode-option input { width: 15px; height: 15px; margin: 2px 0 0; accent-color: #bb6f44; }
+.mode-option b, .mode-option small { display: block; }
+.mode-option small { margin-top: 2px; color: #657168; font-size: 10px; font-weight: 500; }
+.colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.color-option { display: flex; align-items: center; gap: 6px; border: 1px solid #1e29221c; border-radius: 9px; background: white; padding: 7px; cursor: pointer; }
+.color-option:has(input:checked) { border-color: #bb6f44; background: #fff9f5; }
+.color-option input { width: 14px; height: 14px; margin: 0; accent-color: #bb6f44; }
+.swatch { width: 15px; height: 15px; flex: 0 0 auto; border: 1px solid #0002; border-radius: 50%; }
+.color-name { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .video-link { display: inline-block; margin-top: 9px; color: #a4512d; font-size: 11px; font-weight: 700; }
 .video-link[hidden] { display: none; }
 .warnings { display: grid; gap: 5px; }

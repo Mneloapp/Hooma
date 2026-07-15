@@ -4,8 +4,16 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 import { productColorNames } from "@/data/product-colors";
+import { GoogleCloudTranslationError, translateProductCopyToGeorgian } from "@/lib/google-cloud-translation";
 
 export type HoomaProductState = { ok: boolean; message: string; productId?: string; sku?: string };
+export type ClipperTranslationState = {
+  ok: boolean;
+  message: string;
+  name?: string;
+  description?: string;
+  translatedByGoogle?: boolean;
+};
 type MediaKind = "image" | "video";
 type RequestedMedia = { name?: string; size?: number; mimeType?: string; kind?: MediaKind };
 type UploadedMedia = { path?: string; originalName?: string; size?: number; mimeType?: string; kind?: MediaKind };
@@ -64,6 +72,121 @@ async function adminContext() {
   return { profile, admin };
 }
 
+function safeSourceHost(value: unknown) {
+  const sourceUrl = clean(value, 4_000);
+  if (!sourceUrl) return null;
+  try {
+    const url = new URL(sourceUrl);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.hostname.slice(0, 253) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isGeorgianCopy(value: string, minimumGeorgianLetters: number, minimumRatio: number) {
+  const letters = value.match(/\p{L}/gu) ?? [];
+  const georgianLetters = letters.filter((letter) => /\p{Script=Georgian}/u.test(letter));
+  return georgianLetters.length >= minimumGeorgianLetters
+    && letters.length > 0
+    && georgianLetters.length / letters.length >= minimumRatio;
+}
+
+function isGeorgianProductCopy(name: string, description: string) {
+  return isGeorgianCopy(name, 2, 0.25) && isGeorgianCopy(description, 8, 0.5);
+}
+
+function translationFailureMessage(error: unknown) {
+  if (!(error instanceof GoogleCloudTranslationError)) {
+    return "ქართულად თარგმნა დროებით ვერ შესრულდა. სცადე თავიდან ან ტექსტი ხელით შეავსე.";
+  }
+  if (error.code === "not_configured") {
+    return "ქართულად თარგმნა ჯერ არ არის გამართული — Server Environment-ში დაამატე GOOGLE_CLOUD_TRANSLATION_API_KEY.";
+  }
+  if (error.code === "timeout" || error.code === "network_error") {
+    return "თარგმნის სერვისი დროებით მიუწვდომელია. სცადე თავიდან ან ტექსტი ხელით შეავსე.";
+  }
+  if (error.code === "provider_rejected" && error.status === 429) {
+    return "თარგმნის დროებითი ლიმიტი ამოიწურა. მოგვიანებით სცადე ან ტექსტი ხელით შეავსე.";
+  }
+  if (error.code === "provider_rejected") {
+    return "თარგმნის სერვისმა მოთხოვნა არ მიიღო. გადაამოწმე Cloud Translation API და გასაღების შეზღუდვები.";
+  }
+  return "სახელი ან აღწერა ქართულად ვერ ითარგმნა. გადაამოწმე ტექსტი და სცადე თავიდან.";
+}
+
+export async function translateClipperProductAction(formData: FormData): Promise<ClipperTranslationState> {
+  const context = await adminContext();
+  if (!context) return { ok: false, message: "კლიპერის თარგმნა მხოლოდ Admin-ს ან Owner-ს შეუძლია." };
+
+  const name = clean(formData.get("name"), 160);
+  const description = clean(formData.get("description"), 3_000);
+  const sourceHost = safeSourceHost(formData.get("source_url"));
+  if (name.length < 2 || description.length < 10 || !sourceHost) {
+    return { ok: false, message: "თარგმნისთვის საჭიროა წყაროს ბმული, სახელი და მინიმუმ 10-სიმბოლოიანი აღწერა." };
+  }
+  if (isGeorgianProductCopy(name, description)) {
+    return { ok: true, name, description, translatedByGoogle: false, message: "სახელი და აღწერა უკვე ქართულადაა — გადაამოწმე და შეინახე Draft-ში." };
+  }
+
+  const requestId = crypto.randomUUID();
+  const auditBase = {
+    actor_id: context.profile.id,
+    entity_type: "catalog_translation",
+    entity_id: requestId,
+  };
+  const { data: reservation, error: reservationError } = await context.admin.rpc("reserve_catalog_translation_request", {
+    actor_profile_id: context.profile.id,
+    translation_request_id: requestId,
+    source_host: sourceHost,
+    name_characters: name.length,
+    description_characters: description.length,
+  });
+  if (reservationError) {
+    const missingMigration = reservationError.message?.includes("function") || reservationError.message?.includes("schema cache");
+    return { ok: false, message: missingMigration ? "გაუშვი ბოლო Supabase migration და თარგმნა თავიდან სცადე." : "თარგმნის მოთხოვნა უსაფრთხოდ ვერ დარეგისტრირდა. სცადე თავიდან." };
+  }
+  if (!reservation?.allowed) {
+    return {
+      ok: false,
+      message: reservation?.reason === "global_hourly_limit"
+        ? "Hooma-ს თარგმნის საერთო საათობრივი ლიმიტი ამოიწურა. მოგვიანებით სცადე."
+        : "ერთ საათში თარგმნის 60-მოთხოვნიანი ლიმიტი ამოიწურა. მოგვიანებით სცადე.",
+    };
+  }
+
+  try {
+    const translated = await translateProductCopyToGeorgian({ name, description });
+    if (!translated.name || !translated.description) throw new GoogleCloudTranslationError("invalid_response");
+    if (!isGeorgianProductCopy(translated.name, translated.description)) {
+      throw new GoogleCloudTranslationError("invalid_response");
+    }
+    await context.admin.from("audit_log").insert({
+      ...auditBase,
+      action: "catalog_translation_succeeded",
+      metadata: {
+        provider: translated.provider,
+        target_language: translated.targetLanguage,
+        detected_source_languages: translated.detectedSourceLanguages,
+      },
+    });
+    return {
+      ok: true,
+      name: translated.name,
+      description: translated.description,
+      translatedByGoogle: true,
+      message: "სახელი და აღწერა ქართულად ითარგმნა — გამოქვეყნებამდე გადაამოწმე.",
+    };
+  } catch (error) {
+    const safeCode = error instanceof GoogleCloudTranslationError ? error.code : "unexpected_error";
+    await context.admin.from("audit_log").insert({
+      ...auditBase,
+      action: "catalog_translation_failed",
+      metadata: { provider: "google-cloud-translation-basic-v2", target_language: "ka", error_code: safeCode },
+    });
+    return { ok: false, message: translationFailureMessage(error) };
+  }
+}
+
 export async function prepareProductMediaUploadAction(formData: FormData): Promise<{
   ok: boolean;
   message: string;
@@ -115,6 +238,9 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
   const selectedColors = Array.from(new Set(formData.getAll("colors").map((color) => clean(color, 60)).filter(Boolean)));
   if (name.length < 2) return { ok: false, message: "შეიყვანე პროდუქტის სახელი." };
   if (description.length < 10) return { ok: false, message: "აღწერა მინიმუმ 10 სიმბოლოს უნდა შეიცავდეს." };
+  if (!isGeorgianProductCopy(name, description)) {
+    return { ok: false, message: "პროდუქტის სახელი და აღწერა ქართულად უნდა იყოს შევსებული." };
+  }
   if (operatorReference.length < 3) return { ok: false, message: "შეავსე ოპერატორის რეფერენსი." };
   if (!["customer_choice", "fixed_multicolor"].includes(colorMode)) return { ok: false, message: "აირჩიე პროდუქტის ფერის რეჟიმი." };
   const minimumColors = colorMode === "fixed_multicolor" ? 2 : 1;
@@ -160,13 +286,6 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
     if (totalMinutes < 1) throw new Error("ბეჭდვის დრო მინიმუმ 1 წუთი უნდა იყოს.");
     const margin = Number(formData.get("margin_percent"));
     if (!Number.isFinite(margin) || margin < 0 || margin >= 100) throw new Error("მარჟა უნდა იყოს 0-დან 99.99%-მდე.");
-    const dimensions = {
-      x: positiveNumber(formData, "dimension_x", 100_000),
-      y: positiveNumber(formData, "dimension_y", 100_000),
-      z: positiveNumber(formData, "dimension_z", 100_000),
-      unit: "mm",
-    };
-
     const publicUrls = media.map((file, index) => ({
       kind: file.kind,
       url: context.admin.storage.from("product-media").getPublicUrl(paths[index]).data.publicUrl,
@@ -184,7 +303,7 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
       selected_material_grams: grams,
       selected_print_minutes: totalMinutes,
       selected_margin_percent: margin,
-      selected_dimensions: dimensions,
+      selected_dimensions: null,
       product_image_urls: imageUrls,
       product_video_url: videoUrl,
       operator_reference: operatorReference,

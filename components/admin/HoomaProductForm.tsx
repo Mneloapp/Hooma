@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileImage, FileJson, FolderOpen, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
-import { createHoomaProductAction, prepareProductMediaUploadAction } from "@/app/admin/products/new/actions";
+import { createHoomaProductAction, prepareProductMediaUploadAction, translateClipperProductAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
 import { parseHoomaClipperDraft, type HoomaClipperDraft } from "@/lib/catalog-clipper";
 import { createClient } from "@/lib/supabase/client";
@@ -40,11 +40,14 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const videoInput = useRef<HTMLInputElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const packageInput = useRef<HTMLInputElement>(null);
+  const translationSequence = useRef(0);
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
   const [importedMedia, setImportedMedia] = useState<HoomaClipperDraft["product"]["media"] | null>(null);
   const [colorMode, setColorMode] = useState<"customer_choice" | "fixed_multicolor">("customer_choice");
   const [busy, setBusy] = useState(false);
+  const [translationBusy, setTranslationBusy] = useState(false);
+  const [translatedByGoogle, setTranslatedByGoogle] = useState(false);
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
 
@@ -64,15 +67,13 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
       const form = formRef.current;
       if (!form) throw new Error("პროდუქტის ფორმა ჯერ მზად არ არის.");
       const technical = parsed.product.technical;
+      setTranslatedByGoogle(false);
       setFormValue(form, "name", parsed.product.name);
       setFormValue(form, "description", parsed.product.description);
       setFormValue(form, "operator_reference", parsed.product.operatorReference || parsed.source.url);
       setFormValue(form, "material_grams", technical.weightGrams);
       setFormValue(form, "print_hours", technical.printTimeMinutes === null ? null : Math.floor(technical.printTimeMinutes / 60));
       setFormValue(form, "print_minutes", technical.printTimeMinutes === null ? null : Math.round(technical.printTimeMinutes % 60));
-      setFormValue(form, "dimension_x", technical.dimensionsMm?.x);
-      setFormValue(form, "dimension_y", technical.dimensionsMm?.y);
-      setFormValue(form, "dimension_z", technical.dimensionsMm?.z);
       setFormValue(form, "margin_percent", technical.marginPercent);
 
       const materialHint = normalizedMatch(technical.material ?? "");
@@ -114,7 +115,31 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
       const mediaText = packageMedia
         ? ` პაკეტიდან ავტომატურად დაემატა ${packageMedia.images.length} ფოტო${packageMedia.video ? " და ვიდეო" : ""}.`
         : "";
-      setMessage(`JSON იმპორტირებულია.${mediaText} ხელით გადაამოწმე${review.length ? `: ${review.join(", ")}` : " ყველა ველი"}.${warningText}`);
+      const importSummary = `JSON იმპორტირებულია.${mediaText} ფერის რეჟიმი და მონიშნული ფერები ავტომატურად შეივსო. ხელით გადაამოწმე${review.length ? `: ${review.join(", ")}` : " ყველა ველი"}.${warningText}`;
+      if (!parsed.product.name || !parsed.product.description) {
+        setMessage(`${importSummary} წყაროში სახელი ან აღწერა არ მოიძებნა, ამიტომ ქართული ტექსტი ხელით შეავსე.`);
+      } else {
+        const requestNumber = translationSequence.current + 1;
+        translationSequence.current = requestNumber;
+        const translationData = new FormData();
+        translationData.set("source_url", parsed.source.url);
+        translationData.set("name", parsed.product.name);
+        translationData.set("description", parsed.product.description);
+        setTranslationBusy(true);
+        setMessage(`${importSummary} სახელი და აღწერა ქართულად ითარგმნება...`);
+        try {
+          const translation = await translateClipperProductAction(translationData);
+          if (translationSequence.current !== requestNumber) return;
+          if (translation.ok && translation.name && translation.description) {
+            setFormValue(form, "name", translation.name);
+            setFormValue(form, "description", translation.description);
+          }
+          setTranslatedByGoogle(Boolean(translation.ok && translation.translatedByGoogle));
+          setMessage(`${importSummary} ${translation.message}`);
+        } finally {
+          if (translationSequence.current === requestNumber) setTranslationBusy(false);
+        }
+      }
     } catch (error) {
       setImportedMedia(null);
       setMessage(error instanceof Error ? error.message : "Hooma JSON ფაილი ვერ წავიკითხე.");
@@ -174,6 +199,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (translationBusy) { setMessage("დაელოდე სახელისა და აღწერის ქართულად თარგმნას."); return; }
     const formElement = event.currentTarget;
     if (!images.length) { setMessage("პროდუქტს მინიმუმ ერთი ფოტო სჭირდება."); return; }
     const selectedColorCount = new FormData(formElement).getAll("colors").length;
@@ -243,18 +269,19 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
 
       <section className="rounded-2xl border border-hooma-accent/25 bg-hooma-accent/5 p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><div className="flex items-center gap-2"><FileJson size={19} className="text-hooma-accent" /><h3 className="font-semibold">Catalog Clipper-იდან სწრაფი იმპორტი</h3></div><p className="mt-1 text-xs leading-5 text-hooma-muted">აირჩიე Clipper-ის ჩამოტვირთული პროდუქტის საქაღალდე ერთხელ — JSON შეავსებს ველებს, ფოტო და ვიდეო კი ავტომატურად მიებმება Draft-ს.</p></div>
-          <div className="flex shrink-0 flex-col gap-2 sm:items-stretch"><label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-hooma-text px-4 py-2.5 text-sm font-semibold text-white"><FolderOpen size={16} />პაკეტის საქაღალდე<input ref={(node) => { packageInput.current = node; if (node) { node.setAttribute("webkitdirectory", ""); node.setAttribute("directory", ""); } }} type="file" multiple onChange={(event) => void importClipperPackage(event.target.files)} className="sr-only" /></label><label className="inline-flex cursor-pointer items-center justify-center gap-2 px-3 py-1 text-xs font-semibold text-hooma-muted hover:text-hooma-text"><Upload size={14} />მხოლოდ JSON<input ref={importInput} type="file" accept=".json,.hooma.json,application/json" onChange={(event) => void importClipperDraft(event.target.files?.[0] ?? null)} className="sr-only" /></label></div>
+          <div><div className="flex items-center gap-2"><FileJson size={19} className="text-hooma-accent" /><h3 className="font-semibold">Catalog Clipper-იდან სწრაფი იმპორტი</h3></div><p className="mt-1 text-xs leading-5 text-hooma-muted">აირჩიე Clipper-ის ჩამოტვირთული პროდუქტის საქაღალდე ერთხელ — სახელი და აღწერა Google Translate-ით ქართულად ითარგმნება, JSON შეავსებს ტექნიკურ და ფერის ველებს, მედია კი ავტომატურად მიებმება Draft-ს.</p></div>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-stretch"><label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-hooma-text px-4 py-2.5 text-sm font-semibold text-white"><FolderOpen size={16} />{translationBusy ? "ითარგმნება..." : "პაკეტის საქაღალდე"}<input ref={(node) => { packageInput.current = node; if (node) { node.setAttribute("webkitdirectory", ""); node.setAttribute("directory", ""); } }} type="file" multiple disabled={busy || translationBusy} onChange={(event) => void importClipperPackage(event.target.files)} className="sr-only" /></label><label className="inline-flex cursor-pointer items-center justify-center gap-2 px-3 py-1 text-xs font-semibold text-hooma-muted hover:text-hooma-text"><Upload size={14} />მხოლოდ JSON<input ref={importInput} type="file" accept=".json,.hooma.json,application/json" disabled={busy || translationBusy} onChange={(event) => void importClipperDraft(event.target.files?.[0] ?? null)} className="sr-only" /></label></div>
         </div>
         {importedMedia ? <div className="mt-4 border-t border-hooma-text/10 pt-4"><p className="text-sm font-semibold">წყაროდან ნაპოვნი მედია</p><p className="mt-1 text-xs leading-5 text-hooma-muted">თუ სრული პაკეტი აირჩიე, ფაილები უკვე დამატებულია ქვემოთ. მხოლოდ JSON-ის იმპორტისას Clipper-ით ჩამოტვირთული მედია ხელით უნდა აირჩიო.</p>{importedMedia.imageUrls.length ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{importedMedia.imageUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" title={`წყაროს ფოტო ${index + 1}`} className="block h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-hooma-text/10 bg-white"><img src={url} alt={`იმპორტირებული ფოტო ${index + 1}`} referrerPolicy="no-referrer" className="h-full w-full object-cover" /></a>)}</div> : <p className="mt-2 text-xs text-amber-800">JSON-ში ფოტო-ბმული არ არის — ფოტოები ხელით დაამატე.</p>}{importedMedia.videoUrl ? <a href={importedMedia.videoUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-hooma-accent underline">წყაროს ვიდეოს გახსნა</a> : null}</div> : null}
+        {translatedByGoogle ? <p className="mt-4 text-xs leading-5 text-hooma-muted">ავტომატური თარგმანი · <a href="https://translate.google.com" target="_blank" rel="noreferrer noopener" className="font-semibold text-hooma-accent underline">Powered by Google Translate</a> · გამოქვეყნებამდე ტექსტი აუცილებლად გადაამოწმე.</p> : null}
       </section>
 
       <section>
         <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">ძირითადი ინფორმაცია</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">SKU ხელით არ იწერება — სისტემა ყველა ახალ პროდუქტს უნიკალურ HOO კოდს მიანიჭებს.</p></div><span className="shrink-0 rounded-full bg-hooma-panel px-3 py-1.5 text-xs font-semibold text-hooma-muted">SKU: ავტომატური</span></div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-medium">სახელი<input name="name" required minLength={2} maxLength={160} placeholder="პროდუქტის სახელი" className={inputClass} /></label>
+          <label className="text-sm font-medium">ქართული სახელი<input name="name" required minLength={2} maxLength={160} placeholder="პროდუქტის ქართული სახელი" className={inputClass} /></label>
           <label className="text-sm font-medium">კატეგორია / ქვეკატეგორია<select name="category_id" required className={inputClass}><option value="">აირჩიე</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label className="text-sm font-medium sm:col-span-2">აღწერა<textarea name="description" required minLength={10} maxLength={3000} rows={5} placeholder="აღწერე პროდუქტი, დანიშნულება და მომხმარებლისთვის მნიშვნელოვანი დეტალები" className={inputClass} /></label>
+          <label className="text-sm font-medium sm:col-span-2">ქართული აღწერა<textarea name="description" required minLength={10} maxLength={3000} rows={5} placeholder="ქართულად აღწერე პროდუქტი, დანიშნულება და მომხმარებლისთვის მნიშვნელოვანი დეტალები" className={inputClass} /></label>
           <label className="text-sm font-medium sm:col-span-2">ოპერატორის რეფერენსი <span className="font-normal text-hooma-muted">— მომხმარებელს არ უჩანს</span><textarea name="operator_reference" required minLength={3} maxLength={2000} rows={3} placeholder="ჩასვი მოდელის ბმული, ფაილის მდებარეობა ან ბეჭდვისთვის საჭირო შიდა ინსტრუქცია" className={inputClass} /><span className="mt-2 block text-xs font-normal leading-5 text-hooma-muted">ინახება ცალკე დაცულ ცხრილში და ხელმისაწვდომია მხოლოდ Owner/Admin/Production Operator-ისთვის.</span></label>
         </div>
       </section>
@@ -273,21 +300,18 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
 
       <section className="rounded-2xl bg-hooma-panel/70 p-5">
         <h3 className="font-semibold">ტექნიკური პროფილი და მარჟა</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">მასალის თვითღირებულება და დროის ხარჯი Settings-იდან წამოვა; აქ შეყვანილი მარჟით საბოლოო ფასი ავტომატურად დაითვლება.</p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <label className="text-sm font-medium">მასალის ტიპი<select name="material_profile_id" required className={inputClass}><option value="">აირჩიე</option>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="text-sm font-medium">წონა, გრამი<input name="material_grams" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
           <label className="text-sm font-medium">ბეჭდვის დრო — საათი<input name="print_hours" type="number" min="0" max="16666" defaultValue="0" required className={inputClass} /></label>
           <label className="text-sm font-medium">ბეჭდვის დრო — წუთი<input name="print_minutes" type="number" min="0" max="59" defaultValue="0" required className={inputClass} /></label>
-          <label className="text-sm font-medium">X ზომა, მმ<input name="dimension_x" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
-          <label className="text-sm font-medium">Y ზომა, მმ<input name="dimension_y" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
-          <label className="text-sm font-medium">Z ზომა, მმ<input name="dimension_z" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
           <label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" defaultValue={pricing.default_margin_percent} required className={inputClass} /></label>
         </div>
         <div className="mt-6 border-t border-hooma-text/10 pt-5"><div className="flex items-center gap-2"><Palette size={18} className="text-hooma-accent" /><h4 className="text-sm font-semibold">ფერის რეჟიმი</h4></div><div className="mt-4 grid gap-3 md:grid-cols-2"><label className="flex cursor-pointer gap-3 rounded-2xl border border-hooma-text/10 bg-white p-4 transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="radio" name="color_mode" value="customer_choice" checked={colorMode === "customer_choice"} onChange={() => setColorMode("customer_choice")} className="mt-1 h-4 w-4 accent-hooma-accent" /><div><p className="text-sm font-semibold">ერთფერიანი · მომხმარებელი ირჩევს</p><p className="mt-1 text-xs leading-5 text-hooma-muted">მონიშნული ფერები იქნება ცალკეული არჩევანი პროდუქტის გვერდზე.</p></div></label><label className="flex cursor-pointer gap-3 rounded-2xl border border-hooma-text/10 bg-white p-4 transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="radio" name="color_mode" value="fixed_multicolor" checked={colorMode === "fixed_multicolor"} onChange={() => setColorMode("fixed_multicolor")} className="mt-1 h-4 w-4 accent-hooma-accent" /><Layers3 size={18} className="mt-0.5 shrink-0 text-hooma-accent" /><div><p className="text-sm font-semibold">მრავალფერიანი · AMS</p><p className="mt-1 text-xs leading-5 text-hooma-muted">მონიშნული ფერები ქმნის ერთ ფიქსირებულ კომბინაციას. მომხმარებელი მიიღებს ზუსტად ფოტოზე ნაჩვენებ ვერსიას.</p></div></label></div><p className="mt-5 text-sm font-semibold">{colorMode === "fixed_multicolor" ? "AMS-ში გამოსაყენებელი ფერები" : "მომხმარებლისთვის ხელმისაწვდომი ფერები"}</p><p className="mt-1 text-xs leading-5 text-hooma-muted">{colorMode === "fixed_multicolor" ? "აირჩიე მინიმუმ ორი ფერი. ეს სია სრულად გამოჩნდება მხოლოდ ოპერატორთან; მომხმარებელი დაინახავს „მრავალფერიანი — როგორც ფოტოზე“." : "მომხმარებელი მხოლოდ აქ მონიშნულ ფერებს დაინახავს და ერთ-ერთს აირჩევს."}</p><div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{productColorOptions.map((color) => <label key={color.name} className="flex cursor-pointer items-center gap-3 rounded-xl border border-hooma-text/10 bg-white px-3 py-3 text-sm transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="checkbox" name="colors" value={color.name} className="h-4 w-4 accent-hooma-accent" /><span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} /><span>{color.name}</span></label>)}</div></div>
       </section>
 
       {message ? <p aria-live="polite" className="rounded-xl bg-hooma-panel p-4 text-sm leading-6">{message}</p> : null}
-      <button type="submit" disabled={busy || !materials.length || !categories.length} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-hooma-text px-6 py-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">{busy ? <><LoaderCircle size={18} className="animate-spin" />{progress || "Draft იქმნება..."}</> : "Draft-ში შენახვა"}</button>
+      <button type="submit" disabled={busy || translationBusy || !materials.length || !categories.length} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-hooma-text px-6 py-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">{busy ? <><LoaderCircle size={18} className="animate-spin" />{progress || "Draft იქმნება..."}</> : translationBusy ? <><LoaderCircle size={18} className="animate-spin" />ქართულად ითარგმნება...</> : "Draft-ში შენახვა"}</button>
     </form>
   );
 }

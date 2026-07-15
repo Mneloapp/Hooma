@@ -25,10 +25,12 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 CRON_SECRET=
+GOOGLE_CLOUD_TRANSLATION_API_KEY=
 ```
 
 `SUPABASE_SECRET_KEY` is server-only. Never expose it through a `NEXT_PUBLIC_` variable.
 `CRON_SECRET` protects the daily-deal rotation endpoint. See `docs/daily-deals.md` for the 100-product, 50%-off rotation rules.
+`GOOGLE_CLOUD_TRANSLATION_API_KEY` is also server-only. It enables authenticated Catalog Clipper imports to translate product names and descriptions into Georgian through the [Cloud Translation API](https://cloud.google.com/translate); never add it to the extension or a `NEXT_PUBLIC_` variable. Hooma's admin import UI identifies automatic results as powered by Google Translate and requires operator review before publication.
 
 Apply Supabase migrations in chronological order from `supabase/migrations`.
 
