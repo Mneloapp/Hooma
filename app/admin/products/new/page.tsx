@@ -1,16 +1,16 @@
 import { HoomaProductForm } from "@/components/admin/HoomaProductForm";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
+import { buildCategoryOptions, type CategoryRow } from "@/lib/catalog-categories";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NewProductPage() {
   const supabase = (await createClient()) as any;
   const [categoryResult, materialResult, pricingResult] = supabase ? await Promise.all([
-    supabase.from("categories").select("id,parent_id,name_ka,sort_order").eq("is_active", true).order("sort_order"),
+    supabase.from("categories").select("id,parent_id,slug,name_en,name_ka,sort_order").eq("is_active", true).order("sort_order"),
     supabase.from("material_cost_profiles").select("*").eq("is_active", true).order("code"),
     supabase.from("pricing_profiles").select("*").eq("is_default", true).maybeSingle(),
   ]) : [{ data: [] }, { data: [] }, { data: null }];
-  const parents = new Map<string, string>((categoryResult.data ?? []).filter((row: any) => !row.parent_id).map((row: any) => [row.id, row.name_ka]));
-  const categories = (categoryResult.data ?? []).map((row: any) => ({ id: row.id, name: row.parent_id ? `${parents.get(row.parent_id) ?? "კატეგორია"} → ${row.name_ka}` : row.name_ka }));
+  const categories = buildCategoryOptions((categoryResult.data ?? []) as CategoryRow[]);
   const pricing = pricingResult.data as PricingProfile | null;
 
   return <div className="space-y-6"><div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Catalog</p><h1 className="mt-3 text-4xl font-medium">ახალი პროდუქტის დამატება</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-hooma-muted">ყველა მონაცემი შეიყვანე ხელით. SKU და გასაყიდი ფასი სერვერზე ავტომატურად შეიქმნება, პროდუქტი კი ჯერ Draft-ში შეინახება.</p></div>

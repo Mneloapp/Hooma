@@ -2,7 +2,7 @@
 
 The catalog importer reads public product-page metadata through a shared JSON-LD/Open Graph parser. Built-in source hosts are MakerWorld, Printables, Thingiverse, Thangs, MyMiniFactory, and Cults3D. Extra source hosts can be added with the comma-separated server variable `HOOMA_IMPORT_ALLOWED_HOSTS`.
 
-The importer extracts title, description, canonical URL, model identifier, and up to 12 source image URLs. Platform-specific adapters can extend the same metadata shape with material, weight, print time, dimensions, and profile identifiers.
+The importer extracts title, description, canonical URL, model identifier, visible category/subcategory breadcrumb, and up to 12 source image URLs. Platform-specific adapters can extend the same metadata shape with material, weight, print time, and profile identifiers.
 
 CC0 and Public Domain declarations are recognized from structured `license` fields, license meta tags, and `rel=license` links. When that status is explicit in the source metadata, the resulting Draft is internally eligible for Admin/Owner publication without a manual license page. Unknown reuse status remains available as a staff-only Draft preview.
 

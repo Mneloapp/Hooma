@@ -200,12 +200,70 @@
       : Math.max(1, Math.round(Number(clock[1]) * 60 + Number(clock[2])));
   }
 
-  const categoryHint = clean(
-    product?.category
-      ?? product?.additionalType
-      ?? document.querySelector('nav[aria-label*="breadcrumb" i] a:last-of-type')?.textContent,
-    160,
-  );
+  const categoryKey = (value) => String(value ?? "")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9\u10a0-\u10ff]+/g, "")
+    .trim();
+  const genericBreadcrumbItems = new Set([
+    "home", "homepage", "makerworld", "models", "3dmodels", "allmodels",
+    "მთავარი", "საწყისი", "მოდელები", "3დმოდელები", "ყველამოდელი",
+  ].map(categoryKey));
+  const cleanCategoryPath = (items) => {
+    const productKey = categoryKey(name);
+    const result = [];
+    items.forEach((item) => {
+      const label = clean(item, 160);
+      const key = categoryKey(label);
+      if (!label || !key || genericBreadcrumbItems.has(key)) return;
+      if (productKey && (key === productKey || productKey.startsWith(key) || key.startsWith(productKey))) return;
+      if (categoryKey(result[result.length - 1]) !== key) result.push(label);
+    });
+    return result.slice(0, 8);
+  };
+
+  let visibleCategoryPath = [];
+  const breadcrumbSelectors = [
+    'nav[aria-label*="breadcrumb" i]',
+    '[data-testid*="breadcrumb" i]',
+    '[data-test*="breadcrumb" i]',
+    '[class*="breadcrumb" i]',
+    'ol[itemtype*="BreadcrumbList" i]',
+  ];
+  for (const selector of breadcrumbSelectors) {
+    const containers = document.querySelectorAll(selector);
+    for (const container of containers) {
+      if (!isVisible(container)) continue;
+      let labels = Array.from(container.querySelectorAll('a, [aria-current="page"]'))
+        .map((element) => visibleText(element, 160))
+        .filter(Boolean);
+      if (labels.length < 2) {
+        labels = Array.from(container.querySelectorAll("li"))
+          .map((element) => visibleText(element, 160))
+          .filter(Boolean);
+      }
+      const path = cleanCategoryPath(labels);
+      if (path.length > visibleCategoryPath.length) visibleCategoryPath = path;
+    }
+  }
+
+  const breadcrumbObject = ldObjects.find((item) => typeNames(item).includes("breadcrumblist"));
+  const structuredBreadcrumbPath = cleanCategoryPath(values(breadcrumbObject?.itemListElement)
+    .slice()
+    .sort((left, right) => Number(left?.position ?? 0) - Number(right?.position ?? 0))
+    .map((item) => item?.name ?? item?.item?.name));
+  const structuredCategoryValue = values(product?.category)
+    .map((item) => typeof item === "object" && item ? item.name : item)
+    .find((item) => clean(item, 160))
+    ?? product?.additionalType;
+  const structuredCategory = clean(structuredCategoryValue, 160);
+  const categoryPath = visibleCategoryPath.length
+    ? visibleCategoryPath
+    : structuredBreadcrumbPath.length
+      ? structuredBreadcrumbPath
+      : structuredCategory
+        ? [structuredCategory]
+        : [];
+  const categoryHint = categoryPath[categoryPath.length - 1] ?? null;
   const warnings = [];
   if (!name) warnings.push("პროდუქტის სახელი ვერ მოიძებნა.");
   if (!description) warnings.push("აღწერა ვერ მოიძებნა.");
@@ -213,6 +271,7 @@
   if (!material) warnings.push("მასალის ტიპი ვერ მოიძებნა.");
   if (!weightGrams) warnings.push("წონა ვერ მოიძებნა.");
   if (!printTimeMinutes) warnings.push("ბეჭდვის დრო ვერ მოიძებნა.");
+  if (!categoryHint) warnings.push("კატეგორია და ქვეკატეგორია ვერ მოიძებნა.");
   if (pageLooksTranslated && (!hasGeorgian(name) || !hasGeorgian(description))) {
     warnings.push("Chrome-ის ქართული თარგმანი ყველა ველში ვერ ამოიკითხა — სახელი და აღწერა კლიპერში გადაამოწმე.");
   }
@@ -231,6 +290,7 @@
       description,
       operatorReference: location.href,
       categoryHint,
+      categoryPath,
       media: { imageUrls, videoUrl },
       technical: {
         material,

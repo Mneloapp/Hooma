@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { FileImage, FileJson, FolderOpen, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
 import { createHoomaProductAction, prepareProductMediaUploadAction, translateClipperProductAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
+import { matchCategoryOption, type CategoryOption } from "@/lib/catalog-categories";
 import { parseHoomaClipperDraft, type HoomaClipperDraft } from "@/lib/catalog-clipper";
 import { createClient } from "@/lib/supabase/client";
 import { productColorOptions } from "@/data/product-colors";
 
-type CategoryOption = { id: string; name: string };
 type UploadedMedia = { path: string; originalName: string; size: number; mimeType: string; kind: "image" | "video" };
 
 const inputClass = "mt-2 w-full rounded-xl border border-hooma-text/10 bg-white px-3 py-2.5 outline-none focus:border-hooma-accent";
@@ -86,13 +86,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
         : null;
       if (material) setFormValue(form, "material_profile_id", material.id);
 
-      const categoryHint = normalizedMatch(parsed.product.categoryHint ?? "");
-      const category = categoryHint
-        ? categories.find((item) => {
-            const name = normalizedMatch(item.name);
-            return name === categoryHint || name.includes(categoryHint) || categoryHint.includes(name);
-          })
-        : null;
+      const category = matchCategoryOption(categories, parsed.product.categoryPath, parsed.product.categoryHint);
       if (category) setFormValue(form, "category_id", category.id);
 
       setColorMode(technical.colorMode);

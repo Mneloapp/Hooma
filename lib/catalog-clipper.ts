@@ -15,6 +15,7 @@ export type HoomaClipperDraft = {
     description: string | null;
     operatorReference: string;
     categoryHint: string | null;
+    categoryPath: string[];
     media: {
       imageUrls: string[];
       videoUrl: string | null;
@@ -80,6 +81,15 @@ export function parseHoomaClipperDraft(value: unknown): HoomaClipperDraft {
   const warnings = Array.isArray(value.warnings)
     ? value.warnings.map((item) => cleanText(item, 300)).filter((item): item is string => Boolean(item)).slice(0, 20)
     : [];
+  const categoryHint = cleanText(product.categoryHint, 160);
+  const categoryPath = Array.isArray(product.categoryPath)
+    ? product.categoryPath
+        .map((item) => cleanText(item, 160))
+        .filter((item): item is string => Boolean(item))
+        .slice(0, 8)
+    : categoryHint
+      ? [categoryHint]
+      : [];
 
   return {
     schema: hoomaClipperSchema,
@@ -93,7 +103,8 @@ export function parseHoomaClipperDraft(value: unknown): HoomaClipperDraft {
       name: cleanText(product.name, 160),
       description: cleanText(product.description, 3_000),
       operatorReference: cleanText(product.operatorReference, 2_000, true) || sourceUrl,
-      categoryHint: cleanText(product.categoryHint, 160),
+      categoryHint: categoryPath.at(-1) ?? categoryHint,
+      categoryPath,
       media: {
         imageUrls,
         videoUrl: cleanUrl(media.videoUrl),

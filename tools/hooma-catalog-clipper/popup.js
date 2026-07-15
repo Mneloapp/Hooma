@@ -20,6 +20,7 @@ const elements = {
   form: document.querySelector("#draft"),
   name: document.querySelector("#name"),
   description: document.querySelector("#description"),
+  categoryPath: document.querySelector("#category-path"),
   material: document.querySelector("#material"),
   weight: document.querySelector("#weight"),
   timeHours: document.querySelector("#time-hours"),
@@ -45,6 +46,11 @@ const selectedImages = () => Array.from(elements.images.querySelectorAll('input[
 const selectedColors = () => Array.from(elements.colors.querySelectorAll('input[type="checkbox"]:checked')).map((item) => item.value);
 const selectedColorMode = () => document.querySelector('input[name="color-mode"]:checked')?.value === "fixed_multicolor" ? "fixed_multicolor" : "customer_choice";
 const slug = (value) => String(value || "hooma-product").toLowerCase().normalize("NFKD").replace(/[^a-z0-9\u10a0-\u10ff]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "hooma-product";
+const categoryPath = () => elements.categoryPath.value
+  .split(/\s*(?:→|›|>)\s*/)
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .slice(0, 8);
 
 function printTimeInMinutes() {
   const hours = numeric(elements.timeHours);
@@ -71,6 +77,8 @@ function syncDraft() {
   if (printTimeMinutes === undefined) return null;
   draft.product.name = elements.name.value.trim() || null;
   draft.product.description = elements.description.value.trim() || null;
+  draft.product.categoryPath = categoryPath();
+  draft.product.categoryHint = draft.product.categoryPath.at(-1) ?? null;
   draft.product.media.imageUrls = selectedImages();
   draft.product.technical.material = elements.material.value.trim() || null;
   draft.product.technical.weightGrams = numeric(elements.weight);
@@ -124,6 +132,9 @@ function render(data) {
   elements.source.textContent = data.source.url;
   elements.name.value = data.product.name ?? "";
   elements.description.value = data.product.description ?? "";
+  elements.categoryPath.value = (Array.isArray(data.product.categoryPath) && data.product.categoryPath.length
+    ? data.product.categoryPath
+    : data.product.categoryHint ? [data.product.categoryHint] : []).join(" → ");
   elements.material.value = technical.material ?? "";
   elements.weight.value = technical.weightGrams ?? "";
   elements.timeHours.value = technical.printTimeMinutes === null ? "" : Math.floor(technical.printTimeMinutes / 60);
