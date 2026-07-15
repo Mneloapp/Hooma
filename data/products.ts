@@ -21,6 +21,8 @@ export type ProductVariant = {
   pricePlaceholder: string;
   availableColors: string[];
   availableMaterials: string[];
+  colorMode: "customer_choice" | "fixed_multicolor";
+  amsRequired: boolean;
 };
 
 export type Product = {
@@ -121,6 +123,8 @@ const product = ({
       pricePlaceholder,
       availableColors: colors,
       availableMaterials: materials,
+      colorMode: "customer_choice",
+      amsRequired: false,
     },
   ],
   availableMaterials: materials,

@@ -14,6 +14,7 @@ export const productColorOptions = [
 ] as const;
 
 export const productColorNames = productColorOptions.map((color) => color.name);
+export const fixedMulticolorLabel = "მრავალფერიანი — როგორც ფოტოზე";
 
 const legacyColors: Record<string, string> = {
   "Warm white": "#EEEAE1",

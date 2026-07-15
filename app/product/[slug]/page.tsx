@@ -19,6 +19,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const product = previewProduct ?? await getStorefrontProductBySlug(slug);
   if (!product) notFound();
   const defaultVariant = product.variants[0];
+  const fixedMulticolor = defaultVariant.colorMode === "fixed_multicolor" && defaultVariant.amsRequired;
   const related = products.filter((item) => item.category === product.category && item.id !== product.id).slice(0, 3);
   const recommendations = related.length >= 3 ? related : products.filter((item) => item.id !== product.id).slice(0, 5);
 
@@ -42,8 +43,8 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
           <div className="mt-8">
             <h2 className="text-xl font-semibold">პროდუქტის შესახებ</h2>
-            <p className="mt-3 text-sm leading-7 text-hooma-muted">{product.shortDescriptionKa} პროდუქტი მზადდება მხოლოდ შეკვეთის დადასტურების შემდეგ. ფერი და მასალა შეგიძლია აირჩიო შესყიდვის ბლოკში.</p>
-            <ul className="mt-5 grid gap-3 text-sm">{["ზომა: " + defaultVariant.productDimensionsCm, "მასალები: " + product.availableMaterials.join(", "), "ხელმისაწვდომი ფერები: " + product.availableColors.join(", "), "საბოლოო სპეციფიკაცია დასტურდება სატესტო ბეჭდვის შემდეგ"].map((item) => <li key={item} className="flex gap-2.5"><Check size={16} className="mt-0.5 shrink-0 text-hooma-accent" />{item}</li>)}</ul>
+            <p className="mt-3 text-sm leading-7 text-hooma-muted">{product.shortDescriptionKa} პროდუქტი მზადდება მხოლოდ შეკვეთის დადასტურების შემდეგ. {fixedMulticolor ? "მასალა შეგიძლია აირჩიო შესყიდვის ბლოკში, ხოლო ფერთა კომბინაცია ფიქსირებულია და ემთხვევა ფოტოს." : "ფერი და მასალა შეგიძლია აირჩიო შესყიდვის ბლოკში."}</p>
+            <ul className="mt-5 grid gap-3 text-sm">{["ზომა: " + defaultVariant.productDimensionsCm, "მასალები: " + product.availableMaterials.join(", "), fixedMulticolor ? "ფერთა კომბინაცია: მრავალფერიანი — როგორც ფოტოზე" : "ხელმისაწვდომი ფერები: " + product.availableColors.join(", "), "საბოლოო სპეციფიკაცია დასტურდება სატესტო ბეჭდვის შემდეგ"].map((item) => <li key={item} className="flex gap-2.5"><Check size={16} className="mt-0.5 shrink-0 text-hooma-accent" />{item}</li>)}</ul>
           </div>
 
           <div className="mt-8 rounded-2xl bg-hooma-panel p-5"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-hooma-accent" /><h2 className="font-semibold">უსაფრთხოება და მოვლა</h2></div><p className="mt-3 text-sm leading-6 text-hooma-muted">არ მოათავსოთ მაღალი ტემპერატურის ან ღია ცეცხლის სიახლოვეს. საბავშვო და საკვებთან დაკავშირებული პროდუქტები გამოქვეყნდება მხოლოდ შესაბამისი გამოყენების შემოწმების შემდეგ.</p></div>

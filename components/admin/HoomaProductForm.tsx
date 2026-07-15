@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileImage, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
+import { FileImage, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
 import { createHoomaProductAction, prepareProductMediaUploadAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +28,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const videoInput = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
+  const [colorMode, setColorMode] = useState<"customer_choice" | "fixed_multicolor">("customer_choice");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
@@ -58,7 +59,11 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
     event.preventDefault();
     const formElement = event.currentTarget;
     if (!images.length) { setMessage("პროდუქტს მინიმუმ ერთი ფოტო სჭირდება."); return; }
-    if (!new FormData(formElement).getAll("colors").length) { setMessage("აირჩიე მინიმუმ ერთი ფერი, რომელიც მომხმარებელს გამოუჩნდება."); return; }
+    const selectedColorCount = new FormData(formElement).getAll("colors").length;
+    if (selectedColorCount < (colorMode === "fixed_multicolor" ? 2 : 1)) {
+      setMessage(colorMode === "fixed_multicolor" ? "AMS პროდუქტისთვის აირჩიე მინიმუმ ორი ფერი." : "აირჩიე მინიმუმ ერთი ფერი, რომელიც მომხმარებელს გამოუჩნდება.");
+      return;
+    }
     const supabase = createClient() as any;
     if (!supabase) { setMessage("Supabase ჯერ არ არის დაკავშირებული."); return; }
 
@@ -153,7 +158,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
           <label className="text-sm font-medium">Z ზომა, მმ<input name="dimension_z" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
           <label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" defaultValue={pricing.default_margin_percent} required className={inputClass} /></label>
         </div>
-        <div className="mt-6 border-t border-hooma-text/10 pt-5"><div className="flex items-center gap-2"><Palette size={18} className="text-hooma-accent" /><h4 className="text-sm font-semibold">მომხმარებლისთვის ხელმისაწვდომი ფერები</h4></div><p className="mt-1 text-xs leading-5 text-hooma-muted">მომხმარებელი მხოლოდ აქ მონიშნულ ფერებს დაინახავს. აირჩიე მინიმუმ ერთი.</p><div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{productColorOptions.map((color) => <label key={color.name} className="flex cursor-pointer items-center gap-3 rounded-xl border border-hooma-text/10 bg-white px-3 py-3 text-sm transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="checkbox" name="colors" value={color.name} className="h-4 w-4 accent-hooma-accent" /><span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} /><span>{color.name}</span></label>)}</div></div>
+        <div className="mt-6 border-t border-hooma-text/10 pt-5"><div className="flex items-center gap-2"><Palette size={18} className="text-hooma-accent" /><h4 className="text-sm font-semibold">ფერის რეჟიმი</h4></div><div className="mt-4 grid gap-3 md:grid-cols-2"><label className="flex cursor-pointer gap-3 rounded-2xl border border-hooma-text/10 bg-white p-4 transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="radio" name="color_mode" value="customer_choice" checked={colorMode === "customer_choice"} onChange={() => setColorMode("customer_choice")} className="mt-1 h-4 w-4 accent-hooma-accent" /><div><p className="text-sm font-semibold">ერთფერიანი · მომხმარებელი ირჩევს</p><p className="mt-1 text-xs leading-5 text-hooma-muted">მონიშნული ფერები იქნება ცალკეული არჩევანი პროდუქტის გვერდზე.</p></div></label><label className="flex cursor-pointer gap-3 rounded-2xl border border-hooma-text/10 bg-white p-4 transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="radio" name="color_mode" value="fixed_multicolor" checked={colorMode === "fixed_multicolor"} onChange={() => setColorMode("fixed_multicolor")} className="mt-1 h-4 w-4 accent-hooma-accent" /><Layers3 size={18} className="mt-0.5 shrink-0 text-hooma-accent" /><div><p className="text-sm font-semibold">მრავალფერიანი · AMS</p><p className="mt-1 text-xs leading-5 text-hooma-muted">მონიშნული ფერები ქმნის ერთ ფიქსირებულ კომბინაციას. მომხმარებელი მიიღებს ზუსტად ფოტოზე ნაჩვენებ ვერსიას.</p></div></label></div><p className="mt-5 text-sm font-semibold">{colorMode === "fixed_multicolor" ? "AMS-ში გამოსაყენებელი ფერები" : "მომხმარებლისთვის ხელმისაწვდომი ფერები"}</p><p className="mt-1 text-xs leading-5 text-hooma-muted">{colorMode === "fixed_multicolor" ? "აირჩიე მინიმუმ ორი ფერი. ეს სია სრულად გამოჩნდება მხოლოდ ოპერატორთან; მომხმარებელი დაინახავს „მრავალფერიანი — როგორც ფოტოზე“." : "მომხმარებელი მხოლოდ აქ მონიშნულ ფერებს დაინახავს და ერთ-ერთს აირჩევს."}</p><div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{productColorOptions.map((color) => <label key={color.name} className="flex cursor-pointer items-center gap-3 rounded-xl border border-hooma-text/10 bg-white px-3 py-3 text-sm transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="checkbox" name="colors" value={color.name} className="h-4 w-4 accent-hooma-accent" /><span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} /><span>{color.name}</span></label>)}</div></div>
       </section>
 
       {message ? <p aria-live="polite" className="rounded-xl bg-hooma-panel p-4 text-sm leading-6">{message}</p> : null}

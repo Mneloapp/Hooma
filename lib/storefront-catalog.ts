@@ -75,6 +75,18 @@ function safeSourceUrl(value: unknown) {
   }
 }
 
+function variantColorProfile(value: unknown) {
+  const attributes = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const fixedColorPalette = Array.isArray(attributes.fixed_color_palette)
+    ? attributes.fixed_color_palette.filter((color): color is string => typeof color === "string" && Boolean(color.trim()))
+    : [];
+  const fixedMulticolor = attributes.color_mode === "fixed_multicolor" && attributes.ams_required === true && fixedColorPalette.length >= 2;
+  return {
+    colorMode: fixedMulticolor ? "fixed_multicolor" as const : "customer_choice" as const,
+    amsRequired: fixedMulticolor,
+  };
+}
+
 export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const admin = createAdminClient() as any;
   if (!admin) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
@@ -94,7 +106,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const [{ data: variantRows, error: variantError }, { data: sourceRows, error: sourceError }] = await Promise.all([
     admin
       .from("product_variants")
-      .select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,is_active")
+      .select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active")
       .in("product_id", productIds)
       .eq("is_active", true),
     admin
@@ -133,6 +145,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
     const variants: ProductVariant[] = rawVariants.map((variant) => {
       const material = typeof variant.material === "string" && variant.material ? variant.material : "PLA+";
       const availableColors = Array.isArray(variant.available_colors) && variant.available_colors.length ? variant.available_colors : ["სტანდარტული"];
+      const colorProfile = variantColorProfile(variant.attributes);
       const price = Number(variant.price ?? row.base_price);
       return {
         id: variant.id,
@@ -147,6 +160,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
         pricePlaceholder: variant.price_placeholder || row.price_placeholder || "ფასი დამტკიცებულია",
         availableColors,
         availableMaterials: [material],
+        ...colorProfile,
       };
     });
     const availableMaterials = Array.from(new Set(variants.flatMap((variant) => variant.availableMaterials)));
@@ -204,7 +218,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
   const [{ data: row }, { data: categoryRows }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
     admin.from("products").select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes").eq("id", productId).maybeSingle(),
     admin.from("categories").select("id,parent_id,slug,name_en,name_ka").eq("is_active", true),
-    admin.from("product_variants").select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,is_active").eq("product_id", productId).eq("is_active", true),
+    admin.from("product_variants").select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active").eq("product_id", productId).eq("is_active", true),
     admin.from("product_sources").select("platform,creator_name").eq("product_id", productId).limit(1),
   ]);
   if (!row) return null;
@@ -223,6 +237,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
   const variants: ProductVariant[] = rawVariants.map((variant: any) => {
     const material = typeof variant.material === "string" && variant.material ? variant.material : "PLA+";
     const availableColors = Array.isArray(variant.available_colors) && variant.available_colors.length ? variant.available_colors : ["სტანდარტული"];
+    const colorProfile = variantColorProfile(variant.attributes);
     return {
       id: variant.id,
       sku: variant.sku,
@@ -236,6 +251,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
       pricePlaceholder: variant.price_placeholder || row.price_placeholder || "ფასი დამტკიცებულია",
       availableColors,
       availableMaterials: [material],
+      ...colorProfile,
     };
   });
   const availableMaterials = Array.from(new Set(variants.flatMap((variant) => variant.availableMaterials)));

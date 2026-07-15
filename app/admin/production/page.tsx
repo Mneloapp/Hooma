@@ -68,6 +68,7 @@ type ItemRow = {
   id: string;
   order_id: string;
   product_id: string | null;
+  variant_id: string | null;
   product_name: string | null;
   sku: string | null;
   size_label: string | null;
@@ -116,6 +117,13 @@ function OperatorReference({ value }: { value?: string }) {
   return <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Private operator reference</p>{url ? <a href={url} target="_blank" rel="noreferrer noopener" className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-950 px-4 py-2 font-semibold text-white"><ExternalLink size={14} />რეფერენსის გახსნა</a> : <p className="mt-3 whitespace-pre-wrap leading-6 text-blue-900/80">{value}</p>}</div>;
 }
 
+function AmsProductionProfile({ attributes }: { attributes?: Record<string, unknown> }) {
+  const palette = Array.isArray(attributes?.fixed_color_palette) ? attributes.fixed_color_palette.filter((color): color is string => typeof color === "string") : [];
+  const amsRequired = attributes?.ams_required === true && attributes?.color_mode === "fixed_multicolor" && palette.length >= 2;
+  if (!amsRequired) return null;
+  return <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950"><div className="flex items-center gap-2"><strong>AMS აუცილებელია</strong><span className="rounded-full bg-violet-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">Fixed multicolor</span></div><p className="mt-2 text-xs leading-5 text-violet-900/75">ჩატვირთე ეს ფერები AMS-ში და დაბეჭდე რეფერენსის/ფოტოს ფიქსირებული კომბინაციით:</p><p className="mt-2 font-semibold">{palette.join(" · ")}</p></div>;
+}
+
 export default async function ProductionPage({
   searchParams,
 }: {
@@ -142,7 +150,7 @@ export default async function ProductionPage({
   const orders = (orderRows ?? []) as OrderRow[];
   const orderIds = orders.map((order) => order.id);
   const { data: itemRows, error: itemError } = admin && orderIds.length
-    ? await admin.from("order_items").select("id,order_id,product_id,product_name,sku,size_label,material,color,quantity").in("order_id", orderIds).order("created_at")
+    ? await admin.from("order_items").select("id,order_id,product_id,variant_id,product_name,sku,size_label,material,color,quantity").in("order_id", orderIds).order("created_at")
     : { data: [], error: null };
   const items = (itemRows ?? []) as ItemRow[];
   const productIds = Array.from(new Set(items.map((item) => item.product_id).filter((id): id is string => Boolean(id))));
@@ -150,6 +158,11 @@ export default async function ProductionPage({
     ? await admin.from("product_operator_references").select("product_id,reference").in("product_id", productIds)
     : { data: [], error: null };
   const operatorReferencesByProduct = new Map<string, string>((operatorReferenceRows ?? []).map((row: { product_id: string; reference: string }) => [row.product_id, row.reference]));
+  const variantIds = Array.from(new Set(items.map((item) => item.variant_id).filter((id): id is string => Boolean(id))));
+  const { data: productionVariantRows, error: productionVariantError } = admin && variantIds.length
+    ? await admin.from("product_variants").select("id,attributes").in("id", variantIds)
+    : { data: [], error: null };
+  const productionVariantAttributes = new Map<string, Record<string, unknown>>((productionVariantRows ?? []).map((row: { id: string; attributes: Record<string, unknown> | null }) => [row.id, row.attributes ?? {}]));
   const itemIds = items.map((item) => item.id);
   const { data: jobRows, error: jobError } = admin && itemIds.length
     ? await admin
@@ -188,7 +201,7 @@ export default async function ProductionPage({
   const courierOrders = orders.filter((order) => order.fulfillment_status === "ready_for_delivery");
   const deliveryOrders = orders.filter((order) => order.fulfillment_status === "out_for_delivery");
   const idlePrinters = printers.filter((printer) => printer.status === "idle");
-  const errorsPresent = printerError || orderError || itemError || operatorReferenceError || jobError;
+  const errorsPresent = printerError || orderError || itemError || operatorReferenceError || productionVariantError || jobError;
 
   const stages = [
     ["რიგში / მინიჭებული", waitingJobs.length + preparingJobs.length, Clock3],
@@ -230,6 +243,7 @@ export default async function ProductionPage({
             const order = item ? ordersById.get(item.order_id) : undefined;
             const sourceUrl = safeMakerWorldUrl(job.source_url);
             const operatorReference = item?.product_id ? operatorReferencesByProduct.get(item.product_id) : undefined;
+            const colorProfile = item?.variant_id ? productionVariantAttributes.get(item.variant_id) : undefined;
             return (
               <article key={job.id} className="rounded-[1.5rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -244,6 +258,7 @@ export default async function ProductionPage({
                 </div>
 
                 <OperatorReference value={operatorReference} />
+                <AmsProductionProfile attributes={colorProfile} />
 
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
                   {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full border border-hooma-text/15 bg-white px-4 py-2 font-semibold hover:border-hooma-accent"><ExternalLink size={15} />ძველი წყაროს გახსნა</a> : null}
@@ -273,10 +288,11 @@ export default async function ProductionPage({
             const printer = job.printer_id ? printersById.get(job.printer_id) : undefined;
             const sourceUrl = safeMakerWorldUrl(job.source_url);
             const operatorReference = item?.product_id ? operatorReferencesByProduct.get(item.product_id) : undefined;
+            const colorProfile = item?.variant_id ? productionVariantAttributes.get(item.variant_id) : undefined;
             return (
               <article key={job.id} className="rounded-[1.5rem] border border-violet-200 bg-violet-50 p-5">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><p className="text-xs font-semibold text-violet-900">{orderLabel(order)} · ერთეული {job.unit_number} · plate {job.plate_number}{job.attempt_number > 1 ? ` · retry ${job.attempt_number}` : ""}</p><h3 className="mt-2 text-xl font-semibold">{job.product_name_snapshot || item?.product_name || "პროდუქტი"}</h3><p className="mt-2 text-sm text-violet-900/75">{job.color || item?.color || "ფერი —"} · {job.material || item?.material || "მასალა —"}</p><p className="mt-2 text-xs text-violet-900/65">მიანიჭა: {job.assigned_operator_id ? operatorsById.get(job.assigned_operator_id) || "ოპერატორი" : "—"}</p></div><div className="rounded-2xl bg-white/75 px-4 py-3 text-sm"><span className="block text-xs text-hooma-muted">დაჯავშნილი პრინტერი</span><strong>{printer?.name || "მინიჭებულია"}</strong><span className="ml-1 text-xs text-hooma-muted">{printer?.model}</span></div></div>
-                <OperatorReference value={operatorReference} /><div className="mt-4 flex flex-wrap items-center gap-3">{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold"><ExternalLink size={15} />ძველი წყაროს გახსნა</a> : null}<span className="text-xs text-violet-900/70">ჯერ გაუშვი ამ დაჯავშნილ პრინტერზე Bambu Studio-დან.</span></div>
+                <OperatorReference value={operatorReference} /><AmsProductionProfile attributes={colorProfile} /><div className="mt-4 flex flex-wrap items-center gap-3">{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold"><ExternalLink size={15} />ძველი წყაროს გახსნა</a> : null}<span className="text-xs text-violet-900/70">ჯერ გაუშვი ამ დაჯავშნილ პრინტერზე Bambu Studio-დან.</span></div>
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
                   <form action={startPhysicalPrintAction}>
                     <input type="hidden" name="job_id" value={job.id} /><input type="hidden" name="lock_version" value={job.lock_version} /><input type="hidden" name="operation_key" value={randomUUID()} />

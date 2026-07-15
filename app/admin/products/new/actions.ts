@@ -111,12 +111,15 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
   const name = clean(formData.get("name"), 160);
   const description = clean(formData.get("description"), 3_000);
   const operatorReference = clean(formData.get("operator_reference"), 2_000);
+  const colorMode = clean(formData.get("color_mode"), 32);
   const selectedColors = Array.from(new Set(formData.getAll("colors").map((color) => clean(color, 60)).filter(Boolean)));
   if (name.length < 2) return { ok: false, message: "შეიყვანე პროდუქტის სახელი." };
   if (description.length < 10) return { ok: false, message: "აღწერა მინიმუმ 10 სიმბოლოს უნდა შეიცავდეს." };
   if (operatorReference.length < 3) return { ok: false, message: "შეავსე ოპერატორის რეფერენსი." };
-  if (selectedColors.length < 1 || selectedColors.length > productColorNames.length || selectedColors.some((color) => !allowedProductColors.has(color))) {
-    return { ok: false, message: "აირჩიე მინიმუმ ერთი სწორი ფერი." };
+  if (!["customer_choice", "fixed_multicolor"].includes(colorMode)) return { ok: false, message: "აირჩიე პროდუქტის ფერის რეჟიმი." };
+  const minimumColors = colorMode === "fixed_multicolor" ? 2 : 1;
+  if (selectedColors.length < minimumColors || selectedColors.length > productColorNames.length || selectedColors.some((color) => !allowedProductColors.has(color))) {
+    return { ok: false, message: colorMode === "fixed_multicolor" ? "AMS პროდუქტისთვის აირჩიე მინიმუმ ორი სწორი ფერი." : "აირჩიე მინიმუმ ერთი სწორი ფერი." };
   }
 
   const requestId = clean(formData.get("media_request_id"), 36);
@@ -170,7 +173,7 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
     }));
     const imageUrls = publicUrls.filter((item) => item.kind === "image").map((item) => item.url);
     const videoUrl = publicUrls.find((item) => item.kind === "video")?.url ?? null;
-    const { data, error } = await context.admin.rpc("create_manual_product_draft_v2", {
+    const { data, error } = await context.admin.rpc("create_manual_product_draft_v3", {
       actor_profile_id: context.profile.id,
       product_name: name,
       product_slug: safeSlug(name),
@@ -186,6 +189,7 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
       product_video_url: videoUrl,
       operator_reference: operatorReference,
       product_available_colors: selectedColors,
+      product_color_mode: colorMode,
     });
     if (error || !data?.id) {
       await context.admin.storage.from("product-media").remove(paths);
