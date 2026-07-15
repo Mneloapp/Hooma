@@ -1,14 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-
-const swatches: Record<string, string> = {
-  "Warm white": "#EEEAE1",
-  Graphite: "#292929",
-  Sage: "#7B8B68",
-  Sand: "#D8C7AD",
-  Terracotta: "#B96F50",
-};
+import { productColorHex } from "@/data/product-colors";
 
 export function SwatchSelector({
   label,
@@ -36,7 +29,7 @@ export function SwatchSelector({
               value === option ? "border-hooma-accent bg-hooma-accent/10" : "border-hooma-text/10 bg-white hover:border-hooma-accent/50",
             )}
           >
-            {colorMode ? <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: swatches[option] ?? "#D8C7AD" }} /> : null}
+            {colorMode ? <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: productColorHex(option) }} /> : null}
             {option}
           </button>
         ))}

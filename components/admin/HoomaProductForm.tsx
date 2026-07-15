@@ -2,10 +2,11 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileImage, LoaderCircle, Upload, Video, X } from "lucide-react";
+import { FileImage, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
 import { createHoomaProductAction, prepareProductMediaUploadAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
 import { createClient } from "@/lib/supabase/client";
+import { productColorOptions } from "@/data/product-colors";
 
 type CategoryOption = { id: string; name: string };
 type UploadedMedia = { path: string; originalName: string; size: number; mimeType: string; kind: "image" | "video" };
@@ -57,6 +58,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
     event.preventDefault();
     const formElement = event.currentTarget;
     if (!images.length) { setMessage("პროდუქტს მინიმუმ ერთი ფოტო სჭირდება."); return; }
+    if (!new FormData(formElement).getAll("colors").length) { setMessage("აირჩიე მინიმუმ ერთი ფერი, რომელიც მომხმარებელს გამოუჩნდება."); return; }
     const supabase = createClient() as any;
     if (!supabase) { setMessage("Supabase ჯერ არ არის დაკავშირებული."); return; }
 
@@ -123,6 +125,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
           <label className="text-sm font-medium">სახელი<input name="name" required minLength={2} maxLength={160} placeholder="პროდუქტის სახელი" className={inputClass} /></label>
           <label className="text-sm font-medium">კატეგორია / ქვეკატეგორია<select name="category_id" required className={inputClass}><option value="">აირჩიე</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="text-sm font-medium sm:col-span-2">აღწერა<textarea name="description" required minLength={10} maxLength={3000} rows={5} placeholder="აღწერე პროდუქტი, დანიშნულება და მომხმარებლისთვის მნიშვნელოვანი დეტალები" className={inputClass} /></label>
+          <label className="text-sm font-medium sm:col-span-2">ოპერატორის რეფერენსი <span className="font-normal text-hooma-muted">— მომხმარებელს არ უჩანს</span><textarea name="operator_reference" required minLength={3} maxLength={2000} rows={3} placeholder="ჩასვი მოდელის ბმული, ფაილის მდებარეობა ან ბეჭდვისთვის საჭირო შიდა ინსტრუქცია" className={inputClass} /><span className="mt-2 block text-xs font-normal leading-5 text-hooma-muted">ინახება ცალკე დაცულ ცხრილში და ხელმისაწვდომია მხოლოდ Owner/Admin/Production Operator-ისთვის.</span></label>
         </div>
       </section>
 
@@ -150,6 +153,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
           <label className="text-sm font-medium">Z ზომა, მმ<input name="dimension_z" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
           <label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" defaultValue={pricing.default_margin_percent} required className={inputClass} /></label>
         </div>
+        <div className="mt-6 border-t border-hooma-text/10 pt-5"><div className="flex items-center gap-2"><Palette size={18} className="text-hooma-accent" /><h4 className="text-sm font-semibold">მომხმარებლისთვის ხელმისაწვდომი ფერები</h4></div><p className="mt-1 text-xs leading-5 text-hooma-muted">მომხმარებელი მხოლოდ აქ მონიშნულ ფერებს დაინახავს. აირჩიე მინიმუმ ერთი.</p><div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{productColorOptions.map((color) => <label key={color.name} className="flex cursor-pointer items-center gap-3 rounded-xl border border-hooma-text/10 bg-white px-3 py-3 text-sm transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="checkbox" name="colors" value={color.name} className="h-4 w-4 accent-hooma-accent" /><span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} /><span>{color.name}</span></label>)}</div></div>
       </section>
 
       {message ? <p aria-live="polite" className="rounded-xl bg-hooma-panel p-4 text-sm leading-6">{message}</p> : null}

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
+import { productColorNames } from "@/data/product-colors";
 
 export type HoomaProductState = { ok: boolean; message: string; productId?: string; sku?: string };
 type MediaKind = "image" | "video";
@@ -15,6 +16,7 @@ const videoExtensions = new Set(["mp4", "webm"]);
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"]);
 const imageLimit = 10 * 1024 * 1024;
 const videoLimit = 50 * 1024 * 1024;
+const allowedProductColors = new Set<string>(productColorNames);
 
 const clean = (value: unknown, max: number) => String(value ?? "").trim().slice(0, max);
 const extensionOf = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
@@ -108,8 +110,14 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
 
   const name = clean(formData.get("name"), 160);
   const description = clean(formData.get("description"), 3_000);
+  const operatorReference = clean(formData.get("operator_reference"), 2_000);
+  const selectedColors = Array.from(new Set(formData.getAll("colors").map((color) => clean(color, 60)).filter(Boolean)));
   if (name.length < 2) return { ok: false, message: "შეიყვანე პროდუქტის სახელი." };
   if (description.length < 10) return { ok: false, message: "აღწერა მინიმუმ 10 სიმბოლოს უნდა შეიცავდეს." };
+  if (operatorReference.length < 3) return { ok: false, message: "შეავსე ოპერატორის რეფერენსი." };
+  if (selectedColors.length < 1 || selectedColors.length > productColorNames.length || selectedColors.some((color) => !allowedProductColors.has(color))) {
+    return { ok: false, message: "აირჩიე მინიმუმ ერთი სწორი ფერი." };
+  }
 
   const requestId = clean(formData.get("media_request_id"), 36);
   let media: UploadedMedia[] = [];
@@ -162,7 +170,7 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
     }));
     const imageUrls = publicUrls.filter((item) => item.kind === "image").map((item) => item.url);
     const videoUrl = publicUrls.find((item) => item.kind === "video")?.url ?? null;
-    const { data, error } = await context.admin.rpc("create_manual_product_draft", {
+    const { data, error } = await context.admin.rpc("create_manual_product_draft_v2", {
       actor_profile_id: context.profile.id,
       product_name: name,
       product_slug: safeSlug(name),
@@ -176,6 +184,8 @@ export async function createHoomaProductAction(formData: FormData): Promise<Hoom
       selected_dimensions: dimensions,
       product_image_urls: imageUrls,
       product_video_url: videoUrl,
+      operator_reference: operatorReference,
+      product_available_colors: selectedColors,
     });
     if (error || !data?.id) {
       await context.admin.storage.from("product-media").remove(paths);
