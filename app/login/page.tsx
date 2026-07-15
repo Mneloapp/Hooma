@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { defaultAdminPath, isStaffRole } from "@/lib/auth/permissions";
+import { getProfile } from "@/lib/supabase/server";
 
 const errorMessages: Record<string, string> = {
   google: "Google-ით შესვლა ვერ დაიწყო. სცადე ხელახლა.",
@@ -10,6 +13,8 @@ const errorMessages: Record<string, string> = {
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const params = await searchParams;
+  const profile = await getProfile();
+  if (profile) redirect(isStaffRole(profile.role) ? defaultAdminPath(profile.role) : "/account");
   return (
     <section className="mx-auto grid min-h-[70vh] max-w-5xl place-items-center px-4 py-16 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">

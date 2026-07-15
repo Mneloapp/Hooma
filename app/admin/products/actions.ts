@@ -10,7 +10,10 @@ export type PublicationState = { ok?: boolean; message?: string };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function deleteError(message: string) {
-  if (message.includes("referenced by an order")) return "პროდუქტი შეკვეთაში უკვე გამოიყენება და მისი წაშლა აღარ შეიძლება — გადაიყვანე Archived სტატუსში.";
+  if (message.includes("active live order")) return "Archived პროდუქტს აქტიური რეალური შეკვეთა უკავშირდება და მის დასრულებამდე ან გაუქმებამდე ვერ წაიშლება.";
+  if (message.includes("must be archived")) return "პროდუქტი შეკვეთაშია გამოყენებული. უსაფრთხო წაშლამდე ჯერ გადაიყვანე Archived სტატუსში.";
+  if (message.includes("snapshot is incomplete")) return "შეკვეთის ისტორიულ ჩანაწერში პროდუქტის snapshot არასრულია და უსაფრთხო წაშლა ვერ შესრულდება.";
+  if (message.includes("referenced by an order")) return "პროდუქტი შეკვეთის ისტორიასთანაა დაკავშირებული და უსაფრთხო წაშლა ვერ შესრულდა.";
   if (message.includes("deal history")) return "პროდუქტს დღის შეთავაზებების ისტორია აქვს და მისი წაშლა აღარ შეიძლება.";
   if (message.includes("Only Draft")) return "მხოლოდ Draft სტატუსის პროდუქტის წაშლა შეიძლება.";
   if (message.includes("Some requested products")) return "ერთ-ერთი მონიშნული პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია. განაახლე გვერდი და სცადე თავიდან.";

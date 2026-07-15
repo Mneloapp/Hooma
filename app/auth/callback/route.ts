@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { defaultAdminPath, isStaffRole, isUserRole } from "@/lib/auth/permissions";
 
-const safeNextPath = (value: string | null) => value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/account";
+const safeNextPath = (value: string | null) => {
+  const safePath = value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/account";
+  return safePath === "/" ? "/account" : safePath;
+};
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);

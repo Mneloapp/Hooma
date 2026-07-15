@@ -15,7 +15,10 @@ type AuthState = {
 const getString = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const safeNextPath = (value: string, fallback = "/account") => value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : fallback;
+const safeNextPath = (value: string, fallback = "/account") => {
+  const safePath = value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : fallback;
+  return safePath === "/" ? fallback : safePath;
+};
 
 async function siteOrigin() {
   if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");

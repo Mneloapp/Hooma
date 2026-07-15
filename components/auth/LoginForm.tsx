@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/Button";
 import { googleLoginAction, loginAction } from "@/app/auth/actions";
 
-export function LoginForm({ next = "/" }: { next?: string }) {
+export function LoginForm({ next = "/account" }: { next?: string }) {
   const [state, action, pending] = useActionState(loginAction, {});
 
   return (
