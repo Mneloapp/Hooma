@@ -20,6 +20,7 @@ input:focus, textarea:focus { border-color: #bb6f44; }
 textarea { resize: vertical; }
 .grid { display: grid; gap: 8px; }
 .grid.three { grid-template-columns: repeat(3, 1fr); }
+.grid.four { grid-template-columns: repeat(2, 1fr); }
 section { padding-top: 3px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; }
 .section-title span { color: #657168; font-size: 11px; }

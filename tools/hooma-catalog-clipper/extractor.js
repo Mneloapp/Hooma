@@ -28,6 +28,27 @@
     }
     return null;
   };
+  const isVisible = (element) => {
+    if (!(element instanceof Element) || element.closest('[hidden], [aria-hidden="true"]')) return false;
+    const style = getComputedStyle(element);
+    return style.display !== "none"
+      && style.visibility !== "hidden"
+      && style.opacity !== "0"
+      && element.getClientRects().length > 0;
+  };
+  const visibleText = (element, maximum = 3000) => {
+    if (!isVisible(element)) return null;
+    return clean(element.innerText || element.textContent, maximum);
+  };
+  const firstVisibleText = (selectors, maximum = 3000, minimum = 1) => {
+    for (const selector of selectors) {
+      for (const element of document.querySelectorAll(selector)) {
+        const text = visibleText(element, maximum);
+        if (text && text.length >= minimum) return text;
+      }
+    }
+    return null;
+  };
   const values = (value) => Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
   const typeNames = (node) => values(node?.["@type"]).map((item) => String(item).toLowerCase());
 
@@ -55,11 +76,73 @@
   const product = ldObjects.find((item) => typeNames(item).some((type) => ["product", "individualproduct", "3dmodel"].includes(type))) ?? null;
   const bodyText = (document.body?.innerText ?? "").replace(/\u00a0/g, " ").slice(0, 250000);
 
-  const name = clean(product?.name, 160)
-    ?? meta('meta[property="og:title"]', 'meta[name="twitter:title"]')
-    ?? clean(document.querySelector("h1")?.textContent, 160)
+  // Chrome's page translator changes rendered text nodes, but it deliberately leaves
+  // JSON-LD and Open Graph metadata untouched. Prefer visible copy so a translated page
+  // exports the Georgian text the operator can actually see.
+  const visibleName = firstVisibleText([
+    "main h1",
+    "article h1",
+    "h1",
+    '[itemprop="name"]',
+  ], 160);
+  const structuredName = clean(product?.name, 160)
+    ?? meta('meta[property="og:title"]', 'meta[name="twitter:title"]');
+  const name = visibleName
+    ?? structuredName
     ?? clean(document.title, 160);
-  const description = clean(product?.description)
+
+  const visibleDescription = firstVisibleText([
+    'main [itemprop="description"]',
+    'article [itemprop="description"]',
+    'main [data-testid*="description" i]',
+    'main [data-test*="description" i]',
+    'main [id="description" i]',
+    'main [id*="product-description" i]',
+    'main [id*="model-description" i]',
+    'main [class*="product-description" i]',
+    'main [class*="model-description" i]',
+    'main [class*="design-description" i]',
+    'main [class*="introduction" i]',
+    'main [class*="markdown" i]',
+    'main [class*="rich-text" i]',
+    'main [class~="description" i]',
+    'article [class*="description" i]',
+  ], 3000, 10);
+
+  const descriptionHeadingPattern = /^(?:description|details|product description|model description|model details|about this (?:item|product|model)|აღწერა|დეტალები|პროდუქტის აღწერა|მოდელის აღწერა|მოდელის დეტალები|ამ (?:ნივთის|პროდუქტის|მოდელის) შესახებ)\s*:?$/i;
+  let descriptionByHeading = null;
+  if (!visibleDescription) {
+    const headings = document.querySelectorAll('main h2, main h3, main h4, main [role="heading"], article h2, article h3, summary');
+    for (const heading of headings) {
+      const headingText = visibleText(heading, 120);
+      if (!headingText || !descriptionHeadingPattern.test(headingText)) continue;
+      let sibling = heading.nextElementSibling;
+      while (sibling && !descriptionByHeading) {
+        const text = visibleText(sibling, 3000);
+        if (text && text.length >= 10) descriptionByHeading = text;
+        sibling = sibling.nextElementSibling;
+      }
+      if (descriptionByHeading) break;
+    }
+  }
+
+  const hasGeorgian = (value) => /[\u10a0-\u10ff]/i.test(value ?? "");
+  const pageLooksTranslated = document.documentElement.classList.contains("translated-ltr")
+    || document.documentElement.classList.contains("translated-rtl")
+    || document.documentElement.lang.toLowerCase().startsWith("ka")
+    || (hasGeorgian(visibleName) && !hasGeorgian(structuredName));
+  let translatedParagraph = null;
+  if (!visibleDescription && !descriptionByHeading && pageLooksTranslated) {
+    translatedParagraph = Array.from(document.querySelectorAll("main p, article p"))
+      .map((element) => visibleText(element, 3000))
+      .filter((text) => text && text.length >= 30 && hasGeorgian(text))
+      .sort((left, right) => right.length - left.length)[0] ?? null;
+  }
+
+  const description = visibleDescription
+    ?? descriptionByHeading
+    ?? translatedParagraph
+    ?? clean(product?.description)
     ?? meta('meta[property="og:description"]', 'meta[name="twitter:description"]', 'meta[name="description"]');
 
   const imageCandidates = [];
@@ -130,6 +213,9 @@
   if (!material) warnings.push("მასალის ტიპი ვერ მოიძებნა.");
   if (!weightGrams) warnings.push("წონა ვერ მოიძებნა.");
   if (!printTimeMinutes) warnings.push("ბეჭდვის დრო ვერ მოიძებნა.");
+  if (pageLooksTranslated && (!hasGeorgian(name) || !hasGeorgian(description))) {
+    warnings.push("Chrome-ის ქართული თარგმანი ყველა ველში ვერ ამოიკითხა — სახელი და აღწერა კლიპერში გადაამოწმე.");
+  }
   warnings.push("გამოქვეყნებამდე გადაამოწმე მონაცემები, მედიის ხარისხი და გამოყენების უფლება.");
 
   return {
