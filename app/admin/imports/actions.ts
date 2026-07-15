@@ -9,22 +9,42 @@ export type DraftActionState = { ok?: boolean; message?: string; productId?: str
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const clean = (value: unknown, max = 500) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+const defaultImportHosts = ["makerworld.com", "printables.com", "thingiverse.com", "thangs.com", "myminifactory.com", "cults3d.com"];
+const configuredImportHosts = (process.env.HOOMA_IMPORT_ALLOWED_HOSTS ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
+const allowedImportHosts = Array.from(new Set([...defaultImportHosts, ...configuredImportHosts]));
 
-function validateMakerWorldUrl(value: string) {
+function hostAllowed(hostname: string) {
+  return allowedImportHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+}
+
+function validateCatalogSourceUrl(value: string) {
   const url = new URL(value);
   const hostname = url.hostname.toLowerCase();
-  if (url.protocol !== "https:" || !(hostname === "makerworld.com" || hostname.endsWith(".makerworld.com"))) {
-    throw new Error("შეიყვანე MakerWorld-ის სწორი HTTPS ბმული.");
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") || !hostAllowed(hostname)) {
+    throw new Error("შეიყვანე მხარდაჭერილი 3D მოდელების პლატფორმის HTTPS ბმული.");
   }
   url.hash = "";
   return url;
 }
 
-function makerWorldIdentity(url: URL) {
-  const match = url.pathname.match(/\/models\/(\d+)(?:-([^/?#]+))?/i);
-  const modelId = match?.[1] ?? url.pathname.match(/model[_/-](\d+)/i)?.[1] ?? null;
-  let titleSegment = match?.[2] ?? "";
-  try { titleSegment = decodeURIComponent(titleSegment); } catch { titleSegment = match?.[2] ?? ""; }
+function sourcePlatform(url: URL) {
+  const hostname = url.hostname.toLowerCase();
+  if (hostname.endsWith("makerworld.com")) return "makerworld";
+  if (hostname.endsWith("printables.com")) return "printables";
+  if (hostname.endsWith("thingiverse.com")) return "thingiverse";
+  return "other";
+}
+
+function sourceIdentity(url: URL) {
+  const makerWorldMatch = url.pathname.match(/\/models\/(\d+)(?:-([^/?#]+))?/i);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+  const lastSegment = pathSegments.at(-1) ?? "";
+  const modelId = makerWorldMatch?.[1]
+    ?? url.pathname.match(/(?:thing|model|models|3d-model)[_/-](\d+)/i)?.[1]
+    ?? clean(lastSegment, 160)
+    ?? null;
+  let titleSegment = makerWorldMatch?.[2] ?? lastSegment;
+  try { titleSegment = decodeURIComponent(titleSegment); } catch { titleSegment = makerWorldMatch?.[2] ?? lastSegment; }
   const inferredTitle = titleSegment ? clean(titleSegment.replace(/[-_]+/g, " "), 240) : "";
   return { modelId, inferredTitle };
 }
@@ -40,11 +60,11 @@ async function fetchAllowedHtml(initialUrl: URL) {
     });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location) throw new Error("MakerWorld redirect-ს მისამართი არ აქვს.");
-      current = validateMakerWorldUrl(new URL(location, current).toString());
+      if (!location) throw new Error("წყაროს redirect-ს მისამართი არ აქვს.");
+      current = validateCatalogSourceUrl(new URL(location, current).toString());
       continue;
     }
-    if (!response.ok) throw new Error(`MakerWorld გვერდი არ გაიხსნა (HTTP ${response.status}).`);
+    if (!response.ok) throw new Error(`წყაროს გვერდი არ გაიხსნა (HTTP ${response.status}).`);
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("text/html")) throw new Error("ბმული HTML პროდუქტის გვერდს არ აბრუნებს.");
     const declaredSize = Number(response.headers.get("content-length") ?? 0);
@@ -69,7 +89,7 @@ async function fetchAllowedHtml(initialUrl: URL) {
     chunks.forEach((chunk) => { combined.set(chunk, offset); offset += chunk.byteLength; });
     return new TextDecoder().decode(combined);
   }
-  throw new Error("MakerWorld ბმულზე ზედმეტად ბევრი redirect დაფიქსირდა.");
+  throw new Error("წყაროს ბმულზე ზედმეტად ბევრი redirect დაფიქსირდა.");
 }
 
 function attribute(tag: string, name: string) {
@@ -87,27 +107,69 @@ function extractPublicMetadata(html: string, url: URL) {
   }
   const titleTag = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "";
   const first = (key: string) => metadata.get(key)?.[0] ?? "";
-  const rawImages = [...(metadata.get("og:image") ?? []), ...(metadata.get("twitter:image") ?? [])];
+  const jsonLdItems: Record<string, unknown>[] = [];
+  for (const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const values = Array.isArray(parsed) ? parsed : [parsed];
+      for (const value of values) {
+        if (value && typeof value === "object") {
+          const record = value as Record<string, unknown>;
+          const graph = Array.isArray(record["@graph"]) ? record["@graph"] : [];
+          jsonLdItems.push(record, ...graph.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object"));
+        }
+      }
+    } catch { /* Invalid JSON-LD is ignored in favor of Open Graph metadata. */ }
+  }
+  const jsonLd = jsonLdItems.find((item) => {
+    const type = Array.isArray(item["@type"]) ? item["@type"] : [item["@type"]];
+    return type.some((value) => ["product", "creativework", "3dmodel"].includes(String(value ?? "").toLowerCase()));
+  }) ?? jsonLdItems[0] ?? {};
+  const jsonLdImages = (Array.isArray(jsonLd.image) ? jsonLd.image : [jsonLd.image]).flatMap((value) => {
+    if (typeof value === "string") return [value];
+    if (value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string") return [String((value as Record<string, unknown>).url)];
+    return [];
+  });
+  const rawImages = [...jsonLdImages, ...(metadata.get("og:image") ?? []), ...(metadata.get("twitter:image") ?? [])];
   const images = Array.from(new Set(rawImages.map((value) => {
     try { return new URL(value, url).toString(); } catch { return ""; }
   }).filter((value) => value.startsWith("https://")))).slice(0, 12);
-  const modelId = makerWorldIdentity(url).modelId;
+  const modelId = sourceIdentity(url).modelId;
+  const linkLicense = html.match(/<link\b[^>]*rel\s*=\s*["'][^"']*license[^"']*["'][^>]*>/i)?.[0] ?? "";
+  const rawLicense = clean(
+    (typeof jsonLd.license === "string" ? jsonLd.license : "")
+      || first("license") || first("dc.rights") || first("dcterms.license") || attribute(linkLicense, "href"),
+    1_000,
+  );
+  const normalizedLicense = rawLicense.toLowerCase();
+  const publicDomain = normalizedLicense.includes("creativecommons.org/publicdomain/zero")
+    || normalizedLicense.includes("creativecommons.org/publicdomain/mark")
+    || /(^|\s)cc0($|\s|\b)/i.test(rawLicense)
+    || normalizedLicense.includes("public domain");
+  const licenseUrl = (() => { try { const parsed = new URL(rawLicense); return parsed.protocol === "https:" ? parsed.toString() : ""; } catch { return ""; } })();
 
   return {
-    title: clean(first("og:title") || first("twitter:title") || titleTag, 240),
-    description: clean(first("og:description") || first("description") || first("twitter:description"), 3_000),
+    title: clean(jsonLd.name || jsonLd.headline || first("og:title") || first("twitter:title") || titleTag, 240),
+    description: clean(jsonLd.description || first("og:description") || first("description") || first("twitter:description"), 3_000),
     images,
     canonical_url: first("og:url") || url.toString(),
     model_id: modelId,
+    reuse: {
+      status: publicDomain ? "public_domain" : "unknown",
+      license_name: publicDomain ? "CC0 / Public Domain" : rawLicense || null,
+      license_url: publicDomain ? licenseUrl || url.toString() : licenseUrl || null,
+      commercial_use_allowed: publicDomain,
+      media_use_allowed: publicDomain,
+    },
     extraction: {
-      source: "public_page_metadata",
+      source: "universal_public_page_metadata",
       technical_profile_status: "requires_operator_or_3mf_profile",
       extracted_at: new Date().toISOString(),
     },
   };
 }
 
-export async function createMakerWorldImportAction(_state: ImportActionState, formData: FormData): Promise<ImportActionState> {
+export async function createCatalogImportAction(_state: ImportActionState, formData: FormData): Promise<ImportActionState> {
   const profile = await requirePermission("catalog.manage");
   if (!profile) return { ok: false, message: "ამ მოქმედებისთვის ადმინისტრატორის ანგარიშია საჭირო." };
   const admin = createAdminClient() as any;
@@ -115,16 +177,17 @@ export async function createMakerWorldImportAction(_state: ImportActionState, fo
 
   let url: URL;
   try {
-    url = validateMakerWorldUrl(clean(formData.get("source_url"), 2_000));
+    url = validateCatalogSourceUrl(clean(formData.get("source_url"), 2_000));
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "ბმული არასწორია." };
   }
 
-  const identity = makerWorldIdentity(url);
+  const identity = sourceIdentity(url);
+  const platform = sourcePlatform(url);
 
   const baseRow = {
     source_url: url.toString(),
-    platform: "makerworld",
+    platform,
     status: "submitted",
     source_model_id: identity.modelId,
     ...(identity.inferredTitle ? { source_title: identity.inferredTitle } : {}),
@@ -149,19 +212,19 @@ export async function createMakerWorldImportAction(_state: ImportActionState, fo
       metadata_extracted_at: new Date().toISOString(),
       error_message: null,
     }).eq("id", importRow.id);
-    await admin.from("audit_log").insert({ actor_id: profile.id, action: "makerworld_metadata_extracted", entity_type: "source_import", entity_id: importRow.id, metadata: { source_url: url.toString(), image_count: extracted.images.length } });
+    await admin.from("audit_log").insert({ actor_id: profile.id, action: "catalog_source_metadata_extracted", entity_type: "source_import", entity_id: importRow.id, metadata: { source_url: url.toString(), platform, image_count: extracted.images.length, reuse_status: extracted.reuse.status } });
     revalidatePath("/admin/imports");
     return { ok: true, importId: importRow.id, message: "Metadata მიღებულია. ახლა გადაამოწმე პროდუქტისა და ტექნიკური პროფილის მონაცემები." };
   } catch (error) {
     const message = error instanceof Error ? clean(error.message, 500) : "Metadata ავტომატურად ვერ წამოვიღეთ.";
     await admin.from("source_imports").update({ status: "needs_review", error_message: message }).eq("id", importRow.id);
-    await admin.from("audit_log").insert({ actor_id: profile.id, action: "makerworld_metadata_extraction_failed", entity_type: "source_import", entity_id: importRow.id, metadata: { source_url: url.toString(), error: message } });
+    await admin.from("audit_log").insert({ actor_id: profile.id, action: "catalog_source_metadata_extraction_failed", entity_type: "source_import", entity_id: importRow.id, metadata: { source_url: url.toString(), platform, error: message } });
     revalidatePath("/admin/imports");
     return {
       ok: true,
       importId: importRow.id,
       message: message.includes("HTTP 403")
-        ? "MakerWorld-მა ავტომატური წაკითხვა შეზღუდა. ბმული და Model ID შენახულია — შეავსე დარჩენილი მონაცემები გადამოწმების გვერდზე."
+        ? "წყაროს პლატფორმამ ავტომატური წაკითხვა შეზღუდა. ბმული შენახულია — შეავსე დარჩენილი მონაცემები გადამოწმების გვერდზე."
         : `ბმული შენახულია, მაგრამ ავტომატური წაკითხვა ვერ დასრულდა: ${message}`,
     };
   }
@@ -174,7 +237,7 @@ const positiveNumber = (formData: FormData, key: string, max: number) => {
   return value;
 };
 
-function makerWorldImageUrls(value: unknown) {
+function sourceImageUrls(value: unknown, extractedImages: string[]) {
   const entries = Array.from(new Set(String(value ?? "")
     .split(/\r?\n/)
     .map((item) => item.trim())
@@ -184,8 +247,9 @@ function makerWorldImageUrls(value: unknown) {
   return entries.map((entry) => {
     const url = new URL(entry);
     const host = url.hostname.toLowerCase();
-    if (url.protocol !== "https:" || !(host === "makerworld.bblmw.com" || host.endsWith(".bblmw.com"))) {
-      throw new Error("ფოტოს ბმული MakerWorld-ის HTTPS მისამართი უნდა იყოს (makerworld.bblmw.com).");
+    const legacyMakerWorldImage = host === "makerworld.bblmw.com" || host.endsWith(".bblmw.com");
+    if (url.protocol !== "https:" || (!legacyMakerWorldImage && !extractedImages.includes(url.toString()))) {
+      throw new Error("ფოტოს ბმული ავტომატურად მიღებულ წყაროს ფოტოებს უნდა ემთხვეოდეს.");
     }
     url.hash = "";
     return url.toString();
@@ -197,7 +261,7 @@ function draftDatabaseError(message: string) {
     return "ეს Slug უკვე გამოყენებულია. შეცვალე Slug, მაგალითად ბოლოში დაუმატე Model ID.";
   }
   if (message.includes("product_sources") || message.includes("source_url")) {
-    return "ეს MakerWorld წყარო უკვე დაკავშირებულია სხვა პროდუქტთან. გახსენი არსებული პროდუქტი ან წაშალე ძველი Draft.";
+    return "ეს წყარო უკვე დაკავშირებულია სხვა პროდუქტთან. გახსენი არსებული პროდუქტი ან წაშალე ძველი Draft.";
   }
   if (message.includes("Active category and material")) return "არჩეული კატეგორია ან მასალა აღარ არის აქტიური. თავიდან აირჩიე ორივე.";
   if (message.includes("Material grams and print minutes")) return "წონა და ბეჭდვის დრო ნულზე მეტი უნდა იყოს.";
@@ -222,7 +286,6 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
 
   try {
     const description = clean(formData.get("description"), 3_000);
-    const submittedImages = makerWorldImageUrls(formData.get("image_urls"));
     const grams = positiveNumber(formData, "material_grams", 1_000_000);
     const minutes = Math.round(positiveNumber(formData, "print_minutes", 1_000_000));
     const plateCount = Math.round(positiveNumber(formData, "plate_count", 100));
@@ -236,10 +299,10 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
     };
     const { data: importRecord, error: importReadError } = await admin
       .from("source_imports")
-      .select("source_url,extracted_metadata,product_id")
+      .select("source_url,platform,extracted_metadata,product_id")
       .eq("id", importId)
       .single();
-    if (importReadError || !importRecord) throw new Error("MakerWorld Import ჩანაწერი ვერ მოიძებნა.");
+    if (importReadError || !importRecord) throw new Error("Import ჩანაწერი ვერ მოიძებნა.");
 
     if (importRecord.product_id && uuidPattern.test(String(importRecord.product_id))) {
       revalidatePath("/admin/products");
@@ -247,7 +310,7 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
     }
 
     const [{ data: existingSource }, { data: existingSlug }] = await Promise.all([
-      admin.from("product_sources").select("product_id").eq("platform", "makerworld").eq("source_url", importRecord.source_url).maybeSingle(),
+      admin.from("product_sources").select("product_id").eq("platform", importRecord.platform).eq("source_url", importRecord.source_url).maybeSingle(),
       admin.from("products").select("id").eq("slug", slug).maybeSingle(),
     ]);
     if (existingSource?.product_id) {
@@ -261,7 +324,7 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
       await admin.from("audit_log").insert({ actor_id: profile.id, action: "source_import_linked_to_existing_product", entity_type: "product", entity_id: existingSource.product_id, metadata: { source_import_id: importId } });
       revalidatePath("/admin/imports");
       revalidatePath("/admin/products");
-      return { ok: true, productId: String(existingSource.product_id), message: "ეს MakerWorld წყარო უკვე დამატებულია — იხსნება არსებული პროდუქტი." };
+      return { ok: true, productId: String(existingSource.product_id), message: "ეს წყარო უკვე დამატებულია — იხსნება არსებული პროდუქტი." };
     }
     if (existingSlug?.id) return { ok: false, message: "ეს Slug უკვე გამოყენებულია. შეცვალე Slug, მაგალითად ბოლოში დაუმატე Model ID." };
 
@@ -271,6 +334,13 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
     const existingImages = Array.isArray(currentMetadata.images)
       ? currentMetadata.images.filter((value: unknown) => typeof value === "string").slice(0, 12)
       : [];
+    const submittedImages = sourceImageUrls(formData.get("image_urls"), existingImages);
+    const reuse = currentMetadata.reuse && typeof currentMetadata.reuse === "object"
+      ? currentMetadata.reuse as Record<string, unknown>
+      : {};
+    const publicDomainSource = reuse.status === "public_domain"
+      && reuse.commercial_use_allowed === true
+      && reuse.media_use_allowed === true;
     const reviewedMetadata = {
       ...currentMetadata,
       title: nameEn,
@@ -306,10 +376,10 @@ export async function createProductDraftFromImportAction(_state: DraftActionStat
       selected_margin_percent: margin,
       selected_plate_count: plateCount,
       selected_dimensions: dimensions,
-      selected_license_name: null,
-      selected_license_url: null,
-      confirmed_commercial_use: false,
-      confirmed_media_use: false,
+      selected_license_name: publicDomainSource ? clean(reuse.license_name || "CC0 / Public Domain", 200) : null,
+      selected_license_url: publicDomainSource ? clean(reuse.license_url || importRecord.source_url, 2_000) : null,
+      confirmed_commercial_use: publicDomainSource,
+      confirmed_media_use: publicDomainSource,
     });
     if (error || !data) return { ok: false, message: error ? draftDatabaseError(error.message) : "Product Draft ვერ შეიქმნა." };
     revalidatePath("/admin/imports");

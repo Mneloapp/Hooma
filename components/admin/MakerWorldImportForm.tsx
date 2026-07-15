@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Link2, LoaderCircle } from "lucide-react";
-import { createMakerWorldImportAction } from "@/app/admin/imports/actions";
+import { createCatalogImportAction } from "@/app/admin/imports/actions";
 
-export function MakerWorldImportForm() {
-  const [state, action, pending] = useActionState(createMakerWorldImportAction, {});
+export function UniversalImportForm() {
+  const [state, action, pending] = useActionState(createCatalogImportAction, {});
   const router = useRouter();
 
   useEffect(() => {
@@ -16,10 +16,10 @@ export function MakerWorldImportForm() {
 
   return (
     <form action={action} className="rounded-[2rem] bg-white/75 p-6 shadow-soft">
-      <label className="text-sm font-medium">MakerWorld პროდუქტის ბმული
+      <label className="text-sm font-medium">3D მოდელის პროდუქტის ბმული
         <div className="mt-2 flex rounded-2xl border border-hooma-text/10 bg-white p-1 focus-within:border-hooma-accent">
           <span className="grid h-11 w-11 shrink-0 place-items-center text-hooma-muted"><Link2 size={18} /></span>
-          <input name="source_url" type="url" required placeholder="https://makerworld.com/en/models/..." className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" />
+          <input name="source_url" type="url" required placeholder="https://printables.com/model/..." className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" />
           <button disabled={pending} className="flex items-center gap-2 rounded-xl bg-hooma-text px-5 text-sm font-medium text-white disabled:opacity-50">{pending ? <><LoaderCircle size={16} className="animate-spin" />ბმული ინახება...</> : "Draft-ის შექმნა"}</button>
         </div>
       </label>

@@ -52,7 +52,8 @@ function safeSourceUrl(value: unknown) {
   try {
     const url = new URL(value);
     const host = url.hostname.toLowerCase();
-    return url.protocol === "https:" && (host === "makerworld.com" || host.endsWith(".makerworld.com"));
+    const supportedHosts = ["makerworld.com", "printables.com", "thingiverse.com", "thangs.com", "myminifactory.com", "cults3d.com"];
+    return url.protocol === "https:" && supportedHosts.some((supported) => host === supported || host.endsWith(`.${supported}`));
   } catch {
     return false;
   }
@@ -95,7 +96,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   for (const variant of variantRows ?? []) variantsByProduct.set(variant.product_id, [...(variantsByProduct.get(variant.product_id) ?? []), variant]);
   const sourceByProduct = new Map<string, any>();
   for (const source of sourceRows ?? []) {
-    const sourceAllowed = source.platform === "hooma" || (source.platform === "makerworld" && safeSourceUrl(source.source_url));
+    const sourceAllowed = source.platform === "hooma" || safeSourceUrl(source.source_url);
     if (sourceAllowed && !sourceByProduct.has(source.product_id)) sourceByProduct.set(source.product_id, source);
   }
 
@@ -162,7 +163,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       leadTimeDays: Number(row.lead_time_business_days || 3),
       estimatedPrintHours: row.estimated_print_minutes ? Number(row.estimated_print_minutes) / 60 : null,
       licenseStatus: source.license_status === "not_required" ? "not_required" : "verified",
-      sourcePlatform: source.platform === "hooma" ? "hooma" : "makerworld",
+      sourcePlatform: source.platform === "hooma" ? "hooma" : source.platform === "makerworld" ? "makerworld" : "external",
       sourceCreator: source.creator_name || undefined,
       isOrderable: true,
     }];
@@ -251,7 +252,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
     leadTimeDays: Number(row.lead_time_business_days || 3),
     estimatedPrintHours: row.estimated_print_minutes ? Number(row.estimated_print_minutes) / 60 : null,
     licenseStatus: "pending",
-    sourcePlatform: source?.platform === "makerworld" ? "makerworld" : source?.platform === "hooma" ? "hooma" : "other",
+    sourcePlatform: source?.platform === "makerworld" ? "makerworld" : source?.platform === "hooma" ? "hooma" : source ? "external" : "other",
     sourceCreator: source?.creator_name || undefined,
     isOrderable: false,
   };

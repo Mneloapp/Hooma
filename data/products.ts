@@ -49,7 +49,7 @@ export type Product = {
   leadTimeDays: number;
   estimatedPrintHours: number | null;
   licenseStatus: "not_required" | "pending" | "verified";
-  sourcePlatform: "hooma" | "makerworld" | "other";
+  sourcePlatform: "hooma" | "makerworld" | "external" | "other";
   sourceCreator?: string;
   isOrderable: boolean;
 };
