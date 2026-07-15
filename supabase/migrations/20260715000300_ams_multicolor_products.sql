@@ -42,7 +42,7 @@ begin
   );
   is_ams := product_color_mode = 'fixed_multicolor';
 
-  if coalesce(array_length(selected_palette, 1), 0) < case when is_ams then 2 else 1 end then
+  if coalesce(array_length(selected_palette, 1), 0) < (case when is_ams then 2 else 1 end) then
     raise exception 'AMS products require at least two colors';
   end if;
 
