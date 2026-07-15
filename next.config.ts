@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "makerworld.bblmw.com" },
       { protocol: "https", hostname: "**.bblmw.com" },
+      { protocol: "https", hostname: "**.supabase.co", pathname: "/storage/v1/object/public/product-media/**" },
     ],
   },
 };

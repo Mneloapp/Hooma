@@ -28,7 +28,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       <nav aria-label="Breadcrumb" className="mb-5 flex items-center gap-1.5 overflow-x-auto text-xs text-hooma-muted hide-scrollbar"><Link href="/" className="hover:text-hooma-text">მთავარი</Link><ChevronRight size={13} /><Link href="/shop" className="hover:text-hooma-text">კატალოგი</Link><ChevronRight size={13} /><Link href={`/shop?category=${product.categorySlug}`} className="hover:text-hooma-text">{product.category}</Link><ChevronRight size={13} /><span className="truncate text-hooma-text">{product.nameKa}</span></nav>
 
       <section className="grid items-start gap-7 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,0.9fr)_330px] xl:gap-10">
-        <ProductImageGallery images={[product.heroImage, ...product.galleryImages]} name={product.nameKa} />
+        <div><ProductImageGallery images={[product.heroImage, ...product.galleryImages]} name={product.nameKa} />{product.videoUrl ? <div className="mt-4 overflow-hidden rounded-2xl bg-hooma-text"><video src={product.videoUrl} controls preload="metadata" playsInline className="aspect-video w-full object-contain">თქვენი ბრაუზერი ვიდეოს ვერ აჩვენებს.</video></div> : null}</div>
 
         <div className="min-w-0">
           <Link href={`/shop?category=${product.categorySlug}`} className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent hover:underline">{product.category}</Link>

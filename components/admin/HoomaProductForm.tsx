@@ -1,23 +1,159 @@
 "use client";
 
-import Link from "next/link";
-import { useActionState } from "react";
-import { CheckCircle2 } from "lucide-react";
-import { createHoomaProductAction } from "@/app/admin/products/new/actions";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FileImage, LoaderCircle, Upload, Video, X } from "lucide-react";
+import { createHoomaProductAction, prepareProductMediaUploadAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
+import { createClient } from "@/lib/supabase/client";
 
 type CategoryOption = { id: string; name: string };
+type UploadedMedia = { path: string; originalName: string; size: number; mimeType: string; kind: "image" | "video" };
+
 const inputClass = "mt-2 w-full rounded-xl border border-hooma-text/10 bg-white px-3 py-2.5 outline-none focus:border-hooma-accent";
+const imageExtensions = new Set(["jpg", "jpeg", "png", "webp"]);
+const videoExtensions = new Set(["mp4", "webm"]);
+const imageLimit = 10 * 1024 * 1024;
+const videoLimit = 50 * 1024 * 1024;
+
+const extensionOf = (file: File) => file.name.split(".").pop()?.toLowerCase() ?? "";
+const readableSize = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+const contentType = (file: File) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", mp4: "video/mp4", webm: "video/webm" }[extensionOf(file)] ?? file.type) || "application/octet-stream";
 
 export function HoomaProductForm({ categories, materials, pricing }: { categories: CategoryOption[]; materials: MaterialCostProfile[]; pricing: PricingProfile }) {
-  const [state, action, pending] = useActionState(createHoomaProductAction, {});
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
+  const [images, setImages] = useState<File[]>([]);
+  const [video, setVideo] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [progress, setProgress] = useState("");
 
-  return <form action={action} className="mt-6 space-y-6"><input type="hidden" name="pricing_profile_id" value={pricing.id} />
-    <section className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">ქართული სახელი<input name="name_ka" required className={inputClass} /></label><label className="text-sm font-medium">ინგლისური სახელი<input name="name_en" required className={inputClass} /></label><label className="text-sm font-medium">Slug<input name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="მაგ. desk-organizer" className={inputClass} /></label><label className="text-sm font-medium">კატეგორია / ქვეკატეგორია<select name="category_id" required className={inputClass}><option value="">აირჩიე</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="text-sm font-medium sm:col-span-2">ქართული აღწერა<textarea name="description" rows={4} maxLength={3000} className={inputClass} /></label></section>
+  const chooseImages = (selected: FileList | null) => {
+    if (!selected) return;
+    const files = Array.from(selected);
+    if (files.length < 1 || files.length > 12) { setMessage("აირჩიე მინიმუმ 1 და მაქსიმუმ 12 ფოტო."); return; }
+    const invalid = files.find((file) => !imageExtensions.has(extensionOf(file)) || file.size < 1 || file.size > imageLimit);
+    if (invalid) { setMessage(`ფოტო “${invalid.name}” არასწორი ფორმატისაა ან 10MB-ს აღემატება.`); return; }
+    setImages(files);
+    setMessage("");
+  };
 
-    <section className="rounded-2xl bg-hooma-panel/70 p-5"><h3 className="font-semibold">ტექნიკური პროფილი და ფასი</h3><div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><label className="text-sm font-medium">მასალა<select name="material_profile_id" required className={inputClass}>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="text-sm font-medium">წონა, გრამი<input name="material_grams" type="number" min="0.01" step="0.01" required className={inputClass} /></label><label className="text-sm font-medium">ბეჭდვის დრო, წუთი<input name="print_minutes" type="number" min="1" required className={inputClass} /></label><label className="text-sm font-medium">ფირფიტების რაოდენობა<input name="plate_count" type="number" min="1" max="100" defaultValue="1" required className={inputClass} /></label><label className="text-sm font-medium">X ზომა, მმ<input name="dimension_x" type="number" min="0.01" step="0.01" required className={inputClass} /></label><label className="text-sm font-medium">Y ზომა, მმ<input name="dimension_y" type="number" min="0.01" step="0.01" required className={inputClass} /></label><label className="text-sm font-medium">Z ზომა, მმ<input name="dimension_z" type="number" min="0.01" step="0.01" required className={inputClass} /></label><label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" defaultValue={pricing.default_margin_percent} required className={inputClass} /></label></div></section>
+  const chooseVideo = (selected: FileList | null) => {
+    const file = selected?.[0] ?? null;
+    if (!file) { setVideo(null); return; }
+    if (!videoExtensions.has(extensionOf(file)) || file.size < 1 || file.size > videoLimit) {
+      setMessage(`ვიდეო “${file.name}” უნდა იყოს MP4/WebM და მაქსიმუმ 50MB.`);
+      if (videoInput.current) videoInput.current.value = "";
+      return;
+    }
+    setVideo(file);
+    setMessage("");
+  };
 
-    {state.message ? <div className={`rounded-xl p-4 text-sm ${state.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{state.ok ? <CheckCircle2 size={16} className="mr-2 inline" /> : null}{state.message}{state.productId ? <Link href={`/admin/products/${state.productId}`} className="ml-2 font-semibold underline">პროდუქტის გახსნა</Link> : null}</div> : null}
-    <button disabled={pending || !materials.length || !categories.length} className="w-full rounded-xl bg-hooma-text px-6 py-4 font-semibold text-white disabled:opacity-45">{pending ? "Draft იქმნება..." : "Hooma პროდუქტის Draft-ის შექმნა"}</button>
-  </form>;
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    if (!images.length) { setMessage("პროდუქტს მინიმუმ ერთი ფოტო სჭირდება."); return; }
+    const supabase = createClient() as any;
+    if (!supabase) { setMessage("Supabase ჯერ არ არის დაკავშირებული."); return; }
+
+    setBusy(true);
+    setMessage("");
+    setProgress("მედიის უსაფრთხო ატვირთვა მზადდება...");
+    const files = [...images.map((file) => ({ file, kind: "image" as const })), ...(video ? [{ file: video, kind: "video" as const }] : [])];
+    const prepareData = new FormData();
+    prepareData.set("files", JSON.stringify(files.map(({ file, kind }) => ({ name: file.name, size: file.size, mimeType: contentType(file), kind }))));
+    const prepared = await prepareProductMediaUploadAction(prepareData);
+    if (!prepared.ok || !prepared.requestId || !prepared.uploads?.length) {
+      setBusy(false);
+      setProgress("");
+      setMessage(prepared.message);
+      return;
+    }
+
+    const uploaded: UploadedMedia[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const { file, kind } = files[index];
+      const upload = prepared.uploads[index];
+      setProgress(`იტვირთება ${index + 1}/${files.length}: ${file.name}`);
+      const mimeType = contentType(file);
+      const { error } = await supabase.storage.from("product-media").uploadToSignedUrl(upload.path, upload.token, file, {
+        cacheControl: "31536000",
+        contentType: mimeType,
+      });
+      if (error) {
+        if (uploaded.length) await supabase.storage.from("product-media").remove(uploaded.map((item) => item.path));
+        setBusy(false);
+        setProgress("");
+        setMessage(`მედია ვერ აიტვირთა: ${error.message}`);
+        return;
+      }
+      uploaded.push({ path: upload.path, originalName: file.name, size: file.size, mimeType, kind });
+    }
+
+    setProgress("Draft იქმნება და ფასი ითვლება...");
+    const actionData = new FormData(formElement);
+    actionData.set("media_request_id", prepared.requestId);
+    actionData.set("media_manifest", JSON.stringify(uploaded));
+    const result = await createHoomaProductAction(actionData);
+    if (!result.ok) {
+      await supabase.storage.from("product-media").remove(uploaded.map((item) => item.path));
+      setBusy(false);
+      setProgress("");
+      setMessage(result.message);
+      return;
+    }
+
+    setMessage(result.message);
+    setProgress("Draft მზადაა");
+    router.push(`/admin/products/${result.productId}`);
+    router.refresh();
+  };
+
+  return (
+    <form ref={formRef} onSubmit={submit} className="mt-6 space-y-7">
+      <input type="hidden" name="pricing_profile_id" value={pricing.id} />
+
+      <section>
+        <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">ძირითადი ინფორმაცია</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">SKU ხელით არ იწერება — სისტემა ყველა ახალ პროდუქტს უნიკალურ HOO კოდს მიანიჭებს.</p></div><span className="shrink-0 rounded-full bg-hooma-panel px-3 py-1.5 text-xs font-semibold text-hooma-muted">SKU: ავტომატური</span></div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium">სახელი<input name="name" required minLength={2} maxLength={160} placeholder="პროდუქტის სახელი" className={inputClass} /></label>
+          <label className="text-sm font-medium">კატეგორია / ქვეკატეგორია<select name="category_id" required className={inputClass}><option value="">აირჩიე</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="text-sm font-medium sm:col-span-2">აღწერა<textarea name="description" required minLength={10} maxLength={3000} rows={5} placeholder="აღწერე პროდუქტი, დანიშნულება და მომხმარებლისთვის მნიშვნელოვანი დეტალები" className={inputClass} /></label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-hooma-text/10 bg-hooma-panel/45 p-5">
+        <h3 className="font-semibold">ფოტო და ვიდეო</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">პირველი ფოტო გახდება მთავარი. ვიდეო არასავალდებულოა.</p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div><label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-hooma-text/20 bg-white p-5 text-center transition hover:border-hooma-accent/60"><Upload size={22} className="text-hooma-accent" /><span className="mt-3 text-sm font-semibold">ფოტოების არჩევა</span><span className="mt-1 text-xs text-hooma-muted">JPG, PNG ან WebP · 1–12 ფოტო · 10MB თითო</span><input ref={imageInput} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple onChange={(event) => chooseImages(event.target.files)} className="sr-only" /></label>
+            {images.length ? <div className="mt-3 grid gap-2">{images.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm"><FileImage size={16} className="shrink-0 text-hooma-accent" /><span className="min-w-0 flex-1 truncate">{index === 0 ? "მთავარი · " : ""}{file.name}</span><span className="text-xs text-hooma-muted">{readableSize(file.size)}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="grid h-7 w-7 place-items-center rounded-full hover:bg-hooma-panel"><X size={14} /></button></div>)}</div> : null}
+          </div>
+          <div><label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-hooma-text/20 bg-white p-5 text-center transition hover:border-hooma-accent/60"><Video size={22} className="text-hooma-accent" /><span className="mt-3 text-sm font-semibold">ვიდეოს დამატება (არასავალდებულო)</span><span className="mt-1 text-xs text-hooma-muted">MP4 ან WebM · მაქსიმუმ 50MB</span><input ref={videoInput} type="file" accept=".mp4,.webm,video/mp4,video/webm" onChange={(event) => chooseVideo(event.target.files)} className="sr-only" /></label>
+            {video ? <div className="mt-3 flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm"><Video size={16} className="shrink-0 text-hooma-accent" /><span className="min-w-0 flex-1 truncate">{video.name}</span><span className="text-xs text-hooma-muted">{readableSize(video.size)}</span><button type="button" aria-label={`Remove ${video.name}`} onClick={() => { setVideo(null); if (videoInput.current) videoInput.current.value = ""; }} className="grid h-7 w-7 place-items-center rounded-full hover:bg-hooma-panel"><X size={14} /></button></div> : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-hooma-panel/70 p-5">
+        <h3 className="font-semibold">ტექნიკური პროფილი და მარჟა</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">მასალის თვითღირებულება და დროის ხარჯი Settings-იდან წამოვა; აქ შეყვანილი მარჟით საბოლოო ფასი ავტომატურად დაითვლება.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="text-sm font-medium">მასალის ტიპი<select name="material_profile_id" required className={inputClass}><option value="">აირჩიე</option>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="text-sm font-medium">წონა, გრამი<input name="material_grams" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
+          <label className="text-sm font-medium">ბეჭდვის დრო — საათი<input name="print_hours" type="number" min="0" max="16666" defaultValue="0" required className={inputClass} /></label>
+          <label className="text-sm font-medium">ბეჭდვის დრო — წუთი<input name="print_minutes" type="number" min="0" max="59" defaultValue="0" required className={inputClass} /></label>
+          <label className="text-sm font-medium">X ზომა, მმ<input name="dimension_x" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
+          <label className="text-sm font-medium">Y ზომა, მმ<input name="dimension_y" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
+          <label className="text-sm font-medium">Z ზომა, მმ<input name="dimension_z" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
+          <label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" defaultValue={pricing.default_margin_percent} required className={inputClass} /></label>
+        </div>
+      </section>
+
+      {message ? <p aria-live="polite" className="rounded-xl bg-hooma-panel p-4 text-sm leading-6">{message}</p> : null}
+      <button type="submit" disabled={busy || !materials.length || !categories.length} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-hooma-text px-6 py-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">{busy ? <><LoaderCircle size={18} className="animate-spin" />{progress || "Draft იქმნება..."}</> : "Draft-ში შენახვა"}</button>
+    </form>
+  );
 }

@@ -34,9 +34,25 @@ function safeCatalogImage(value: unknown, fallback: string) {
   try {
     const url = new URL(value);
     const host = url.hostname.toLowerCase();
-    return url.protocol === "https:" && (host === "makerworld.bblmw.com" || host.endsWith(".bblmw.com")) ? url.toString() : fallback;
+    const isLegacyCatalogHost = host === "makerworld.bblmw.com" || host.endsWith(".bblmw.com");
+    const isHoomaMedia = host.endsWith(".supabase.co") && url.pathname.startsWith("/storage/v1/object/public/product-media/");
+    return url.protocol === "https:" && (isLegacyCatalogHost || isHoomaMedia) ? url.toString() : fallback;
   } catch {
     return fallback;
+  }
+}
+
+function safeCatalogVideo(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && url.hostname.toLowerCase().endsWith(".supabase.co")
+      && url.pathname.startsWith("/storage/v1/object/public/product-media/")
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -66,7 +82,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const [{ data: productRows, error: productError }, { data: categoryRows, error: categoryError }] = await Promise.all([
     admin
       .from("products")
-      .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes")
+      .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes")
       .eq("status", "active")
       .eq("production_status", "approved")
       .order("created_at", { ascending: false }),
@@ -151,6 +167,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       longDescription: row.long_description || row.short_description || "",
       heroImage,
       galleryImages: galleryImages.length ? galleryImages : [heroImage],
+      videoUrl: safeCatalogVideo(row.video_url),
       variants,
       availableMaterials,
       availableColors,
@@ -185,7 +202,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
   if (!profile || !admin) return null;
 
   const [{ data: row }, { data: categoryRows }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
-    admin.from("products").select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes").eq("id", productId).maybeSingle(),
+    admin.from("products").select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes").eq("id", productId).maybeSingle(),
     admin.from("categories").select("id,parent_id,slug,name_en,name_ka").eq("is_active", true),
     admin.from("product_variants").select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,is_active").eq("product_id", productId).eq("is_active", true),
     admin.from("product_sources").select("platform,creator_name").eq("product_id", productId).limit(1),
@@ -240,6 +257,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
     longDescription: row.long_description || row.short_description || "",
     heroImage,
     galleryImages: galleryImages.length ? galleryImages : [heroImage],
+    videoUrl: safeCatalogVideo(row.video_url),
     variants,
     availableMaterials,
     availableColors,

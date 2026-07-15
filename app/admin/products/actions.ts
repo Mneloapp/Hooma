@@ -16,6 +16,18 @@ function deleteError(message: string) {
   return "პროდუქტის წაშლა ვერ დასრულდა. სცადე თავიდან.";
 }
 
+function productMediaPath(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const prefix = "/storage/v1/object/public/product-media/";
+    if (!url.pathname.startsWith(prefix)) return null;
+    return decodeURIComponent(url.pathname.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteProductDraftAction(_state: DeleteProductState, formData: FormData): Promise<DeleteProductState> {
   const profile = await requirePermission("catalog.manage");
   const admin = createAdminClient() as any;
@@ -25,11 +37,19 @@ export async function deleteProductDraftAction(_state: DeleteProductState, formD
   }
   if (!uuidPattern.test(productId)) return { ok: false, message: "პროდუქტის ID არასწორია." };
 
+  const { data: productMedia } = await admin.from("products").select("hero_image,gallery_images,video_url").eq("id", productId).maybeSingle();
   const { error } = await admin.rpc("delete_catalog_draft", {
     requested_product_id: productId,
     actor_profile_id: profile.id,
   });
   if (error) return { ok: false, message: deleteError(error.message) };
+
+  const mediaPaths = Array.from(new Set([
+    productMediaPath(productMedia?.hero_image),
+    ...(Array.isArray(productMedia?.gallery_images) ? productMedia.gallery_images.map(productMediaPath) : []),
+    productMediaPath(productMedia?.video_url),
+  ].filter((path): path is string => Boolean(path))));
+  if (mediaPaths.length) await admin.storage.from("product-media").remove(mediaPaths);
 
   revalidatePath("/");
   revalidatePath("/shop");

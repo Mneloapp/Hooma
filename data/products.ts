@@ -37,6 +37,7 @@ export type Product = {
   longDescription: string;
   heroImage: string;
   galleryImages: string[];
+  videoUrl?: string;
   variants: ProductVariant[];
   availableMaterials: string[];
   availableColors: string[];
