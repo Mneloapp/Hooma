@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileImage, FileJson, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
+import { FileImage, FileJson, FolderOpen, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
 import { createHoomaProductAction, prepareProductMediaUploadAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
 import { parseHoomaClipperDraft, type HoomaClipperDraft } from "@/lib/catalog-clipper";
@@ -39,6 +39,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
+  const packageInput = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
   const [importedMedia, setImportedMedia] = useState<HoomaClipperDraft["product"]["media"] | null>(null);
@@ -47,7 +48,10 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
 
-  const importClipperDraft = async (file: File | null) => {
+  const importClipperDraft = async (
+    file: File | null,
+    packageMedia?: { images: File[]; video: File | null },
+  ) => {
     if (!file) return;
     if (file.size < 1 || file.size > 512 * 1024) {
       setMessage("Hooma JSON ფაილი ცარიელია ან 512KB-ს აღემატება.");
@@ -96,19 +100,53 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
         checkbox.checked = importedColors.has(normalizedMatch(checkbox.value));
       });
       setImportedMedia(parsed.product.media);
+      if (packageMedia) {
+        setImages(packageMedia.images);
+        setVideo(packageMedia.video);
+      }
 
       const review = [];
       if (!category) review.push("კატეგორია");
       if (!material) review.push("მასალა");
       if (!technical.colors.length) review.push("ფერები");
-      if (parsed.product.media.imageUrls.length) review.push("ჩამოტვირთული ფოტოები");
+      if (parsed.product.media.imageUrls.length && !packageMedia?.images.length) review.push("ჩამოტვირთული ფოტოები");
       const warningText = parsed.warnings.length ? ` კლიპერის შენიშვნა: ${parsed.warnings.join(" ")}` : "";
-      setMessage(`JSON იმპორტირებულია. ხელით გადაამოწმე${review.length ? `: ${review.join(", ")}` : " ყველა ველი"}.${warningText}`);
+      const mediaText = packageMedia
+        ? ` პაკეტიდან ავტომატურად დაემატა ${packageMedia.images.length} ფოტო${packageMedia.video ? " და ვიდეო" : ""}.`
+        : "";
+      setMessage(`JSON იმპორტირებულია.${mediaText} ხელით გადაამოწმე${review.length ? `: ${review.join(", ")}` : " ყველა ველი"}.${warningText}`);
     } catch (error) {
       setImportedMedia(null);
       setMessage(error instanceof Error ? error.message : "Hooma JSON ფაილი ვერ წავიკითხე.");
     } finally {
       if (importInput.current) importInput.current.value = "";
+    }
+  };
+
+  const importClipperPackage = async (selected: FileList | null) => {
+    if (!selected?.length) return;
+    const files = Array.from(selected).filter((file) => file.name !== ".DS_Store");
+    const jsonFiles = files.filter((file) => file.name.toLowerCase().endsWith(".json"));
+    const packageImages = files
+      .filter((file) => imageExtensions.has(extensionOf(file)))
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
+    const packageVideos = files.filter((file) => videoExtensions.has(extensionOf(file)));
+
+    try {
+      if (jsonFiles.length !== 1) throw new Error("პაკეტში ზუსტად ერთი .hooma.json ფაილი უნდა იყოს.");
+      if (packageImages.length < 1 || packageImages.length > 12) throw new Error("პაკეტში უნდა იყოს 1-დან 12-მდე ფოტო.");
+      const invalidImage = packageImages.find((file) => file.size < 1 || file.size > imageLimit);
+      if (invalidImage) throw new Error(`ფოტო “${invalidImage.name}” ცარიელია ან 10MB-ს აღემატება.`);
+      if (packageVideos.length > 1) throw new Error("პაკეტში მაქსიმუმ ერთი ვიდეო შეიძლება იყოს.");
+      const packageVideo = packageVideos[0] ?? null;
+      if (packageVideo && (packageVideo.size < 1 || packageVideo.size > videoLimit)) {
+        throw new Error(`ვიდეო “${packageVideo.name}” ცარიელია ან 50MB-ს აღემატება.`);
+      }
+      await importClipperDraft(jsonFiles[0], { images: packageImages, video: packageVideo });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "პროდუქტის პაკეტი ვერ წავიკითხე.");
+    } finally {
+      if (packageInput.current) packageInput.current.value = "";
     }
   };
 
@@ -205,10 +243,10 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
 
       <section className="rounded-2xl border border-hooma-accent/25 bg-hooma-accent/5 p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><div className="flex items-center gap-2"><FileJson size={19} className="text-hooma-accent" /><h3 className="font-semibold">Catalog Clipper-იდან იმპორტი</h3></div><p className="mt-1 text-xs leading-5 text-hooma-muted">შემოიტანე გაფართოების მიერ მომზადებული .hooma.json. სისტემა შეავსებს ნაპოვნ ველებს; შენ გადაამოწმებ და Draft-ს შექმნი.</p></div>
-          <label className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-hooma-text px-4 py-2.5 text-sm font-semibold text-white"><Upload size={16} />JSON-ის არჩევა<input ref={importInput} type="file" accept=".json,.hooma.json,application/json" onChange={(event) => void importClipperDraft(event.target.files?.[0] ?? null)} className="sr-only" /></label>
+          <div><div className="flex items-center gap-2"><FileJson size={19} className="text-hooma-accent" /><h3 className="font-semibold">Catalog Clipper-იდან სწრაფი იმპორტი</h3></div><p className="mt-1 text-xs leading-5 text-hooma-muted">აირჩიე Clipper-ის ჩამოტვირთული პროდუქტის საქაღალდე ერთხელ — JSON შეავსებს ველებს, ფოტო და ვიდეო კი ავტომატურად მიებმება Draft-ს.</p></div>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-stretch"><label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-hooma-text px-4 py-2.5 text-sm font-semibold text-white"><FolderOpen size={16} />პაკეტის საქაღალდე<input ref={(node) => { packageInput.current = node; if (node) { node.setAttribute("webkitdirectory", ""); node.setAttribute("directory", ""); } }} type="file" multiple onChange={(event) => void importClipperPackage(event.target.files)} className="sr-only" /></label><label className="inline-flex cursor-pointer items-center justify-center gap-2 px-3 py-1 text-xs font-semibold text-hooma-muted hover:text-hooma-text"><Upload size={14} />მხოლოდ JSON<input ref={importInput} type="file" accept=".json,.hooma.json,application/json" onChange={(event) => void importClipperDraft(event.target.files?.[0] ?? null)} className="sr-only" /></label></div>
         </div>
-        {importedMedia ? <div className="mt-4 border-t border-hooma-text/10 pt-4"><p className="text-sm font-semibold">წყაროდან ნაპოვნი მედია</p><p className="mt-1 text-xs leading-5 text-hooma-muted">ბრაუზერის უსაფრთხოების გამო JSON ფაილი ფოტოს ფაილად ვერ აქცევს. Clipper-ით ჩამოტვირთული ფოტოები ქვემოთ „ფოტოების არჩევა“-ში ატვირთე.</p>{importedMedia.imageUrls.length ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{importedMedia.imageUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" title={`წყაროს ფოტო ${index + 1}`} className="block h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-hooma-text/10 bg-white"><img src={url} alt={`იმპორტირებული ფოტო ${index + 1}`} referrerPolicy="no-referrer" className="h-full w-full object-cover" /></a>)}</div> : <p className="mt-2 text-xs text-amber-800">JSON-ში ფოტო-ბმული არ არის — ფოტოები ხელით დაამატე.</p>}{importedMedia.videoUrl ? <a href={importedMedia.videoUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-hooma-accent underline">წყაროს ვიდეოს გახსნა</a> : null}</div> : null}
+        {importedMedia ? <div className="mt-4 border-t border-hooma-text/10 pt-4"><p className="text-sm font-semibold">წყაროდან ნაპოვნი მედია</p><p className="mt-1 text-xs leading-5 text-hooma-muted">თუ სრული პაკეტი აირჩიე, ფაილები უკვე დამატებულია ქვემოთ. მხოლოდ JSON-ის იმპორტისას Clipper-ით ჩამოტვირთული მედია ხელით უნდა აირჩიო.</p>{importedMedia.imageUrls.length ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{importedMedia.imageUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" title={`წყაროს ფოტო ${index + 1}`} className="block h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-hooma-text/10 bg-white"><img src={url} alt={`იმპორტირებული ფოტო ${index + 1}`} referrerPolicy="no-referrer" className="h-full w-full object-cover" /></a>)}</div> : <p className="mt-2 text-xs text-amber-800">JSON-ში ფოტო-ბმული არ არის — ფოტოები ხელით დაამატე.</p>}{importedMedia.videoUrl ? <a href={importedMedia.videoUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-hooma-accent underline">წყაროს ვიდეოს გახსნა</a> : null}</div> : null}
       </section>
 
       <section>

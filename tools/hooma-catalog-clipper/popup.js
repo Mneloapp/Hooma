@@ -16,7 +16,7 @@ const elements = {
   videoLink: document.querySelector("#video-link"),
   warnings: document.querySelector("#warnings"),
   export: document.querySelector("#export"),
-  downloadMedia: document.querySelector("#download-media"),
+  downloadPackage: document.querySelector("#download-package"),
 };
 
 let draft = null;
@@ -46,6 +46,15 @@ function syncDraft() {
 
 function updateImageCount() {
   elements.imageCount.textContent = `${selectedImages().length} არჩეული`;
+}
+
+async function downloadJson(data, saveAs, folderName = slug(data.product.name)) {
+  const encoded = encodeURIComponent(JSON.stringify(data, null, 2));
+  return chrome.downloads.download({
+    url: `data:application/json;charset=utf-8,${encoded}`,
+    filename: `hooma-import/${folderName}/product.hooma.json`,
+    saveAs,
+  });
 }
 
 function render(data) {
@@ -117,32 +126,31 @@ elements.extract.addEventListener("click", async () => {
 elements.export.addEventListener("click", async () => {
   const data = syncDraft();
   if (!data) return;
-  const encoded = encodeURIComponent(JSON.stringify(data, null, 2));
-  await chrome.downloads.download({
-    url: `data:application/json;charset=utf-8,${encoded}`,
-    filename: `hooma-import/${slug(data.product.name)}.hooma.json`,
-    saveAs: true,
-  });
+  await downloadJson(data, true);
   show("Hooma JSON მზადაა. ახლა შემოიტანე Admin → პროდუქტები → ახალი პროდუქტი გვერდზე.", "ok");
 });
 
-elements.downloadMedia.addEventListener("click", async () => {
+elements.downloadPackage.addEventListener("click", async () => {
   const data = syncDraft();
   if (!data) return;
   const images = data.product.media.imageUrls;
   const directVideo = data.product.media.videoUrl && /\.(?:mp4|webm)(?:$|\?)/i.test(data.product.media.videoUrl)
     ? data.product.media.videoUrl
     : null;
-  if (!images.length && !directVideo) { show("ჩამოსატვირთი ფოტო ან პირდაპირი ვიდეო ვერ მოიძებნა.", "error"); return; }
-  elements.downloadMedia.disabled = true;
+  if (!images.length) { show("სრულ პაკეტს მინიმუმ ერთი ფოტო სჭირდება.", "error"); return; }
+  elements.downloadPackage.disabled = true;
+  const packageFolder = `${slug(data.product.name)}-${Date.now()}`;
   let failures = 0;
+  try {
+    await downloadJson(data, false, packageFolder);
+  } catch { failures += 1; }
   for (let index = 0; index < images.length; index += 1) {
     try {
       const pathname = new URL(images[index]).pathname;
       const extension = pathname.match(/\.(jpe?g|png|webp)(?:$|\/)/i)?.[1]?.toLowerCase() ?? "jpg";
       await chrome.downloads.download({
         url: images[index],
-        filename: `hooma-import/${slug(data.product.name)}/image-${String(index + 1).padStart(2, "0")}.${extension}`,
+        filename: `hooma-import/${packageFolder}/image-${String(index + 1).padStart(2, "0")}.${extension}`,
         saveAs: false,
       });
     } catch { failures += 1; }
@@ -152,12 +160,17 @@ elements.downloadMedia.addEventListener("click", async () => {
       const extension = new URL(directVideo).pathname.toLowerCase().endsWith(".webm") ? "webm" : "mp4";
       await chrome.downloads.download({
         url: directVideo,
-        filename: `hooma-import/${slug(data.product.name)}/video.${extension}`,
+        filename: `hooma-import/${packageFolder}/video.${extension}`,
         saveAs: false,
       });
     } catch { failures += 1; }
   }
-  elements.downloadMedia.disabled = false;
-  const total = images.length + (directVideo ? 1 : 0);
-  show(failures ? `${total - failures} მედია ჩამოიტვირთა; ${failures} წყარომ დაბლოკა.` : `${total} მედია ჩამოიტვირთა.`, failures ? "" : "ok");
+  elements.downloadPackage.disabled = false;
+  const total = 1 + images.length + (directVideo ? 1 : 0);
+  show(
+    failures
+      ? `პაკეტის ${total - failures}/${total} ფაილი ჩამოიტვირთა; ${failures} ფაილი წყარომ დაბლოკა.`
+      : `სრული პაკეტი ჩამოიტვირთა: JSON და ${images.length} ფოტო${directVideo ? ", ვიდეო" : ""}.`,
+    failures ? "" : "ok",
+  );
 });

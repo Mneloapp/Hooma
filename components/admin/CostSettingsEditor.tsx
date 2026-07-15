@@ -248,7 +248,7 @@ export function CostSettingsEditor({
       <section className="rounded-[1.5rem] bg-white/75 p-6 shadow-soft">
         <h2 className="text-xl font-semibold">მასალის თვითღირებულება</h2>
         <p className="mt-2 text-sm leading-6 text-hooma-muted">
-          თითოეული მასალისთვის ფასი და დანაკარგი ცალ-ცალკე ინახება. შენახული ფასი ავტომატურად გამოიყენება ქვემოთ მოცემულ კალკულატორში.
+          თითოეული მასალისთვის ფასი და დანაკარგი ცალ-ცალკე ინახება. შენახვისას ამ მასალით უკვე დამატებული პროდუქტების ფასებიც ავტომატურად გადაითვლება.
         </p>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           {savedMaterials.map((item) => {
@@ -307,8 +307,9 @@ export function CostSettingsEditor({
         <section className="rounded-[1.5rem] bg-white/75 p-6 shadow-soft">
           <h2 className="text-xl font-semibold">წარმოებისა და ფასის პარამეტრები</h2>
           <p className="mt-2 text-sm leading-6 text-hooma-muted">
-            ეს არის Hooma-ს ერთი საერთო ფასის პროფილი. ერთხელ შენახული პარამეტრები აღარ განულდება და ყველა მასალის კალკულაციაზე გავრცელდება.
+            ეს არის Hooma-ს ერთი საერთო ფასის პროფილი. შენახვისას ყველა არსებული პროდუქტის თვითღირებულება და გასაყიდი ფასი განახლდება; პროდუქტის ინდივიდუალური მარჟა უცვლელი დარჩება.
           </p>
+          <p className="mt-1 text-xs leading-5 text-hooma-muted">უკვე მიღებულ შეკვეთებში დაფიქსირებული ფასი არ შეიცვლება.</p>
           <form action={submitPricing} className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <input type="hidden" name="id" value={savedPricing.id} />
             {pricingFields.map((field) => (

@@ -17,8 +17,9 @@ The extension has no Supabase credentials, does not sign in to Hooma, does not r
 1. Open a product page in Chrome/Edge and wait until its content is visible.
 2. Open **Hooma Catalog Clipper** and choose **გახსნილი გვერდის წაკითხვა**.
 3. Review/correct the extracted fields and select up to 12 images.
-4. Download the Hooma JSON and selected images.
+4. Choose **სრული პაკეტის ჩამოტვირთვა**. JSON and media are saved together under `Downloads/hooma-import/<product-name>`.
 5. In Hooma open **Admin → პროდუქტები → ახალი პროდუქტი**.
-6. Import the `.hooma.json` file, select the downloaded image/video files, complete any missing category/material/color information, and create the Draft.
+6. Choose the downloaded product package folder once. Hooma fills the fields and attaches its image/video files automatically.
+7. Complete any missing category/material/color information and create the Draft.
 
 Websites expose different data, so the clipper never invents missing technical values. Empty fields remain empty for operator review. Some sites may also prevent direct media downloads; in that case save the permitted media manually and upload it through the existing Hooma media selector.

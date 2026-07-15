@@ -28,6 +28,8 @@ export type PricingProfileResult = {
 };
 
 export type SettingsActionResult<T> = { ok: true; message: string; data: T } | { ok: false; message: string };
+type RecalculationResult = { recalculated_variant_count?: number | string; affected_product_count?: number | string };
+type SavedSettingsPayload<T> = { profile?: T; recalculation?: RecalculationResult };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const numberInRange = (formData: FormData, key: string, min: number, max: number) => {
@@ -50,18 +52,31 @@ export async function saveMaterialCostAction(formData: FormData): Promise<Settin
       cost_per_kg: numberInRange(formData, "cost_per_kg", 0, 100_000),
       waste_percent: numberInRange(formData, "waste_percent", 0, 100),
     };
-    const { data, error } = await admin.rpc("save_material_cost_profile", {
+    const { data, error } = await admin.rpc("save_material_cost_profile_v2", {
       requested_profile_id: id,
       requested_cost_per_kg: values.cost_per_kg,
       requested_waste_percent: values.waste_percent,
       actor_profile_id: profile.id,
     });
-    if (error) return { ok: false, message: "მასალის ფასი ვერ შეინახა. სცადე თავიდან." };
-    const saved = (Array.isArray(data) ? data[0] : data) as MaterialCostProfileResult | null;
+    if (error) {
+      if (error.message?.includes("save_material_cost_profile_v2") || error.message?.includes("schema cache")) {
+        return { ok: false, message: "გაუშვი ბოლო Supabase migration და სცადე თავიდან." };
+      }
+      return { ok: false, message: "მასალის ფასი და პროდუქტების ფასები ვერ განახლდა. სცადე თავიდან." };
+    }
+    const payload = (Array.isArray(data) ? data[0] : data) as SavedSettingsPayload<MaterialCostProfileResult> | null;
+    const saved = payload?.profile ?? null;
     if (!saved?.id) return { ok: false, message: "შენახული მასალის პროფილი ვერ დაბრუნდა." };
+    const affectedProducts = Number(payload?.recalculation?.affected_product_count ?? 0);
     revalidatePath("/admin/settings");
     revalidatePath("/admin/imports");
-    return { ok: true, message: `${saved.name} — ფასი შენახულია.`, data: saved };
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/products/[id]", "page");
+    revalidatePath("/product/[slug]", "page");
+    revalidatePath("/");
+    revalidatePath("/shop");
+    revalidatePath("/deals");
+    return { ok: true, message: `${saved.name} — ფასი შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
   } catch {
     return { ok: false, message: "შეამოწმე ფასი და დანაკარგის პროცენტი." };
   }
@@ -85,7 +100,7 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
       vat_percent: numberInRange(formData, "vat_percent", 0, 100),
       rounding_step: numberInRange(formData, "rounding_step", 0.01, 1_000),
     };
-    const { data, error } = await admin.rpc("save_default_pricing_profile", {
+    const { data, error } = await admin.rpc("save_default_pricing_profile_v2", {
       requested_profile_id: id,
       requested_machine_hour_cost: values.machine_hour_cost,
       requested_labor_cost_per_order: values.labor_cost_per_order,
@@ -97,12 +112,25 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
       requested_rounding_step: values.rounding_step,
       actor_profile_id: profile.id,
     });
-    if (error) return { ok: false, message: "წარმოებისა და ფასის პარამეტრები ვერ შეინახა. სცადე თავიდან." };
-    const saved = (Array.isArray(data) ? data[0] : data) as PricingProfileResult | null;
+    if (error) {
+      if (error.message?.includes("save_default_pricing_profile_v2") || error.message?.includes("schema cache")) {
+        return { ok: false, message: "გაუშვი ბოლო Supabase migration და სცადე თავიდან." };
+      }
+      return { ok: false, message: "წარმოებისა და ფასის პარამეტრები და პროდუქტების ფასები ვერ განახლდა. სცადე თავიდან." };
+    }
+    const payload = (Array.isArray(data) ? data[0] : data) as SavedSettingsPayload<PricingProfileResult> | null;
+    const saved = payload?.profile ?? null;
     if (!saved?.id) return { ok: false, message: "შენახული ფასის პროფილი ვერ დაბრუნდა." };
+    const affectedProducts = Number(payload?.recalculation?.affected_product_count ?? 0);
     revalidatePath("/admin/settings");
     revalidatePath("/admin/imports");
-    return { ok: true, message: "საერთო პარამეტრები შენახულია და ყველა მასალაზე გავრცელდება.", data: saved };
+    revalidatePath("/admin/products");
+    revalidatePath("/admin/products/[id]", "page");
+    revalidatePath("/product/[slug]", "page");
+    revalidatePath("/");
+    revalidatePath("/shop");
+    revalidatePath("/deals");
+    return { ok: true, message: `საერთო პარამეტრები შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
   } catch {
     return { ok: false, message: "შეამოწმე წარმოებისა და ფასის ყველა მნიშვნელობა." };
   }
