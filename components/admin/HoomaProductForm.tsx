@@ -2,9 +2,10 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileImage, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
+import { FileImage, FileJson, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
 import { createHoomaProductAction, prepareProductMediaUploadAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
+import { parseHoomaClipperDraft, type HoomaClipperDraft } from "@/lib/catalog-clipper";
 import { createClient } from "@/lib/supabase/client";
 import { productColorOptions } from "@/data/product-colors";
 
@@ -20,18 +21,96 @@ const videoLimit = 50 * 1024 * 1024;
 const extensionOf = (file: File) => file.name.split(".").pop()?.toLowerCase() ?? "";
 const readableSize = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 const contentType = (file: File) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", mp4: "video/mp4", webm: "video/webm" }[extensionOf(file)] ?? file.type) || "application/octet-stream";
+const normalizedMatch = (value: string) => value.toLocaleLowerCase("ka-GE").replace(/[^a-z0-9\u10a0-\u10ff]+/g, "");
+
+const setFormValue = (form: HTMLFormElement, name: string, value: string | number | null | undefined) => {
+  if (value === null || value === undefined || value === "") return;
+  const field = form.elements.namedItem(name);
+  if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+    field.value = String(value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+};
 
 export function HoomaProductForm({ categories, materials, pricing }: { categories: CategoryOption[]; materials: MaterialCostProfile[]; pricing: PricingProfile }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  const importInput = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
+  const [importedMedia, setImportedMedia] = useState<HoomaClipperDraft["product"]["media"] | null>(null);
   const [colorMode, setColorMode] = useState<"customer_choice" | "fixed_multicolor">("customer_choice");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
+
+  const importClipperDraft = async (file: File | null) => {
+    if (!file) return;
+    if (file.size < 1 || file.size > 512 * 1024) {
+      setMessage("Hooma JSON ფაილი ცარიელია ან 512KB-ს აღემატება.");
+      if (importInput.current) importInput.current.value = "";
+      return;
+    }
+
+    try {
+      const parsed = parseHoomaClipperDraft(JSON.parse(await file.text()));
+      const form = formRef.current;
+      if (!form) throw new Error("პროდუქტის ფორმა ჯერ მზად არ არის.");
+      const technical = parsed.product.technical;
+      setFormValue(form, "name", parsed.product.name);
+      setFormValue(form, "description", parsed.product.description);
+      setFormValue(form, "operator_reference", parsed.product.operatorReference || parsed.source.url);
+      setFormValue(form, "material_grams", technical.weightGrams);
+      setFormValue(form, "print_hours", technical.printTimeMinutes === null ? null : Math.floor(technical.printTimeMinutes / 60));
+      setFormValue(form, "print_minutes", technical.printTimeMinutes === null ? null : Math.round(technical.printTimeMinutes % 60));
+      setFormValue(form, "dimension_x", technical.dimensionsMm?.x);
+      setFormValue(form, "dimension_y", technical.dimensionsMm?.y);
+      setFormValue(form, "dimension_z", technical.dimensionsMm?.z);
+      setFormValue(form, "margin_percent", technical.marginPercent);
+
+      const materialHint = normalizedMatch(technical.material ?? "");
+      const material = materialHint
+        ? materials.find((item) => {
+            const code = normalizedMatch(item.code);
+            const name = normalizedMatch(item.name);
+            return materialHint === code || materialHint === name || materialHint.startsWith(code) || name.includes(materialHint);
+          })
+        : null;
+      if (material) setFormValue(form, "material_profile_id", material.id);
+
+      const categoryHint = normalizedMatch(parsed.product.categoryHint ?? "");
+      const category = categoryHint
+        ? categories.find((item) => {
+            const name = normalizedMatch(item.name);
+            return name === categoryHint || name.includes(categoryHint) || categoryHint.includes(name);
+          })
+        : null;
+      if (category) setFormValue(form, "category_id", category.id);
+
+      setColorMode(technical.colorMode);
+      const importedColors = new Set(technical.colors.map(normalizedMatch));
+      form.querySelectorAll<HTMLInputElement>('input[name="colors"]').forEach((checkbox) => {
+        checkbox.checked = importedColors.has(normalizedMatch(checkbox.value));
+      });
+      setImportedMedia(parsed.product.media);
+
+      const review = [];
+      if (!category) review.push("კატეგორია");
+      if (!material) review.push("მასალა");
+      if (!technical.colors.length) review.push("ფერები");
+      if (parsed.product.media.imageUrls.length) review.push("ჩამოტვირთული ფოტოები");
+      const warningText = parsed.warnings.length ? ` კლიპერის შენიშვნა: ${parsed.warnings.join(" ")}` : "";
+      setMessage(`JSON იმპორტირებულია. ხელით გადაამოწმე${review.length ? `: ${review.join(", ")}` : " ყველა ველი"}.${warningText}`);
+    } catch (error) {
+      setImportedMedia(null);
+      setMessage(error instanceof Error ? error.message : "Hooma JSON ფაილი ვერ წავიკითხე.");
+    } finally {
+      if (importInput.current) importInput.current.value = "";
+    }
+  };
 
   const chooseImages = (selected: FileList | null) => {
     if (!selected) return;
@@ -123,6 +202,14 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   return (
     <form ref={formRef} onSubmit={submit} className="mt-6 space-y-7">
       <input type="hidden" name="pricing_profile_id" value={pricing.id} />
+
+      <section className="rounded-2xl border border-hooma-accent/25 bg-hooma-accent/5 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><div className="flex items-center gap-2"><FileJson size={19} className="text-hooma-accent" /><h3 className="font-semibold">Catalog Clipper-იდან იმპორტი</h3></div><p className="mt-1 text-xs leading-5 text-hooma-muted">შემოიტანე გაფართოების მიერ მომზადებული .hooma.json. სისტემა შეავსებს ნაპოვნ ველებს; შენ გადაამოწმებ და Draft-ს შექმნი.</p></div>
+          <label className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-hooma-text px-4 py-2.5 text-sm font-semibold text-white"><Upload size={16} />JSON-ის არჩევა<input ref={importInput} type="file" accept=".json,.hooma.json,application/json" onChange={(event) => void importClipperDraft(event.target.files?.[0] ?? null)} className="sr-only" /></label>
+        </div>
+        {importedMedia ? <div className="mt-4 border-t border-hooma-text/10 pt-4"><p className="text-sm font-semibold">წყაროდან ნაპოვნი მედია</p><p className="mt-1 text-xs leading-5 text-hooma-muted">ბრაუზერის უსაფრთხოების გამო JSON ფაილი ფოტოს ფაილად ვერ აქცევს. Clipper-ით ჩამოტვირთული ფოტოები ქვემოთ „ფოტოების არჩევა“-ში ატვირთე.</p>{importedMedia.imageUrls.length ? <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{importedMedia.imageUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" title={`წყაროს ფოტო ${index + 1}`} className="block h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-hooma-text/10 bg-white"><img src={url} alt={`იმპორტირებული ფოტო ${index + 1}`} referrerPolicy="no-referrer" className="h-full w-full object-cover" /></a>)}</div> : <p className="mt-2 text-xs text-amber-800">JSON-ში ფოტო-ბმული არ არის — ფოტოები ხელით დაამატე.</p>}{importedMedia.videoUrl ? <a href={importedMedia.videoUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-hooma-accent underline">წყაროს ვიდეოს გახსნა</a> : null}</div> : null}
+      </section>
 
       <section>
         <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">ძირითადი ინფორმაცია</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">SKU ხელით არ იწერება — სისტემა ყველა ახალ პროდუქტს უნიკალურ HOO კოდს მიანიჭებს.</p></div><span className="shrink-0 rounded-full bg-hooma-panel px-3 py-1.5 text-xs font-semibold text-hooma-muted">SKU: ავტომატური</span></div>

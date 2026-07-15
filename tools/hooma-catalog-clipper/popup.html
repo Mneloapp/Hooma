@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hooma Catalog Clipper</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">H</div>
+      <div><h1>Hooma Catalog Clipper</h1><p id="source">გახსნილი გვერდი ჯერ არ წაკითხულა.</p></div>
+    </header>
+
+    <button id="extract" class="primary">გახსნილი გვერდის წაკითხვა</button>
+    <div id="status" role="status">კლიპერი მზადაა.</div>
+
+    <form id="draft" hidden>
+      <label>სახელი<input id="name" maxlength="160" /></label>
+      <label>აღწერა<textarea id="description" maxlength="3000" rows="4"></textarea></label>
+      <div class="grid three">
+        <label>მასალა<input id="material" maxlength="120" placeholder="PLA" /></label>
+        <label>წონა, გ<input id="weight" type="number" min="0" step="0.01" /></label>
+        <label>დრო, წთ<input id="time" type="number" min="0" step="1" /></label>
+      </div>
+      <div class="grid three">
+        <label>X, მმ<input id="x" type="number" min="0" step="0.01" /></label>
+        <label>Y, მმ<input id="y" type="number" min="0" step="0.01" /></label>
+        <label>Z, მმ<input id="z" type="number" min="0" step="0.01" /></label>
+      </div>
+
+      <section>
+        <div class="section-title"><strong>ფოტოები</strong><span id="image-count">0 არჩეული</span></div>
+        <p class="hint">მონიშნე მაქსიმუმ 12. Hooma-სთვის ცალკე ჩამოტვირთე და მედიის ველში ატვირთე.</p>
+        <div id="images" class="images"></div>
+        <a id="video-link" class="video-link" target="_blank" rel="noreferrer" hidden>ნაპოვნი ვიდეოს გახსნა</a>
+      </section>
+
+      <div id="warnings" class="warnings"></div>
+      <div class="actions">
+        <button id="export" type="button" class="primary">Hooma JSON-ის ჩამოტვირთვა</button>
+        <button id="download-media" type="button" class="secondary">არჩეული მედიის ჩამოტვირთვა</button>
+      </div>
+    </form>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -39,7 +39,7 @@ Apply Supabase migrations in chronological order from `supabase/migrations`.
 - Cart and test checkout shell
 - Admin import inbox and production queue
 - Authenticated custom-part file upload and individual quote workflow
-- Admin-only MakerWorld URL intake, review queue, material/time costing, margin calculator, and rights-gated product Draft creation
+- Admin-only manual product Draft creation, material/time costing, margin calculator, and universal Catalog Clipper JSON import
 - Source-license, production, tracking, payment, and audit database foundation
 - Server-authoritative test order validation
 
