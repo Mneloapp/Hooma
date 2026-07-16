@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Clock3 } from "lucide-react";
 import type { Product } from "@/data/products";
 import { useLanguage } from "./LanguageProvider";
+import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
 
 export function ProductCard({ product, compact = false }: { product: Product; compact?: boolean }) {
   const { language } = useLanguage();
@@ -26,6 +27,7 @@ export function ProductCard({ product, compact = false }: { product: Product; co
             <span className="flex items-center gap-1.5"><Clock3 size={13} />{product.leadTimeDays} {language === "ka" ? "დღე" : "days"}</span>
           </div>
           <h3 className={`${compact ? "line-clamp-2 min-h-12 text-base" : "text-xl"} font-semibold tracking-tight`}>{language === "ka" ? product.nameKa : product.hoomaName}</h3>
+          <div className="mt-2.5"><ProductRatingSummary average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} language={language} /></div>
           {!compact ? <p className="mt-2 min-h-12 text-sm leading-6 text-hooma-muted">{language === "ka" ? product.shortDescriptionKa : product.shortDescription}</p> : null}
           <div className="mt-5 flex items-center justify-between border-t border-hooma-text/10 pt-4 text-sm">
             <span className="font-semibold">{product.price === null ? product.pricePlaceholder : `₾${product.price.toFixed(2)}`}</span>

@@ -1,4 +1,5 @@
 import { Check, Clock3, Package, Truck } from "lucide-react";
+import Link from "next/link";
 import { OrdersAutoRefresh } from "@/components/account/OrdersAutoRefresh";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,8 @@ type OrderItem = {
   material: string | null;
   color: string | null;
   quantity: number;
+  product_id: string | null;
+  products: { slug: string } | Array<{ slug: string }> | null;
 };
 
 type OrderEvent = {
@@ -72,7 +75,7 @@ export default async function AccountOrdersPage() {
 
   const [{ data: itemRows }, { data: eventRows }] = supabase && orderIds.length
     ? await Promise.all([
-      supabase.from("order_items").select("id,order_id,product_name,size_label,material,color,quantity").in("order_id", orderIds).order("created_at"),
+      supabase.from("order_items").select("id,order_id,product_id,product_name,size_label,material,color,quantity,products(slug)").in("order_id", orderIds).order("created_at"),
       supabase.from("order_events").select("id,order_id,customer_label_ka,event_type,created_at").in("order_id", orderIds).eq("is_customer_visible", true).order("created_at"),
     ])
     : [{ data: [] }, { data: [] }];
@@ -124,9 +127,9 @@ export default async function AccountOrdersPage() {
               <div>
                 <h3 className="flex items-center gap-2 font-semibold"><Package size={18} className="text-hooma-accent" />პროდუქტები</h3>
                 <div className="mt-3 divide-y divide-hooma-text/10 rounded-2xl border border-hooma-text/10 bg-white">
-                  {orderItems.map((item) => (
-                    <div key={item.id} className="flex flex-col justify-between gap-2 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{item.product_name || "ინდივიდუალური პროდუქტი"}</p><p className="mt-1 text-xs text-hooma-muted">{[item.size_label, item.material, item.color].filter(Boolean).join(" · ") || "კონფიგურაცია"}</p></div><strong className="text-sm">×{item.quantity}</strong></div>
-                  ))}
+                  {orderItems.map((item) => { const joinedProduct = Array.isArray(item.products) ? item.products[0] : item.products; return (
+                    <div key={item.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{item.product_name || "ინდივიდუალური პროდუქტი"}</p><p className="mt-1 text-xs text-hooma-muted">{[item.size_label, item.material, item.color].filter(Boolean).join(" · ") || "კონფიგურაცია"}</p></div><div className="flex items-center gap-3"><strong className="text-sm">×{item.quantity}</strong>{order.fulfillment_status === "delivered" && joinedProduct?.slug ? <Link href={`/product/${joinedProduct.slug}#reviews`} className="rounded-full bg-hooma-text px-3 py-1.5 text-xs font-semibold text-white">შეფასება</Link> : null}</div></div>
+                  ); })}
                   {!orderItems.length ? <p className="p-4 text-sm text-hooma-muted">პროდუქტის მონაცემები ვერ ჩაიტვირთა.</p> : null}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3 text-xs text-hooma-muted">

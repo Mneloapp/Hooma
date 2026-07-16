@@ -40,7 +40,9 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
     .sort((a, b) => {
       if (sort === "name") return a.nameKa.localeCompare(b.nameKa, "ka");
       if (sort === "fastest") return a.leadTimeDays - b.leadTimeDays;
-      return Number(b.isFeatured) - Number(a.isFeatured);
+      if (sort === "rating") return b.ratingAverage - a.ratingAverage || b.ratingCount - a.ratingCount;
+      if (sort === "sales") return b.salesCount - a.salesCount || b.popularityScore - a.popularityScore;
+      return b.popularityScore - a.popularityScore || Number(b.isFeatured) - Number(a.isFeatured);
     });
 
   const activeFilters = [q ? `ძიება: ${q}` : null, selectedCategory?.nameKa, subcategory ? selectedCategory?.subcategories.find((item) => item.slug === subcategory)?.nameKa : null, material].filter(Boolean);
@@ -119,7 +121,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
               </details>
               <form action="/shop" className="relative">
                 {q ? <input type="hidden" name="q" value={q} /> : null}{category ? <input type="hidden" name="category" value={category} /> : null}{subcategory ? <input type="hidden" name="subcategory" value={subcategory} /> : null}{material ? <input type="hidden" name="material" value={material} /> : null}
-                <div className="flex items-center gap-2"><div className="relative"><select name="sort" defaultValue={sort} aria-label="დალაგება" className="h-10 appearance-none rounded-xl border border-hooma-text/10 bg-white py-0 pl-3 pr-9 text-sm outline-none"><option value="featured">რჩეული</option><option value="name">სახელის მიხედვით</option><option value="fastest">მომზადების დრო</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-hooma-muted" /></div><button className="h-10 rounded-xl bg-hooma-text px-3 text-xs font-medium text-white">დალაგება</button></div>
+                <div className="flex items-center gap-2"><div className="relative"><select name="sort" defaultValue={sort} aria-label="დალაგება" className="h-10 appearance-none rounded-xl border border-hooma-text/10 bg-white py-0 pl-3 pr-9 text-sm outline-none"><option value="featured">პოპულარული</option><option value="rating">უმაღლესი შეფასება</option><option value="sales">ყველაზე გაყიდვადი</option><option value="name">სახელის მიხედვით</option><option value="fastest">მომზადების დრო</option></select><ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-hooma-muted" /></div><button className="h-10 rounded-xl bg-hooma-text px-3 text-xs font-medium text-white">დალაგება</button></div>
               </form>
             </div>
           </div>

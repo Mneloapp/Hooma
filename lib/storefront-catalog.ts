@@ -112,7 +112,11 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   if (productError || categoryError || !productRows?.length) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
 
   const productIds = productRows.map((row: any) => row.id);
-  const [{ data: variantRows, error: variantError }, { data: sourceRows, error: sourceError }] = await Promise.all([
+  const [
+    { data: variantRows, error: variantError },
+    { data: sourceRows, error: sourceError },
+    { data: metricRows },
+  ] = await Promise.all([
     admin
       .from("product_variants")
       .select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active")
@@ -125,6 +129,10 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       .in("license_status", ["verified", "not_required"])
       .eq("commercial_use_allowed", true)
       .eq("media_use_allowed", true),
+    admin
+      .from("product_public_metrics")
+      .select("product_id,average_rating,rating_count,review_count,sold_quantity,popularity_score")
+      .in("product_id", productIds),
   ]);
   if (variantError || sourceError) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
 
@@ -132,6 +140,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const variantsByProduct = new Map<string, any[]>();
   for (const variant of variantRows ?? []) variantsByProduct.set(variant.product_id, [...(variantsByProduct.get(variant.product_id) ?? []), variant]);
   const sourceByProduct = new Map<string, any>();
+  const metricsByProduct = new Map<string, any>((metricRows ?? []).map((row: any) => [row.product_id, row]));
   for (const source of sourceRows ?? []) {
     const sourceAllowed = source.platform === "hooma" || safeSourceUrl(source.source_url);
     if (sourceAllowed && !sourceByProduct.has(source.product_id)) sourceByProduct.set(source.product_id, source);
@@ -176,6 +185,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
     const availableMaterials = Array.from(new Set(variants.flatMap((variant) => variant.availableMaterials)));
     const availableColors = Array.from(new Set(variants.flatMap((variant) => variant.availableColors)));
     const price = Math.min(...variants.map((variant) => variant.price ?? Number.POSITIVE_INFINITY));
+    const metrics = metricsByProduct.get(row.id);
 
     return [{
       id: row.id,
@@ -207,6 +217,11 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       sourcePlatform: source.platform === "hooma" ? "hooma" : source.platform === "makerworld" ? "makerworld" : "external",
       sourceCreator: source.creator_name || undefined,
       isOrderable: true,
+      ratingAverage: Number(metrics?.average_rating ?? 0),
+      ratingCount: Number(metrics?.rating_count ?? 0),
+      reviewCount: Number(metrics?.review_count ?? 0),
+      salesCount: Number(metrics?.sold_quantity ?? 0),
+      popularityScore: Number(metrics?.popularity_score ?? (row.is_featured ? 0.75 : 0)),
     }];
   });
 
@@ -225,11 +240,12 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
   const admin = createAdminClient() as any;
   if (!profile || !admin) return null;
 
-  const [{ data: row }, { data: categoryRows }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
+  const [{ data: row }, { data: categoryRows }, { data: variantRows }, { data: sourceRows }, { data: metricRows }] = await Promise.all([
     admin.from("products").select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes").eq("id", productId).maybeSingle(),
     admin.from("categories").select("id,parent_id,slug,name_en,name_ka"),
     admin.from("product_variants").select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active").eq("product_id", productId).eq("is_active", true),
     admin.from("product_sources").select("platform,creator_name").eq("product_id", productId).limit(1),
+    admin.from("product_public_metrics").select("average_rating,rating_count,review_count,sold_quantity,popularity_score").eq("product_id", productId).limit(1),
   ]);
   if (!row) return null;
 
@@ -268,6 +284,7 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
   const availableColors = Array.from(new Set(variants.flatMap((variant) => variant.availableColors)));
   const price = Math.min(...variants.map((variant) => variant.price ?? Number.POSITIVE_INFINITY));
   const source = sourceRows?.[0];
+  const metrics = metricRows?.[0];
 
   return {
     id: row.id,
@@ -299,5 +316,10 @@ export async function getAdminPreviewProductById(productId: string): Promise<Pro
     sourcePlatform: source?.platform === "makerworld" ? "makerworld" : source?.platform === "hooma" ? "hooma" : source ? "external" : "other",
     sourceCreator: source?.creator_name || undefined,
     isOrderable: false,
+    ratingAverage: Number(metrics?.average_rating ?? 0),
+    ratingCount: Number(metrics?.rating_count ?? 0),
+    reviewCount: Number(metrics?.review_count ?? 0),
+    salesCount: Number(metrics?.sold_quantity ?? 0),
+    popularityScore: Number(metrics?.popularity_score ?? (row.is_featured ? 0.75 : 0)),
   };
 }

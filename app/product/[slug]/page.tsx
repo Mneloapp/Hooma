@@ -5,6 +5,9 @@ import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductShelf } from "@/components/ProductShelf";
 import { getAdminPreviewProductById, getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
+import { getProductReviewData } from "@/lib/product-reviews";
+import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
+import { ProductReviewsSection } from "@/components/reviews/ProductReviewsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +21,21 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   if (previewId && (!previewProduct || previewProduct.slug !== slug)) notFound();
   const product = previewProduct ?? await getStorefrontProductBySlug(slug);
   if (!product) notFound();
+  const reviewData = await getProductReviewData(product.id);
   const defaultVariant = product.variants[0];
   const fixedMulticolor = defaultVariant.colorMode === "fixed_multicolor" && defaultVariant.amsRequired;
-  const related = products.filter((item) => item.category === product.category && item.id !== product.id).slice(0, 3);
-  const recommendations = related.length >= 3 ? related : products.filter((item) => item.id !== product.id).slice(0, 5);
+  const recommendations = products
+    .filter((item) => item.id !== product.id)
+    .map((item) => ({
+      item,
+      score: (item.categorySlug === product.categorySlug ? 6 : 0)
+        + (item.subcategorySlug === product.subcategorySlug ? 4 : 0)
+        + item.tags.filter((tag) => product.tags.includes(tag)).length * 2
+        + item.popularityScore,
+    }))
+    .sort((left, right) => right.score - left.score)
+    .map(({ item }) => item)
+    .slice(0, 8);
 
   return (
     <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
@@ -34,6 +48,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         <div className="min-w-0">
           <Link href={`/shop?category=${product.categorySlug}`} className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent hover:underline">{product.category}</Link>
           <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] sm:text-4xl">{product.nameKa}</h1>
+          <Link href="#reviews" className="mt-3 inline-flex rounded-full border border-hooma-text/10 bg-white/65 px-3 py-2 transition hover:border-hooma-accent/35"><ProductRatingSummary average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} detailed /></Link>
           <p className="mt-4 text-base leading-7 text-hooma-muted">{product.shortDescriptionKa}</p>
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hooma-text/10 py-4 text-sm"><span className="font-medium">SKU: {defaultVariant.sku}</span><span className="text-hooma-muted">{product.isOrderable ? "წარმოებისთვის დამტკიცებული" : "კატალოგის სატესტო პროდუქტი"}</span></div>
 
@@ -52,6 +67,8 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
         <ProductConfigurator product={product} />
       </section>
+
+      <ProductReviewsSection productId={product.id} slug={product.slug} productName={product.nameKa} average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} reviews={reviewData.reviews} context={reviewData.context} allowReview={!previewProduct && product.isOrderable} />
 
       <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" products={recommendations} href={`/shop?category=${product.categorySlug}`} /></div>
     </main>

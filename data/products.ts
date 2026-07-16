@@ -59,6 +59,11 @@ export type Product = {
   sourcePlatform: "hooma" | "makerworld" | "external" | "other";
   sourceCreator?: string;
   isOrderable: boolean;
+  ratingAverage: number;
+  ratingCount: number;
+  reviewCount: number;
+  salesCount: number;
+  popularityScore: number;
 };
 
 const colors = ["Warm white", "Graphite", "Sage", "Sand", "Terracotta"];
@@ -144,6 +149,11 @@ const product = ({
   licenseStatus: "not_required",
   sourcePlatform: "hooma",
   isOrderable: false,
+  ratingAverage: 0,
+  ratingCount: 0,
+  reviewCount: 0,
+  salesCount: 0,
+  popularityScore: featured ? 0.75 : 0,
 });
 
 export const products: Product[] = [
