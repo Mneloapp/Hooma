@@ -1,4 +1,4 @@
-(() => {
+(async () => {
   const MAX_IMAGES = 40;
   const MATERIAL_PATTERN = /\b(PLA(?:\+|\s*PLUS|\s*BASIC|\s*MATTE|\s*TOUGH)?|PETG(?:-?CF)?|ABS|ASA|TPU(?:\s*\d+[AD])?|TPE|PC|PA(?:6|12)?(?:-?CF)?|NYLON|PVA|HIPS)\b/i;
 
@@ -75,6 +75,78 @@
   const ldObjects = jsonLdObjects();
   const product = ldObjects.find((item) => typeNames(item).some((type) => ["product", "individualproduct", "3dmodel"].includes(type))) ?? null;
   const bodyText = (document.body?.innerText ?? "").replace(/\u00a0/g, " ").slice(0, 250000);
+
+  async function makerWorldProfileTechnical() {
+    const isMakerWorld = /(^|\.)makerworld\.com(?:\.cn)?$/i.test(location.hostname);
+    const modelId = location.pathname.match(/\/models\/(\d+)/i)?.[1];
+    if (!isMakerWorld || !modelId) return null;
+
+    try {
+      const response = await fetch(`${location.origin}/api/v1/design-service/design/${modelId}`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return null;
+      const raw = await response.json();
+      const design = raw?.data?.instances ? raw.data : raw?.result?.instances ? raw.result : raw;
+      const instances = Array.isArray(design?.instances) ? design.instances : [];
+      if (!instances.length) return null;
+
+      const requestedProfileId = location.hash.match(/profileId-(\d+)/i)?.[1]
+        ?? new URLSearchParams(location.search).get("profileId");
+      const selected = instances.find((instance) => requestedProfileId
+        && [instance?.profileId, instance?.id].some((value) => String(value) === requestedProfileId))
+        ?? instances.find((instance) => String(instance?.id) === String(design?.defaultInstanceId))
+        ?? instances.find((instance) => instance?.isDefault === true || instance?.is_default === true)
+        ?? instances[0];
+      if (!selected) return null;
+
+      const modelInfo = selected?.extention?.modelInfo
+        ?? selected?.extension?.modelInfo
+        ?? selected?.modelInfo
+        ?? {};
+      const plates = Array.isArray(modelInfo?.plates) ? modelInfo.plates : [];
+      const plateSum = (field) => {
+        const amounts = plates.map((plate) => number(plate?.[field])).filter(Boolean);
+        return amounts.length ? amounts.reduce((total, amount) => total + amount, 0) : null;
+      };
+      const filaments = [
+        ...(Array.isArray(selected?.instanceFilaments) ? selected.instanceFilaments : []),
+        ...(Array.isArray(modelInfo?.filaments) ? modelInfo.filaments : []),
+        ...plates.flatMap((plate) => Array.isArray(plate?.filaments) ? plate.filaments : []),
+      ];
+      const materialTotals = new Map();
+      filaments.forEach((filament) => {
+        const rawMaterial = clean(filament?.type ?? filament?.material ?? filament?.name, 120);
+        const material = clean(rawMaterial?.match(MATERIAL_PATTERN)?.[1]?.toUpperCase() ?? rawMaterial?.toUpperCase(), 120);
+        if (!material) return;
+        const grams = number(filament?.usedG ?? filament?.used_g ?? filament?.weight ?? filament?.grams) ?? 0.01;
+        materialTotals.set(material, (materialTotals.get(material) ?? 0) + grams);
+      });
+      const material = Array.from(materialTotals.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
+      const filamentWeight = filaments
+        .map((filament) => number(filament?.usedG ?? filament?.used_g ?? filament?.weight ?? filament?.grams))
+        .filter(Boolean)
+        .reduce((total, grams) => total + grams, 0);
+      const weightGrams = number(selected?.weight)
+        ?? number(modelInfo?.weight)
+        ?? plateSum("weight")
+        ?? (filamentWeight > 0 ? filamentWeight : null);
+      const predictionSeconds = number(selected?.prediction)
+        ?? number(modelInfo?.prediction)
+        ?? plateSum("prediction");
+
+      return {
+        material,
+        weightGrams: weightGrams ? round(weightGrams) : null,
+        printTimeMinutes: predictionSeconds ? Math.max(1, Math.round(predictionSeconds / 60)) : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const makerWorldTechnical = await makerWorldProfileTechnical();
 
   // Chrome's page translator changes rendered text nodes, but it deliberately leaves
   // JSON-LD and Open Graph metadata untouched. Prefer visible copy so a translated page
@@ -177,22 +249,40 @@
       ?? document.querySelector("video source")?.src,
   );
 
+  const technicalSnippets = Array.from(new Set(Array.from(document.querySelectorAll([
+    'main [class*="profile" i]', 'main [class*="print" i]', 'main [class*="filament" i]',
+    'main [class*="material" i]', 'main [class*="parameter" i]', 'main [class*="stat" i]',
+    'main [data-testid*="profile" i]', 'main [data-testid*="print" i]',
+  ].join(",")))
+    .map((element) => visibleText(element, 500))
+    .filter(Boolean))).slice(0, 250);
+  const technicalText = technicalSnippets.join("\n");
   const materialText = [
     product?.material,
     product?.additionalProperty && JSON.stringify(product.additionalProperty).slice(0, 10000),
-    bodyText.match(/(?:material|filament)[^\n]{0,100}/i)?.[0],
+    bodyText.match(/(?:material|filament|მასალა|ფილამენტი|ძაფი)[^\n]{0,160}/i)?.[0],
+    technicalText.match(MATERIAL_PATTERN)?.[0],
+    bodyText.match(MATERIAL_PATTERN)?.[0],
   ].filter(Boolean).join(" ");
-  const material = clean(materialText.match(MATERIAL_PATTERN)?.[1]?.toUpperCase(), 120);
+  const material = makerWorldTechnical?.material
+    ?? clean(materialText.match(MATERIAL_PATTERN)?.[1]?.toUpperCase(), 120);
 
-  const weightMatch = bodyText.match(/(?:model\s+weight|material\s+(?:used|weight)|filament(?:\s+used)?|weight)[^\n\r]{0,80}?(\d+(?:[.,]\d+)?)\s*(kg|g|gram|grams)\b/i);
-  let weightGrams = number(weightMatch?.[1]);
-  if (weightGrams && weightMatch?.[2]?.toLowerCase() === "kg") weightGrams *= 1000;
+  const weightSource = `${technicalText}\n${bodyText}`;
+  const weightMatch = weightSource.match(/(?:model\s*weight|material\s*(?:used|weight)|filament(?:\s*used)?|weight|მოდელის\s*წონა|მასალის\s*წონა|გამოყენებული\s*მასალა|ფილამენტის\s*წონა|წონა)[^\n\r\d]{0,80}?(\d+(?:[.,]\d+)?)\s*(kg|kgs?|kilograms?|g|grams?|კგ|კილოგრამ(?:ი|ები)?|გ|გრ|გრამ(?:ი|ები)?)(?=$|[^A-Za-z\u10a0-\u10ff])/i)
+    ?? technicalText.match(/(\d+(?:[.,]\d+)?)\s*(kg|kgs?|kilograms?|g|grams?|კგ|კილოგრამ(?:ი|ები)?|გ|გრ|გრამ(?:ი|ები)?)(?=$|[^A-Za-z\u10a0-\u10ff])/i);
+  let weightGrams = makerWorldTechnical?.weightGrams ?? number(weightMatch?.[1]);
+  const weightUnit = weightMatch?.[2]?.toLocaleLowerCase("ka-GE") ?? "";
+  if (!makerWorldTechnical?.weightGrams && weightGrams && /^(?:kg|kgs|kilogram|kilograms|კგ|კილოგრამ)/i.test(weightUnit)) weightGrams *= 1000;
   if (weightGrams) weightGrams = round(weightGrams);
 
-  const timeText = bodyText.match(/(?:print(?:ing)?\s*(?:time|duration)|estimated\s*time)[^\n\r]{0,100}/i)?.[0] ?? "";
-  const timeHours = number(timeText.match(/(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/i)?.[1]) ?? 0;
-  const timeMinutes = number(timeText.match(/(\d+(?:[.,]\d+)?)\s*(?:m|min|mins|minute|minutes)\b/i)?.[1]) ?? 0;
-  let printTimeMinutes = timeHours || timeMinutes ? Math.max(1, Math.round(timeHours * 60 + timeMinutes)) : null;
+  const timeSource = `${technicalText}\n${bodyText}`;
+  const timeText = timeSource.match(/(?:print(?:ing)?\s*(?:time|duration)|estimated\s*time|print\s*duration|ბეჭდვის\s*(?:დრო|ხანგრძლივობა)|დამზადების\s*დრო|სავარაუდო\s*დრო)[^\n\r]{0,160}/i)?.[0]
+    ?? technicalSnippets.find((snippet) => /(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hour|hours|სთ|საათი|საათები)(?=$|[^A-Za-z\u10a0-\u10ff])/i.test(snippet))
+    ?? "";
+  const timeHours = number(timeText.match(/(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hour|hours|სთ|საათი|საათები)(?=$|[^A-Za-z\u10a0-\u10ff])/i)?.[1]) ?? 0;
+  const timeMinutes = number(timeText.match(/(\d+(?:[.,]\d+)?)\s*(?:m|min|mins|minute|minutes|წთ|წუთი|წუთები)(?=$|[^A-Za-z\u10a0-\u10ff])/i)?.[1]) ?? 0;
+  let printTimeMinutes = makerWorldTechnical?.printTimeMinutes
+    ?? (timeHours || timeMinutes ? Math.max(1, Math.round(timeHours * 60 + timeMinutes)) : null);
   if (!printTimeMinutes) {
     const clock = timeText.match(/\b(\d{1,3}):(\d{2})(?::(\d{2}))?\b/);
     if (clock) printTimeMinutes = clock[3]

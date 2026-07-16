@@ -16,7 +16,7 @@ The extension has no Supabase credentials, does not sign in to Hooma, does not r
 
 1. Open a product page in Chrome/Edge and wait until its content is visible.
 2. To avoid a cloud translation request, use Chrome's **Translate to Georgian** on the page and wait until the visible product copy changes.
-3. Open **Hooma Catalog Clipper** and choose **გახსნილი გვერდის წაკითხვა**. The clipper prioritizes the visible translated title and description over untranslated JSON-LD/Open Graph metadata. For category detection it reads the breadcrumb first, then visible category links/chips and canonicalizes a recognized match to Hooma's Georgian category tree.
+3. Open **Hooma Catalog Clipper** and choose **გახსნილი გვერდის წაკითხვა**. The clipper prioritizes the visible translated title and description over untranslated JSON-LD/Open Graph metadata. For category detection it reads the breadcrumb first, then visible category links/chips and canonicalizes a recognized match to Hooma's Georgian category tree. On MakerWorld it also reads the selected print profile's same-origin metadata to fill the dominant material, total filament weight and print prediction; other sites use visible English/Georgian technical labels and profile blocks.
 4. Review/correct the visible category path, material, weight, print hours and remaining minutes; choose the customer color choices or one fixed AMS color composition; then select up to 12 images.
 5. Choose **სრული პაკეტის ჩამოტვირთვა**. JSON and media are saved together under `Downloads/hooma-import/<product-name>`.
 6. In Hooma open **Admin → პროდუქტები → ახალი პროდუქტი**.
