@@ -204,6 +204,94 @@
     .toLocaleLowerCase()
     .replace(/[^a-z0-9\u10a0-\u10ff]+/g, "")
     .trim();
+  const catalogTaxonomy = [
+    { ka: "3D პრინტერი", en: "3D Printer", children: [
+      ["3D პრინტერის აქსესუარები", "3D Printer Accessories"],
+      ["3D პრინტერის ნაწილები", "3D Printer Parts"],
+      ["სატესტო მოდელები", "Test Models", "Calibration Models"],
+    ] },
+    { ka: "ხელოვნება", en: "Art", children: [
+      ["2D ხელოვნება", "2D Art"],
+      ["მონეტები და სამკერდე ნიშნები", "Coins & Badges", "Coins and Badges"],
+      ["ნიშნები და ლოგოები", "Signs & Logos", "Signs and Logos"],
+      ["ქანდაკებები", "Sculptures"],
+      ["სხვა ხელოვნების მოდელები", "Other Art Models", "Other Art"],
+    ] },
+    { ka: "განათლება", en: "Education", children: [
+      ["ბიოლოგია", "Biology"], ["ქიმია", "Chemistry"], ["ინჟინერია", "Engineering"],
+      ["გეოგრაფია", "Geography"], ["მათემატიკა", "Mathematics", "Math"],
+      ["ფიზიკა და ასტრონომია", "Physics & Astronomy", "Physics and Astronomy"],
+      ["სხვა საგანმანათლებლო მოდელები", "Other Educational Models", "Other Education Models"],
+    ] },
+    { ka: "მოდა", en: "Fashion", children: [
+      ["ჩანთები", "Bags"], ["ტანსაცმელი", "Clothing"], ["საყურეები", "Earrings"],
+      ["ფეხსაცმელი", "Footwear", "Shoes"], ["სათვალე", "Glasses", "Eyewear"],
+      ["სამკაულები", "Jewelry", "Jewellery"], ["ბეჭდები", "Rings"],
+      ["სხვა მოდის მოდელები", "Other Fashion Models", "Other Fashion"],
+    ] },
+    { ka: "ჰობი და საკუთარი ხელით კეთება", en: "Hobby & DIY", aliases: ["Hobbies & DIY", "Hobby and DIY"], children: [
+      ["ელექტრონიკა", "Electronics"], ["მუსიკა", "Music"], ["RC", "RC"], ["რობოტიკა", "Robotics"],
+      ["სპორტი და ღია ცის ქვეშ", "Sports & Outdoors", "Sport & Outdoors", "Sports and Outdoors"],
+      ["მანქანები", "Vehicles"],
+      ["სხვა ჰობი და საკუთარი ხელით კეთების მოდელები", "Other Hobby & DIY Models", "Other Hobbies & DIY"],
+    ] },
+    { ka: "საყოფაცხოვრებო", en: "Household", children: [
+      ["დეკორი", "Decor", "Decoration"], ["დღესასწაულები", "Holidays", "Holiday", "Festivals"],
+      ["ბაღი", "Garden"], ["ოფისი", "Office"], ["შინაური ცხოველები", "Pets"],
+      ["სხვა სახლის მოდელები", "Other Household Models", "Other House Models", "Other Household"],
+    ] },
+    { ka: "მინიატურები", en: "Miniatures", children: [
+      ["ცხოველები", "Animals"], ["არქიტექტურა", "Architecture"], ["არსებები", "Creatures"],
+      ["ხალხი", "People"], ["სხვა მინიატურები", "Other Miniatures"],
+    ] },
+    { ka: "რეკვიზიტები და კოსფლეი", en: "Props & Cosplay", aliases: ["Props and Cosplay"], children: [
+      ["კოსტიუმები", "Costumes"], ["ნიღბები და ჩაფხუტები", "Masks & Helmets", "Masks and Helmets"],
+      ["კოსფლეის იარაღები", "Cosplay Weapons"],
+      ["სხვა რეკვიზიტები და კოსფლეი", "Other Props & Cosplay", "Other Props and Cosplay"],
+    ] },
+    { ka: "ხელსაწყოები", en: "Tools", children: [
+      ["გაჯეტები", "Gadgets"], ["ხელის ხელსაწყოები", "Hand Tools"],
+      ["ჩარჩოები", "Fixtures", "Jigs & Fixtures", "Jigs and Fixtures"],
+      ["საზომი ინსტრუმენტები", "Measuring Tools", "Measurement Tools"],
+      ["სამედიცინო ინსტრუმენტები", "Medical Instruments", "Medical Tools"],
+      ["ორგანიზატორები", "Organizers", "Organisers"], ["სხვა ინსტრუმენტები", "Other Tools"],
+    ] },
+    { ka: "სათამაშოები და თამაშები", en: "Toys & Games", aliases: ["Toys and Games"], children: [
+      ["სამაგიდო თამაშები", "Board Games"], ["პერსონაჟები", "Characters"],
+      ["გარე სათამაშოები", "Outdoor Toys"], ["თავსატეხები", "Puzzles"],
+      ["სამშენებლო ნაკრებები", "Construction Sets", "Building Sets"],
+      ["სხვა სათამაშოები და თამაშები", "Other Toys & Games", "Other Toys and Games"],
+    ] },
+    { ka: "გენერაციული 3D მოდელი", en: "Generative 3D Model", children: [] },
+  ];
+  const taxonomyEntries = catalogTaxonomy.flatMap((parent) => [
+    {
+      parentKa: parent.ka,
+      childKa: null,
+      keys: [parent.ka, parent.en, ...(parent.aliases ?? [])].map(categoryKey),
+    },
+    ...parent.children.map(([childKa, ...aliases]) => ({
+      parentKa: parent.ka,
+      childKa,
+      keys: [childKa, ...aliases].map(categoryKey),
+    })),
+  ]);
+  const taxonomyMatch = (value) => {
+    const label = clean(value, 300)?.replace(/\s*[([]\d+[)\]]\s*$/, "");
+    const key = categoryKey(label);
+    if (!key) return null;
+    return taxonomyEntries.find((entry) => entry.keys.includes(key)) ?? null;
+  };
+  const canonicalTaxonomyPath = (items) => {
+    const matches = items.flatMap((item) => String(item ?? "")
+      .split(/\s*(?:→|›|>|\/|\||•)\s*/)
+      .map(taxonomyMatch)
+      .filter(Boolean));
+    const child = matches.findLast((match) => match.childKa);
+    if (child) return [child.parentKa, child.childKa];
+    const parent = matches.findLast((match) => !match.childKa);
+    return parent ? [parent.parentKa] : [];
+  };
   const genericBreadcrumbItems = new Set([
     "home", "homepage", "makerworld", "models", "3dmodels", "allmodels",
     "მთავარი", "საწყისი", "მოდელები", "3დმოდელები", "ყველამოდელი",
@@ -220,6 +308,51 @@
     });
     return result.slice(0, 8);
   };
+
+  // Product pages do not always render a formal breadcrumb. Scan visible
+  // category links/chips against Hooma's exact taxonomy as a second source.
+  // Canonical Georgian labels make the exported package independent of the
+  // page language and deterministic for the Admin category matcher.
+  const visibleTaxonomyCandidates = [];
+  const categoryCandidateSelectors = [
+    'main a', 'main button', 'main [role="link"]', 'main li',
+    'main [class*="category" i]', 'main [class*="tag" i]',
+    '[data-testid*="category" i]', '[data-test*="category" i]',
+    '[aria-label*="category" i]', '[itemprop="category" i]',
+    'a[href*="category" i]', 'a[href*="catalog" i]',
+  ];
+  const candidateElements = new Set();
+  categoryCandidateSelectors.forEach((selector) => {
+    document.querySelectorAll(selector).forEach((element) => candidateElements.add(element));
+  });
+  Array.from(candidateElements).slice(0, 12000).forEach((element) => {
+    const label = visibleText(element, 300);
+    const candidatePath = canonicalTaxonomyPath([label]);
+    if (!candidatePath.length) return;
+    const match = { parentKa: candidatePath[0], childKa: candidatePath[1] ?? null };
+    const context = [
+      element.getAttribute("href"), element.getAttribute("class"), element.getAttribute("id"),
+      element.getAttribute("data-testid"), element.getAttribute("data-test"), element.getAttribute("aria-label"),
+      element.parentElement?.getAttribute("class"),
+    ].filter(Boolean).join(" ");
+    let score = match.childKa ? 120 : 50;
+    if (/category|categor|taxonomy|breadcrumb/i.test(context)) score += 100;
+    if (/tag|chip|label/i.test(context)) score += 45;
+    if (element.matches("a, button, [role=link]")) score += 25;
+    if (element.closest("header, footer")) score -= 120;
+    visibleTaxonomyCandidates.push({ match, score });
+  });
+  visibleTaxonomyCandidates.sort((left, right) => right.score - left.score);
+  const visibleTaxonomyMatch = visibleTaxonomyCandidates[0]?.match ?? null;
+  const visibleTaxonomyPath = visibleTaxonomyMatch
+    ? [visibleTaxonomyMatch.parentKa, visibleTaxonomyMatch.childKa].filter(Boolean)
+    : [];
+  const labelledCategoryPaths = Array.from(bodyText.matchAll(
+    /(?:^|\n)\s*(?:category|categories|კატეგორია|კატეგორიები)\s*:?\s*(?:\n\s*)?([^\n]{1,240})/gim,
+  )).map((match) => canonicalTaxonomyPath([match[1]])).filter((path) => path.length);
+  const labelledCategoryPath = labelledCategoryPaths.find((path) => path.length > 1)
+    ?? labelledCategoryPaths[0]
+    ?? [];
 
   let visibleCategoryPath = [];
   const breadcrumbSelectors = [
@@ -256,13 +389,30 @@
     .find((item) => clean(item, 160))
     ?? product?.additionalType;
   const structuredCategory = clean(structuredCategoryValue, 160);
-  const categoryPath = visibleCategoryPath.length
-    ? visibleCategoryPath
-    : structuredBreadcrumbPath.length
-      ? structuredBreadcrumbPath
-      : structuredCategory
-        ? [structuredCategory]
-        : [];
+  const metadataCategoryValues = Array.from(document.querySelectorAll(
+    'meta[name="keywords" i], meta[property="article:tag" i], meta[name*="category" i], meta[property*="category" i]',
+  )).flatMap((element) => String(element.getAttribute("content") ?? "").split(/[,;|]/));
+  const canonicalBreadcrumbPath = canonicalTaxonomyPath(visibleCategoryPath);
+  const canonicalStructuredPath = canonicalTaxonomyPath([
+    ...structuredBreadcrumbPath,
+    structuredCategory,
+    ...metadataCategoryValues,
+  ]);
+  const categoryPath = canonicalBreadcrumbPath.length
+    ? canonicalBreadcrumbPath
+    : canonicalStructuredPath.length
+      ? canonicalStructuredPath
+      : labelledCategoryPath.length
+        ? labelledCategoryPath
+        : visibleTaxonomyPath.length
+          ? visibleTaxonomyPath
+          : visibleCategoryPath.length
+            ? visibleCategoryPath
+            : structuredBreadcrumbPath.length
+              ? structuredBreadcrumbPath
+              : structuredCategory
+                ? [structuredCategory]
+                : [];
   const categoryHint = categoryPath[categoryPath.length - 1] ?? null;
   const warnings = [];
   if (!name) warnings.push("პროდუქტის სახელი ვერ მოიძებნა.");

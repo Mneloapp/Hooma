@@ -50,6 +50,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const [translatedByGoogle, setTranslatedByGoogle] = useState(false);
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
+  const parentCategories = categories.filter((category) => !category.parentSlug);
 
   const importClipperDraft = async (
     file: File | null,
@@ -274,7 +275,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
         <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">ძირითადი ინფორმაცია</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">SKU ხელით არ იწერება — სისტემა ყველა ახალ პროდუქტს უნიკალურ HOO კოდს მიანიჭებს.</p></div><span className="shrink-0 rounded-full bg-hooma-panel px-3 py-1.5 text-xs font-semibold text-hooma-muted">SKU: ავტომატური</span></div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium">ქართული სახელი<input name="name" required minLength={2} maxLength={160} placeholder="პროდუქტის ქართული სახელი" className={inputClass} /></label>
-          <label className="text-sm font-medium">კატეგორია / ქვეკატეგორია<select name="category_id" required className={inputClass}><option value="">აირჩიე</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="text-sm font-medium">კატეგორია / ქვეკატეგორია<select name="category_id" required className={inputClass}><option value="">აირჩიე</option>{parentCategories.map((parent) => { const children = categories.filter((category) => category.parentSlug === parent.slug); return children.length ? <optgroup key={parent.id} label={parent.nameKa}><option value={parent.id}>{parent.nameKa} — ქვეკატეგორია დასაზუსტებელია</option>{children.map((child) => <option key={child.id} value={child.id}>{child.nameKa}</option>)}</optgroup> : <option key={parent.id} value={parent.id}>{parent.nameKa}</option>; })}</select></label>
           <label className="text-sm font-medium sm:col-span-2">ქართული აღწერა<textarea name="description" required minLength={10} maxLength={3000} rows={5} placeholder="ქართულად აღწერე პროდუქტი, დანიშნულება და მომხმარებლისთვის მნიშვნელოვანი დეტალები" className={inputClass} /></label>
           <label className="text-sm font-medium sm:col-span-2">ოპერატორის რეფერენსი <span className="font-normal text-hooma-muted">— მომხმარებელს არ უჩანს</span><textarea name="operator_reference" required minLength={3} maxLength={2000} rows={3} placeholder="ჩასვი მოდელის ბმული, ფაილის მდებარეობა ან ბეჭდვისთვის საჭირო შიდა ინსტრუქცია" className={inputClass} /><span className="mt-2 block text-xs font-normal leading-5 text-hooma-muted">ინახება ცალკე დაცულ ცხრილში და ხელმისაწვდომია მხოლოდ Owner/Admin/Production Operator-ისთვის.</span></label>
         </div>

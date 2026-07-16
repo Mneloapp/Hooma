@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hooma Catalog Clipper",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Reads the product page currently open by the operator and prepares a reviewed Hooma product draft.",
   "permissions": ["activeTab", "scripting", "downloads"],
   "action": {
