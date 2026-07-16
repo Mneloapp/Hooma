@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FileImage, FileJson, FolderOpen, Layers3, LoaderCircle, Palette, Upload, Video, X } from "lucide-react";
 import { createHoomaProductAction, prepareProductMediaUploadAction, translateClipperProductAction } from "@/app/admin/products/new/actions";
 import type { MaterialCostProfile, PricingProfile } from "@/components/admin/CostSettingsEditor";
+import { useCatalogPricePreview } from "@/components/admin/useCatalogPricePreview";
 import { matchCategoryOption, type CategoryOption } from "@/lib/catalog-categories";
 import { parseHoomaClipperDraft, type HoomaClipperDraft } from "@/lib/catalog-clipper";
 import { createClient } from "@/lib/supabase/client";
@@ -50,7 +51,25 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const [translatedByGoogle, setTranslatedByGoogle] = useState(false);
   const [message, setMessage] = useState("");
   const [progress, setProgress] = useState("");
+  const [materialProfileId, setMaterialProfileId] = useState("");
+  const [materialGrams, setMaterialGrams] = useState("");
+  const [printHours, setPrintHours] = useState("0");
+  const [printMinutes, setPrintMinutes] = useState("0");
+  const [marginPercent, setMarginPercent] = useState(String(pricing.default_margin_percent));
   const parentCategories = categories.filter((category) => !category.parentSlug);
+  const hoursNumber = Number(printHours);
+  const minutesNumber = Number(printMinutes);
+  const totalPrintMinutes = Number.isInteger(hoursNumber) && hoursNumber >= 0
+    && Number.isInteger(minutesNumber) && minutesNumber >= 0 && minutesNumber <= 59
+    ? hoursNumber * 60 + minutesNumber
+    : 0;
+  const pricePreview = useCatalogPricePreview({
+    materialProfileId,
+    pricingProfileId: pricing.id,
+    materialGrams,
+    printMinutes: totalPrintMinutes,
+    marginPercent,
+  });
 
   const importClipperDraft = async (
     file: File | null,
@@ -72,10 +91,12 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
       setFormValue(form, "name", parsed.product.name);
       setFormValue(form, "description", parsed.product.description);
       setFormValue(form, "operator_reference", parsed.product.operatorReference || parsed.source.url);
-      setFormValue(form, "material_grams", technical.weightGrams);
-      setFormValue(form, "print_hours", technical.printTimeMinutes === null ? null : Math.floor(technical.printTimeMinutes / 60));
-      setFormValue(form, "print_minutes", technical.printTimeMinutes === null ? null : Math.round(technical.printTimeMinutes % 60));
-      setFormValue(form, "margin_percent", technical.marginPercent);
+      if (technical.weightGrams !== null) setMaterialGrams(String(technical.weightGrams));
+      if (technical.printTimeMinutes !== null) {
+        setPrintHours(String(Math.floor(technical.printTimeMinutes / 60)));
+        setPrintMinutes(String(Math.round(technical.printTimeMinutes % 60)));
+      }
+      if (technical.marginPercent !== null) setMarginPercent(String(technical.marginPercent));
 
       const materialHint = normalizedMatch(technical.material ?? "");
       const material = materialHint
@@ -85,7 +106,7 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
             return materialHint === code || materialHint === name || materialHint.startsWith(code) || name.includes(materialHint);
           })
         : null;
-      if (material) setFormValue(form, "material_profile_id", material.id);
+      if (material) setMaterialProfileId(material.id);
 
       const category = matchCategoryOption(categories, parsed.product.categoryPath, parsed.product.categoryHint);
       if (category) setFormValue(form, "category_id", category.id);
@@ -195,6 +216,8 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (translationBusy) { setMessage("დაელოდე სახელისა და აღწერის ქართულად თარგმნას."); return; }
+    if (pricePreview.loading) { setMessage("დაელოდე ფასის სერვერულ კალკულაციას."); return; }
+    if (!pricePreview.data) { setMessage(pricePreview.error || "ჯერ შეავსე ტექნიკური მონაცემები და დაელოდე ფასის გამოთვლას."); return; }
     const formElement = event.currentTarget;
     if (!images.length) { setMessage("პროდუქტს მინიმუმ ერთი ფოტო სჭირდება."); return; }
     const selectedColorCount = new FormData(formElement).getAll("colors").length;
@@ -296,12 +319,13 @@ export function HoomaProductForm({ categories, materials, pricing }: { categorie
       <section className="rounded-2xl bg-hooma-panel/70 p-5">
         <h3 className="font-semibold">ტექნიკური პროფილი და მარჟა</h3><p className="mt-1 text-xs leading-5 text-hooma-muted">მასალის თვითღირებულება და დროის ხარჯი Settings-იდან წამოვა; აქ შეყვანილი მარჟით საბოლოო ფასი ავტომატურად დაითვლება.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <label className="text-sm font-medium">მასალის ტიპი<select name="material_profile_id" required className={inputClass}><option value="">აირჩიე</option>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label className="text-sm font-medium">წონა, გრამი<input name="material_grams" type="number" min="0.01" step="0.01" required className={inputClass} /></label>
-          <label className="text-sm font-medium">ბეჭდვის დრო — საათი<input name="print_hours" type="number" min="0" max="16666" defaultValue="0" required className={inputClass} /></label>
-          <label className="text-sm font-medium">ბეჭდვის დრო — წუთი<input name="print_minutes" type="number" min="0" max="59" defaultValue="0" required className={inputClass} /></label>
-          <label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" defaultValue={pricing.default_margin_percent} required className={inputClass} /></label>
+          <label className="text-sm font-medium">მასალის ტიპი<select name="material_profile_id" required value={materialProfileId} onChange={(event) => setMaterialProfileId(event.target.value)} className={inputClass}><option value="">აირჩიე</option>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="text-sm font-medium">წონა, გრამი<input name="material_grams" type="number" min="0.01" step="0.01" required value={materialGrams} onChange={(event) => setMaterialGrams(event.target.value)} className={inputClass} /></label>
+          <label className="text-sm font-medium">ბეჭდვის დრო — საათი<input name="print_hours" type="number" min="0" max="16666" required value={printHours} onChange={(event) => setPrintHours(event.target.value)} className={inputClass} /></label>
+          <label className="text-sm font-medium">ბეჭდვის დრო — წუთი<input name="print_minutes" type="number" min="0" max="59" required value={printMinutes} onChange={(event) => setPrintMinutes(event.target.value)} className={inputClass} /></label>
+          <label className="text-sm font-medium">მოგების მარჟა, %<input name="margin_percent" type="number" min="0" max="99.99" step="0.01" required value={marginPercent} onChange={(event) => setMarginPercent(event.target.value)} className={inputClass} /></label>
         </div>
+        {pricePreview.data ? <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl bg-hooma-text p-5 text-white sm:flex-row sm:items-center"><div><p className="text-xs text-white/55">Supabase-ზე დათვლილი საბოლოო ფასი</p><p className="mt-2 text-3xl font-bold">₾{pricePreview.data.finalSalePrice.toFixed(2)}</p></div><div className="text-xs leading-5 text-white/60 sm:text-right"><p>{materialGrams} გ · {totalPrintMinutes} წუთი · მარჟა {pricePreview.data.marginPercent}%</p><p>თვითღირებულება ₾{pricePreview.data.productionCost.toFixed(2)} · დღგ-მდე ₾{pricePreview.data.salePriceBeforeVat.toFixed(2)}</p><p>Draft-ში ზუსტად ეს ფასი შეინახება.</p></div></div> : pricePreview.loading ? <p className="mt-5 flex items-center gap-2 text-sm text-hooma-muted"><LoaderCircle size={16} className="animate-spin" />ფასი Supabase-ზე ითვლება...</p> : pricePreview.error ? <p className="mt-5 text-sm text-red-700">{pricePreview.error}</p> : <p className="mt-5 text-xs leading-5 text-hooma-muted">ფასის სანახავად აირჩიე მასალა და შეავსე წონა, დრო და მარჟა.</p>}
         <div className="mt-6 border-t border-hooma-text/10 pt-5"><div className="flex items-center gap-2"><Palette size={18} className="text-hooma-accent" /><h4 className="text-sm font-semibold">ფერის რეჟიმი</h4></div><div className="mt-4 grid gap-3 md:grid-cols-2"><label className="flex cursor-pointer gap-3 rounded-2xl border border-hooma-text/10 bg-white p-4 transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="radio" name="color_mode" value="customer_choice" checked={colorMode === "customer_choice"} onChange={() => setColorMode("customer_choice")} className="mt-1 h-4 w-4 accent-hooma-accent" /><div><p className="text-sm font-semibold">ერთფერიანი · მომხმარებელი ირჩევს</p><p className="mt-1 text-xs leading-5 text-hooma-muted">მონიშნული ფერები იქნება ცალკეული არჩევანი პროდუქტის გვერდზე.</p></div></label><label className="flex cursor-pointer gap-3 rounded-2xl border border-hooma-text/10 bg-white p-4 transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="radio" name="color_mode" value="fixed_multicolor" checked={colorMode === "fixed_multicolor"} onChange={() => setColorMode("fixed_multicolor")} className="mt-1 h-4 w-4 accent-hooma-accent" /><Layers3 size={18} className="mt-0.5 shrink-0 text-hooma-accent" /><div><p className="text-sm font-semibold">მრავალფერიანი · AMS</p><p className="mt-1 text-xs leading-5 text-hooma-muted">მონიშნული ფერები ქმნის ერთ ფიქსირებულ კომბინაციას. მომხმარებელი მიიღებს ზუსტად ფოტოზე ნაჩვენებ ვერსიას.</p></div></label></div><p className="mt-5 text-sm font-semibold">{colorMode === "fixed_multicolor" ? "AMS-ში გამოსაყენებელი ფერები" : "მომხმარებლისთვის ხელმისაწვდომი ფერები"}</p><p className="mt-1 text-xs leading-5 text-hooma-muted">{colorMode === "fixed_multicolor" ? "აირჩიე მინიმუმ ორი ფერი. ეს სია სრულად გამოჩნდება მხოლოდ ოპერატორთან; მომხმარებელი დაინახავს „მრავალფერიანი — როგორც ფოტოზე“." : "მომხმარებელი მხოლოდ აქ მონიშნულ ფერებს დაინახავს და ერთ-ერთს აირჩევს."}</p><div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{productColorOptions.map((color) => <label key={color.name} className="flex cursor-pointer items-center gap-3 rounded-xl border border-hooma-text/10 bg-white px-3 py-3 text-sm transition has-[:checked]:border-hooma-accent has-[:checked]:bg-hooma-accent/10"><input type="checkbox" name="colors" value={color.name} className="h-4 w-4 accent-hooma-accent" /><span className="h-5 w-5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} /><span>{color.name}</span></label>)}</div></div>
       </section>
 

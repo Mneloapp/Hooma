@@ -71,6 +71,7 @@ export async function saveMaterialCostAction(formData: FormData): Promise<Settin
     revalidatePath("/admin/settings");
     revalidatePath("/admin/imports");
     revalidatePath("/admin/products");
+    revalidatePath("/admin/products/new");
     revalidatePath("/admin/products/[id]", "page");
     revalidatePath("/product/[slug]", "page");
     revalidatePath("/");
@@ -125,6 +126,7 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
     revalidatePath("/admin/settings");
     revalidatePath("/admin/imports");
     revalidatePath("/admin/products");
+    revalidatePath("/admin/products/new");
     revalidatePath("/admin/products/[id]", "page");
     revalidatePath("/product/[slug]", "page");
     revalidatePath("/");

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Calculator, LoaderCircle, LockKeyhole, Save } from "lucide-react";
 import { saveMaterialCostAction, savePricingProfileAction } from "@/app/admin/settings/actions";
+import { useCatalogPricePreview } from "@/components/admin/useCatalogPricePreview";
 
 export type MaterialCostProfile = {
   id: string;
@@ -64,8 +65,6 @@ const money = new Intl.NumberFormat("ka-GE", {
 const decimal = new Intl.NumberFormat("ka-GE", { maximumFractionDigits: 2 });
 const inputClass =
   "mt-2 w-full rounded-xl border border-hooma-text/10 bg-white px-3 py-2.5 outline-none focus:border-hooma-accent";
-const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-
 const normalizeMaterial = (profile: MaterialCostProfile): MaterialCostProfile => ({
   ...profile,
   cost_per_kg: Number(profile.cost_per_kg),
@@ -144,55 +143,14 @@ export function CostSettingsEditor({
   const [margin, setMargin] = useState(initialPricing ? String(initialPricing.default_margin_percent) : "");
 
   const selectedMaterial = savedMaterials.find((item) => item.id === materialId);
-
-  const result = useMemo(() => {
-    const weightInGrams = Number(grams);
-    const printMinutes = Number(minutes);
-    const marginPercent = Number(margin);
-    if (
-      !selectedMaterial ||
-      !savedPricing ||
-      !Number.isFinite(weightInGrams) ||
-      weightInGrams <= 0 ||
-      !Number.isFinite(printMinutes) ||
-      printMinutes <= 0 ||
-      !Number.isFinite(marginPercent) ||
-      marginPercent < 0 ||
-      marginPercent >= 100
-    ) {
-      return null;
-    }
-
-    const materialCost = roundMoney(
-      (weightInGrams / 1000) * selectedMaterial.cost_per_kg * (1 + selectedMaterial.waste_percent / 100),
-    );
-    const machineCost = roundMoney((printMinutes / 60) * savedPricing.machine_hour_cost);
-    const laborCost = savedPricing.labor_cost_per_order;
-    const packagingCost = savedPricing.packaging_cost;
-    const direct = materialCost + machineCost + laborCost + packagingCost;
-    const overhead = roundMoney((direct * savedPricing.overhead_percent) / 100);
-    const failureReserve = roundMoney(((direct + overhead) * savedPricing.failure_reserve_percent) / 100);
-    const production = direct + overhead + failureReserve;
-    const beforeVat = marginPercent ? roundMoney(production / (1 - marginPercent / 100)) : production;
-    const vatAmount = (beforeVat * savedPricing.vat_percent) / 100;
-    const withVat = beforeVat + vatAmount;
-    const final = roundMoney(
-      Math.ceil(withVat / savedPricing.rounding_step - Number.EPSILON) * savedPricing.rounding_step,
-    );
-
-    return {
-      materialCost,
-      machineCost,
-      laborCost,
-      packagingCost,
-      overhead,
-      failureReserve,
-      production,
-      beforeVat,
-      vatAmount,
-      final,
-    };
-  }, [selectedMaterial, savedPricing, grams, minutes, margin]);
+  const pricePreview = useCatalogPricePreview({
+    materialProfileId: selectedMaterial?.id ?? "",
+    pricingProfileId: savedPricing?.id ?? "",
+    materialGrams: grams,
+    printMinutes: minutes,
+    marginPercent: margin,
+  });
+  const result = pricePreview.data;
 
   const updateMaterialDraft = (id: string, key: keyof MaterialDraft, value: string) => {
     setMaterialDrafts((current) => ({
@@ -414,10 +372,10 @@ export function CostSettingsEditor({
               ["პრინტერის დრო", result.machineCost],
               ["შრომა", result.laborCost],
               ["შეფუთვა", result.packagingCost],
-              ["ზედნადები", result.overhead],
-              ["ბეჭდვის რეზერვი", result.failureReserve],
-              ["სრული თვითღირებულება", result.production],
-              ["ფასი დღგ-მდე", result.beforeVat],
+              ["ზედნადები", result.overheadCost],
+              ["ბეჭდვის რეზერვი", result.failureReserveCost],
+              ["სრული თვითღირებულება", result.productionCost],
+              ["ფასი დღგ-მდე", result.salePriceBeforeVat],
               ["დღგ", result.vatAmount],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded-xl bg-white/70 p-4">
@@ -427,9 +385,13 @@ export function CostSettingsEditor({
             ))}
             <div className="rounded-xl bg-hooma-text p-4 text-white sm:col-span-2 lg:col-span-3">
               <p className="text-xs text-white/55">საბოლოო გასაყიდი ფასი</p>
-              <p className="mt-2 text-3xl font-bold">{money.format(result.final)}</p>
+              <p className="mt-2 text-3xl font-bold">{money.format(result.finalSalePrice)}</p>
             </div>
           </div>
+        ) : pricePreview.loading ? (
+          <p className="mt-5 flex items-center gap-2 text-sm text-hooma-muted"><LoaderCircle size={16} className="animate-spin" />ფასი სერვერზე ითვლება...</p>
+        ) : pricePreview.error ? (
+          <p className="mt-5 text-sm text-red-700">{pricePreview.error}</p>
         ) : (
           <p className="mt-5 text-sm text-hooma-muted">შეიყვანე წონა და ბეჭდვის დრო კალკულაციისთვის.</p>
         )}

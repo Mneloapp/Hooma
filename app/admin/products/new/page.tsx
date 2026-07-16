@@ -4,6 +4,8 @@ import { catalogCategories } from "@/data/catalog";
 import { buildCategoryOptions, type CategoryRow } from "@/lib/catalog-categories";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewProductPage() {
   const supabase = (await createClient()) as any;
   const [categoryResult, materialResult, pricingResult] = supabase ? await Promise.all([

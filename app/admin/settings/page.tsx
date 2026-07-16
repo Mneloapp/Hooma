@@ -1,6 +1,8 @@
 import { CostSettingsEditor, type MaterialCostProfile, type PricingProfile } from "@/components/admin/CostSettingsEditor";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminSettingsPage() {
   const supabase = (await createClient()) as any;
   const [materialsResult, pricingResult] = supabase ? await Promise.all([
