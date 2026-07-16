@@ -41,7 +41,7 @@ export const dictionary = {
       faqCta: "View all FAQ",
     },
     footer: {
-      copy: "Useful objects, made on demand in Tbilisi. Designed to make everyday life work a little better.",
+      copy: "See it. Want it. Use it.",
       shop: "Shop",
       howItWorks: "How it works",
       faq: "FAQ",
@@ -88,7 +88,7 @@ export const dictionary = {
       faqCta: "ყველა კითხვა",
     },
     footer: {
-      copy: "სასარგებლო ნივთები, დამზადებული შეკვეთით თბილისში. შექმნილი უკეთესი ყოველდღიურობისთვის.",
+      copy: "ნახავ. მოგინდება. გამოგადგება.",
       shop: "მაღაზია",
       howItWorks: "როგორ მუშაობს",
       faq: "კითხვები",
