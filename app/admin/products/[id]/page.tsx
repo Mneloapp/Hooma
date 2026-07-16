@@ -5,6 +5,7 @@ import { ProductEditor } from "@/components/admin/ProductEditor";
 import { VariantEditor } from "@/components/admin/VariantEditor";
 import { DeleteProductButton } from "@/components/admin/DeleteProductButton";
 import { ProductPublicationControls } from "@/components/admin/ProductPublicationControls";
+import { ProductMediaEditor } from "@/components/admin/ProductMediaEditor";
 import { products } from "@/data/products";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,6 +43,10 @@ export default async function AdminProductDetail({ params }: { params: Promise<{
   const publicReady = source?.platform === "hooma" || (source?.license_status === "verified" && source?.commercial_use_allowed && source?.media_use_allowed);
   const video = typeof product.video_url === "string" && product.video_url.startsWith("https://") ? product.video_url.replace(/["\\\n\r]/g, "") : null;
   const imageCount = Array.isArray(product.gallery_images) ? product.gallery_images.length : image ? 1 : 0;
+  const galleryImages = Array.from(new Set<string>([
+    ...(image ? [image] : []),
+    ...(Array.isArray(product.gallery_images) ? product.gallery_images.filter((value: unknown): value is string => typeof value === "string" && value.startsWith("https://")) : []),
+  ]));
   const operatorReference = operatorReferenceResult.data?.reference as string | undefined;
   const operatorReferenceUrl = safeReferenceUrl(operatorReference);
   const variantAttributes = variant?.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes) ? variant.attributes : {};
@@ -55,5 +60,6 @@ export default async function AdminProductDetail({ params }: { params: Promise<{
         <ProductPublicationControls productId={product.id} slug={product.slug} status={product.status} priceReady={Boolean(variant?.is_active && Number(variant?.price) > 0)} publicReady={Boolean(publicReady)} />
         {product.status === "draft" ? <section className="rounded-[1.5rem] border border-red-200 bg-white/75 p-5"><h2 className="font-semibold text-red-950">Draft-ის მართვა</h2><p className="mt-2 text-sm leading-6 text-hooma-muted">წაშლა გამოიყენე მხოლოდ სატესტო ან შეცდომით შექმნილი Draft-ისთვის. შეკვეთაში გამოყენებული პროდუქტი დაცულია.</p><div className="mt-4"><DeleteProductButton productId={product.id} productName={product.name_ka || product.hooma_name} /></div></section> : null}</div>
     </div>
+    <ProductMediaEditor key={product.updated_at} productId={product.id} initialImages={galleryImages} initialVideo={video} />
   </div>;
 }
