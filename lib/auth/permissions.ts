@@ -10,6 +10,7 @@ export type Permission =
   | "production.manage"
   | "customers.read"
   | "pricing.manage"
+  | "finance.manage"
   | "team.manage";
 
 export const staffRoles: StaffRole[] = ["owner", "admin", "catalog_manager", "production_operator", "support"];
@@ -31,8 +32,8 @@ export const roleLabels: Record<UserRole, string> = {
 };
 
 const rolePermissions: Record<UserRole, Permission[]> = {
-  owner: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "team.manage"],
-  admin: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage"],
+  owner: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "finance.manage", "team.manage"],
+  admin: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "finance.manage"],
   catalog_manager: ["admin.access", "catalog.manage"],
   production_operator: ["admin.access", "inventory.manage", "orders.manage", "production.manage"],
   support: ["admin.access", "orders.manage", "quotes.manage", "customers.read"],
@@ -53,6 +54,7 @@ export function hasPermission(role: UserRole, permission: Permission) {
 
 const routePermissions: Array<[string, Permission]> = [
   ["/admin/team", "team.manage"],
+  ["/admin/erp", "finance.manage"],
   ["/admin/settings", "pricing.manage"],
   ["/admin/catalog-agent", "catalog.manage"],
   ["/admin/imports", "catalog.manage"],

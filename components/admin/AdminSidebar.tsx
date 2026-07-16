@@ -10,6 +10,7 @@ export const adminNavItems: Array<[string, string, Permission]> = [
   ["/admin/orders", "შეკვეთები", "orders.manage"],
   ["/admin/custom-orders", "ინდივიდუალური ფასები", "quotes.manage"],
   ["/admin/production", "წარმოება", "production.manage"],
+  ["/admin/erp", "ERP და ფინანსები", "finance.manage"],
   ["/admin/customers", "მომხმარებლები", "customers.read"],
   ["/admin/settings", "ფასის პარამეტრები", "pricing.manage"],
   ["/admin/team", "გუნდი და უფლებები", "team.manage"],
