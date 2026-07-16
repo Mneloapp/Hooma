@@ -1,62 +1,76 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProductBySlug, getRelatedProducts, products } from "@/data/products";
-import { Badge } from "@/components/Badge";
-import { FAQAccordion } from "@/components/FAQAccordion";
+import { Check, ChevronRight, Clock3, Factory, FlaskConical, ShieldCheck, Truck } from "lucide-react";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
-import { ProductGrid } from "@/components/ProductGrid";
-import { SectionTitle } from "@/components/SectionTitle";
+import { ProductShelf } from "@/components/ProductShelf";
+import { getAdminPreviewProductById, getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
+import { getProductReviewData } from "@/lib/product-reviews";
+import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
+import { ProductReviewsSection } from "@/components/reviews/ProductReviewsSection";
 
-export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
-}
+export const dynamic = "force-dynamic";
 
-export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }) {
   const { slug } = await params;
-  const product = getProductBySlug(slug);
+  const { preview: previewId } = await searchParams;
+  const [previewProduct, products] = await Promise.all([
+    previewId ? getAdminPreviewProductById(previewId) : Promise.resolve(null),
+    getStorefrontCatalog(),
+  ]);
+  if (previewId && (!previewProduct || previewProduct.slug !== slug)) notFound();
+  const product = previewProduct ?? await getStorefrontProductBySlug(slug);
   if (!product) notFound();
+  const reviewData = await getProductReviewData(product.id);
   const defaultVariant = product.variants[0];
+  const fixedMulticolor = defaultVariant.colorMode === "fixed_multicolor" && defaultVariant.amsRequired;
+  const recommendations = products
+    .filter((item) => item.id !== product.id)
+    .map((item) => ({
+      item,
+      score: (item.categorySlug === product.categorySlug ? 6 : 0)
+        + (item.subcategorySlug === product.subcategorySlug ? 4 : 0)
+        + item.tags.filter((tag) => product.tags.includes(tag)).length * 2
+        + item.popularityScore,
+    }))
+    .sort((left, right) => right.score - left.score)
+    .map(({ item }) => item)
+    .slice(0, 8);
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-        <div>
-          <ProductImageGallery images={[product.heroImage, ...product.galleryImages]} name={product.hoomaName} />
-        </div>
-        <div>
-          <Badge>{product.category}</Badge>
-          <h1 className="mt-4 text-4xl font-semibold md:text-6xl">{product.hoomaName}</h1>
-          <p className="mt-4 text-lg leading-8 text-hooma-muted">{product.shortDescription}</p>
-          <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-white p-4 text-sm">
-            <span className="text-hooma-muted">Original model</span><span className="text-right">{product.originalModelCode} {product.originalName}</span>
-            <span className="text-hooma-muted">Dimensions</span><span className="text-right">{defaultVariant.productDimensionsCm}</span>
-            <span className="text-hooma-muted">Packing size</span><span className="text-right">{defaultVariant.packingDimensionsCm}</span>
-            <span className="text-hooma-muted">Gross weight</span><span className="text-right">{defaultVariant.grossWeightKg}</span>
-            <span className="text-hooma-muted">Delivery</span><span className="text-right">{product.deliveryEstimate}</span>
+    <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
+      {previewProduct ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-950"><FlaskConical size={19} className="mt-0.5 shrink-0" /><div><p className="font-semibold">Admin-ის სატესტო Preview</p><p className="mt-1 text-sm leading-6 text-blue-900/75">ეს Draft მხოლოდ ავტორიზებულ თანამშრომელს უჩანს. კალათაში დამატება და შეკვეთა გამორთულია.</p></div></div> : null}
+      <nav aria-label="Breadcrumb" className="mb-5 flex items-center gap-1.5 overflow-x-auto text-xs text-hooma-muted hide-scrollbar"><Link href="/" className="hover:text-hooma-text">მთავარი</Link><ChevronRight size={13} /><Link href="/shop" className="hover:text-hooma-text">კატალოგი</Link><ChevronRight size={13} /><Link href={`/shop?category=${product.categorySlug}`} className="hover:text-hooma-text">{product.category}</Link><ChevronRight size={13} /><span className="truncate text-hooma-text">{product.nameKa}</span></nav>
+
+      <section className="grid items-start gap-7 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,0.9fr)_330px] xl:gap-10">
+        <div><ProductImageGallery images={[product.heroImage, ...product.galleryImages]} name={product.nameKa} />{product.videoUrl ? <div className="mt-4 overflow-hidden rounded-2xl bg-hooma-text"><video src={product.videoUrl} controls preload="metadata" playsInline className="aspect-video w-full object-contain">თქვენი ბრაუზერი ვიდეოს ვერ აჩვენებს.</video></div> : null}</div>
+
+        <div className="min-w-0">
+          <Link href={`/shop?category=${product.categorySlug}`} className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent hover:underline">{product.category}</Link>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] sm:text-4xl">{product.nameKa}</h1>
+          <Link href="#reviews" className="mt-3 inline-flex rounded-full border border-hooma-text/10 bg-white/65 px-3 py-2 transition hover:border-hooma-accent/35"><ProductRatingSummary average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} detailed /></Link>
+          <p className="mt-4 text-base leading-7 text-hooma-muted">{product.shortDescriptionKa}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hooma-text/10 py-4 text-sm"><span className="font-medium">SKU: {defaultVariant.sku}</span><span className="text-hooma-muted">{product.isOrderable ? "წარმოებისთვის დამტკიცებული" : "კატალოგის სატესტო პროდუქტი"}</span></div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {[[Clock3, "ვადა", `${product.leadTimeDays} სამუშაო დღე შეკვეთიდან მიწოდებამდე`], [Factory, "წარმოება", "თბილისი"], [Truck, "მიწოდება", "ტრეკინგით"]].map(([Icon, label, value]) => { const DetailIcon = Icon as typeof Clock3; return <div key={String(label)} className="rounded-xl border border-hooma-text/10 bg-white/65 p-4"><DetailIcon size={17} className="text-hooma-accent" /><p className="mt-3 text-xs text-hooma-muted">{String(label)}</p><p className="mt-1 text-sm font-medium">{String(value)}</p></div>; })}
           </div>
-          <div className="mt-8"><ProductConfigurator product={product} /></div>
-        </div>
-      </div>
-      <div className="mt-20 grid gap-10 lg:grid-cols-3">
-        {[
-          ["Description", product.longDescription],
-          ["Compressed delivery", "Your selected model arrives in compact packaging, then expands after opening into full-size comfort."],
-          ["Care guide", "Vacuum gently, rotate cushions where applicable, and blot spills promptly with a clean dry cloth. Confirm fabric-specific care before cleaning."],
-        ].map(([title, copy]) => (
-          <div key={title} className="rounded-2xl bg-white p-6">
-            <h2 className="text-xl font-semibold">{title}</h2>
-            <p className="mt-3 text-sm leading-6 text-hooma-muted">{copy}</p>
+
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold">პროდუქტის შესახებ</h2>
+            <p className="mt-3 text-sm leading-7 text-hooma-muted">{product.shortDescriptionKa} პროდუქტი მზადდება მხოლოდ შეკვეთის დადასტურების შემდეგ. {fixedMulticolor ? "მასალა შეგიძლია აირჩიო შესყიდვის ბლოკში, ხოლო ფერთა კომბინაცია ფიქსირებულია და ემთხვევა ფოტოს." : "ფერი და მასალა შეგიძლია აირჩიო შესყიდვის ბლოკში."}</p>
+            <ul className="mt-5 grid gap-3 text-sm">{["ზომა: " + defaultVariant.productDimensionsCm, "მასალები: " + product.availableMaterials.join(", "), fixedMulticolor ? "ფერთა კომბინაცია: მრავალფერიანი — როგორც ფოტოზე" : "ხელმისაწვდომი ფერები: " + product.availableColors.join(", "), "საბოლოო სპეციფიკაცია დასტურდება სატესტო ბეჭდვის შემდეგ"].map((item) => <li key={item} className="flex gap-2.5"><Check size={16} className="mt-0.5 shrink-0 text-hooma-accent" />{item}</li>)}</ul>
           </div>
-        ))}
-      </div>
-      <div className="mx-auto mt-20 max-w-4xl">
-        <SectionTitle title="Product FAQ" />
-        <FAQAccordion />
-      </div>
-      <div className="mt-20">
-        <SectionTitle title="Related products" />
-        <ProductGrid products={getRelatedProducts(product)} />
-      </div>
-    </section>
+
+          <div className="mt-8 rounded-2xl bg-hooma-panel p-5"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-hooma-accent" /><h2 className="font-semibold">უსაფრთხოება და მოვლა</h2></div><p className="mt-3 text-sm leading-6 text-hooma-muted">არ მოათავსოთ მაღალი ტემპერატურის ან ღია ცეცხლის სიახლოვეს. საბავშვო და საკვებთან დაკავშირებული პროდუქტები გამოქვეყნდება მხოლოდ შესაბამისი გამოყენების შემოწმების შემდეგ.</p></div>
+        </div>
+
+        <ProductConfigurator product={product} />
+      </section>
+
+      <ProductReviewsSection productId={product.id} slug={product.slug} productName={product.nameKa} average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} reviews={reviewData.reviews} context={reviewData.context} allowReview={!previewProduct && product.isOrderable} />
+
+      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" products={recommendations} href={`/shop?category=${product.categorySlug}`} /></div>
+    </main>
   );
 }

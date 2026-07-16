@@ -3,27 +3,15 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-export const faqs = [
-  ["How does compressed furniture work?", "The furniture is packed compactly for delivery, then expands after opening. Exact expansion timing can vary by model, room temperature, and fabric."],
-  ["Are prices available?", "Not yet. Product pages currently use request-price placeholders until Hooma finalizes pricing."],
-  ["Can I choose fabric and color?", "Yes. The configurator is prepared for fabric and color choices. Final availability should be confirmed before order."],
-  ["Will the final color match the screen?", "Final color may vary slightly depending on fabric and lighting."],
+const faqs = [
+  ["როდის მივიღებ შეკვეთას?", "სტანდარტული კატალოგის პროდუქტებისთვის ვადა არის 3 სამუშაო დღე შეკვეთიდან მიწოდებამდე. ინდივიდუალური ან რთული პროდუქტის შემთხვევაში ზუსტ დროს შეკვეთის დადასტურებისას გაცნობებთ."],
+  ["ყველა პროდუქტი წინასწარ მზად არის?", "არა. პროდუქტების უმეტესობა მზადდება შეკვეთის შემდეგ. ეს საშუალებას გვაძლევს შემოგთავაზოთ ფერისა და მასალის არჩევანი ზედმეტი მარაგის გარეშე."],
+  ["შემიძლია ინდივიდუალური დეტალის შეკვეთა?", "დიახ. მოგვაწოდეთ ფოტო, ზომები და აღწერა. ოპერატორი შეაფასებს მოდელირების, მასალისა და წარმოების შესაძლებლობას."],
+  ["რას ნიშნავს კატალოგის პრევიუ?", "სატესტო ეტაპზე პროდუქტების სტრუქტურა და შეკვეთის პროცესი მოწმდება. რეალური ფასი, ფოტო და წარმოების პროფილი ადმინ პანელიდან დამტკიცების შემდეგ გამოქვეყნდება."],
+  ["გადახდა უკვე მუშაობს?", "ჯერ არა. საბანკო გადახდა დაემატება მხოლოდ შიდა შეკვეთის, წარმოების, ხარისხის კონტროლისა და ტრეკინგის სრული ტესტირების შემდეგ."],
 ];
 
-export function FAQAccordion({ items = faqs }: { items?: string[][] }) {
-  const [open, setOpen] = useState(0);
-
-  return (
-    <div className="divide-y divide-hooma-text/10 rounded-2xl bg-white">
-      {items.map(([question, answer], index) => (
-        <div key={question}>
-          <button onClick={() => setOpen(open === index ? -1 : index)} className="flex w-full items-center justify-between gap-5 p-5 text-left font-medium">
-            {question}
-            <ChevronDown size={18} className={`shrink-0 transition ${open === index ? "rotate-180" : ""}`} />
-          </button>
-          {open === index ? <p className="px-5 pb-5 text-sm leading-6 text-hooma-muted">{answer}</p> : null}
-        </div>
-      ))}
-    </div>
-  );
+export function FAQAccordion() {
+  const [active, setActive] = useState<number | null>(0);
+  return <div className="mt-8 divide-y divide-hooma-text/10 border-y border-hooma-text/10">{faqs.map(([question, answer], index) => <div key={question}><button type="button" onClick={() => setActive(active === index ? null : index)} className="flex w-full items-center justify-between gap-6 py-5 text-left font-medium"><span>{question}</span><ChevronDown size={18} className={`shrink-0 transition ${active === index ? "rotate-180" : ""}`} /></button>{active === index ? <p className="max-w-3xl pb-6 text-sm leading-7 text-hooma-muted">{answer}</p> : null}</div>)}</div>;
 }

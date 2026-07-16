@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title">
+  <title id="title">Pet product placeholder</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e6ede2"/><stop offset="1" stop-color="#d8c7ad"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="720" rx="330" ry="52" fill="#1d251b" opacity=".12"/>
+  <path d="M370 625c20-160 105-250 230-250s210 90 230 250c-120 80-340 80-460 0z" fill="#fbf8f2" stroke="#283026" stroke-width="18"/>
+  <circle cx="490" cy="345" r="55" fill="#7b8b68"/><circle cx="600" cy="295" r="58" fill="#7b8b68"/><circle cx="710" cy="345" r="55" fill="#7b8b68"/>
+  <path d="M600 420c-95 0-145 85-105 145 33 49 177 49 210 0 40-60-10-145-105-145z" fill="#7b8b68"/>
+  <text x="70" y="92" font-family="Arial,sans-serif" font-size="30" letter-spacing="8" fill="#283026">HOOMA / PETS</text>
+</svg>

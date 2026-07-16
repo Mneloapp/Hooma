@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title">
+  <title id="title">Home organization product placeholder</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f0e8dc"/><stop offset="1" stop-color="#d6c3a9"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="725" rx="350" ry="55" fill="#332a22" opacity=".12"/>
+  <path d="M320 340h560v350H320z" fill="#fbf8f2" stroke="#342c24" stroke-width="18"/>
+  <path d="M600 340v350M320 515h560" stroke="#342c24" stroke-width="14"/>
+  <path d="M425 440h70M705 440h70M425 615h70M705 615h70" stroke="#7b8b68" stroke-width="18" stroke-linecap="round"/>
+  <text x="70" y="92" font-family="Arial,sans-serif" font-size="30" letter-spacing="8" fill="#342c24">HOOMA / HOME</text>
+</svg>

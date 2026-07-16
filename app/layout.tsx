@@ -7,13 +7,13 @@ import { CartDrawer } from "@/components/CartDrawer";
 import { LanguageProvider } from "@/components/LanguageProvider";
 
 export const metadata: Metadata = {
-  title: "Hooma | Furniture, Reimagined",
-  description: "Premium compressed furniture for modern living.",
+  title: "Hooma | სასარგებლო ნივთები ყოველდღიურობისთვის",
+  description: "შეკვეთით დამზადებული სასარგებლო ნივთები. 3 სამუშაო დღე შეკვეთიდან მიწოდებამდე.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="ka">
       <body className="font-sans antialiased">
         <LanguageProvider>
           <CartProvider>

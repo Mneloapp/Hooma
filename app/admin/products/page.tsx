@@ -1,57 +1,25 @@
 import Link from "next/link";
-import { products } from "@/data/products";
+import { CatalogProductTable, type CatalogProductListItem } from "@/components/admin/CatalogProductTable";
+import { catalogCategories } from "@/data/catalog";
+import { createClient, requirePermission } from "@/lib/supabase/server";
 
 export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
   const params = await searchParams;
-  const q = (params.q ?? "").toLowerCase();
+  const q = (params.q ?? "").toLocaleLowerCase("ka-GE");
   const category = params.category ?? "all";
-  const filtered = products.filter((product) => {
-    const matchesQuery = `${product.hoomaName} ${product.originalModelCode} ${product.originalName}`.toLowerCase().includes(q);
-    const matchesCategory = category === "all" || product.category === category;
-    return matchesQuery && matchesCategory;
-  });
+  const profile = await requirePermission("catalog.manage");
+  const supabase = (await createClient()) as any;
+  const { data: databaseRows } = supabase ? await supabase.from("products").select("id,slug,hooma_name,name_ka,status,production_status,estimated_print_minutes,material_grams,base_price,categories(slug,name_en,name_ka)").order("created_at", { ascending: false }) : { data: [] };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Catalog</p>
-          <h1 className="mt-3 text-4xl font-medium">Products</h1>
-        </div>
-        <Link href="/admin/products/new" className="rounded-full bg-hooma-text px-5 py-3 text-sm font-medium text-white">Create product</Link>
-      </div>
-      <form className="flex flex-col gap-3 rounded-[1.5rem] bg-white/70 p-4 sm:flex-row">
-        <input name="q" defaultValue={params.q} placeholder="Search products" className="min-h-11 flex-1 rounded-full border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent" />
-        <select name="category" defaultValue={category} className="min-h-11 rounded-full border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent">
-          <option value="all">All categories</option>
-          <option>Sofas</option>
-          <option>Sofa Beds</option>
-          <option>Lounge Chairs</option>
-          <option>Ottomans</option>
-          <option>Pet Collection</option>
-        </select>
-        <button className="rounded-full border border-hooma-text/10 px-5 py-3 text-sm font-medium">Filter</button>
-      </form>
-      <div className="overflow-hidden rounded-[1.5rem] bg-white/75 shadow-soft">
-        <div className="overflow-x-auto">
-          <table className="min-w-[820px] w-full text-left text-sm">
-            <thead className="bg-hooma-panel text-xs uppercase tracking-[0.18em] text-hooma-muted">
-              <tr><th className="px-5 py-4">Product</th><th className="px-5 py-4">Original</th><th className="px-5 py-4">Category</th><th className="px-5 py-4">Variants</th><th className="px-5 py-4">Status</th></tr>
-            </thead>
-            <tbody className="divide-y divide-hooma-text/10">
-              {filtered.map((product) => (
-                <tr key={product.id}>
-                  <td className="px-5 py-4"><Link href={`/admin/products/${product.id}`} className="font-medium hover:text-hooma-accent">{product.hoomaName}</Link><span className="block text-xs text-hooma-muted">{product.slug}</span></td>
-                  <td className="px-5 py-4 text-hooma-muted">{product.originalModelCode} {product.originalName}</td>
-                  <td className="px-5 py-4 text-hooma-muted">{product.category}</td>
-                  <td className="px-5 py-4 text-hooma-muted">{product.variants.length}</td>
-                  <td className="px-5 py-4"><span className="rounded-full bg-hooma-accent/10 px-3 py-1 text-xs text-hooma-accent">active</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+  const databaseProducts: CatalogProductListItem[] = (databaseRows ?? []).map((row: any) => {
+    const categoryRow = Array.isArray(row.categories) ? row.categories[0] : row.categories;
+    return { id: row.id, name: row.name_ka || row.hooma_name, slug: row.slug, category: categoryRow?.name_ka || categoryRow?.name_en || "—", categorySlug: categoryRow?.slug || "", subcategory: "", printMinutes: row.estimated_print_minutes, grams: row.material_grams, price: row.base_price === null ? null : Number(row.base_price), production: row.production_status, status: row.status };
+  });
+  const filtered = databaseProducts.filter((product) => `${product.name} ${product.slug}`.toLocaleLowerCase("ka-GE").includes(q) && (category === "all" || product.categorySlug === category));
+  const canDelete = Boolean(profile && ["owner", "admin", "catalog_manager"].includes(profile.role));
+
+  return <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Catalog</p><h1 className="mt-3 text-4xl font-medium">პროდუქტები</h1><p className="mt-2 text-sm text-hooma-muted">{`${databaseProducts.length} პროდუქტი Supabase კატალოგში`}</p></div><Link href="/admin/products/new" className="rounded-full bg-hooma-text px-5 py-3 text-sm font-medium text-white">ახალი პროდუქტი</Link></div>
+    <form className="flex flex-col gap-3 rounded-[1.5rem] bg-white/70 p-4 sm:flex-row"><input name="q" defaultValue={params.q} placeholder="პროდუქტის ძიება" className="min-h-11 flex-1 rounded-full border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent" /><select name="category" defaultValue={category} className="min-h-11 rounded-full border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა კატეგორია</option>{catalogCategories.map((item) => <option key={item.slug} value={item.slug}>{item.nameKa}</option>)}</select><button className="rounded-full border border-hooma-text/10 px-5 py-3 text-sm font-medium">ფილტრი</button></form>
+    {filtered.length ? <CatalogProductTable products={filtered} canDelete={canDelete} /> : <div className="rounded-[1.5rem] border border-dashed border-hooma-text/15 bg-white/60 px-6 py-14 text-center"><p className="font-semibold">Supabase კატალოგში პროდუქტი ჯერ არ არის</p><p className="mt-2 text-sm text-hooma-muted">დაამატე პირველი პროდუქტი ან გაასუფთავე ძიების ფილტრი.</p></div>}
+  </div>;
 }

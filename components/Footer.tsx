@@ -9,7 +9,7 @@ export function Footer() {
 
   return (
     <footer className="border-t border-hooma-text/10 bg-hooma-text text-white">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1fr] lg:px-8">
         <div>
           <BrandLogo inverted className="w-28" imageClassName="max-h-24" />
           <p className="mt-4 max-w-sm text-sm leading-6 text-white/65">{t.footer.copy}</p>
@@ -18,6 +18,12 @@ export function Footer() {
           <Link href="/shop">{t.footer.shop}</Link>
           <Link href="/how-it-works">{t.footer.howItWorks}</Link>
           <Link href="/faq">{t.footer.faq}</Link>
+        </div>
+        <div className="grid content-start gap-3 text-sm text-white/65">
+          <Link href="/about">Hooma-ს შესახებ</Link>
+          <Link href="/contact">კონტაქტი</Link>
+          <Link href="/privacy">კონფიდენციალურობა</Link>
+          <Link href="/terms">გამოყენების პირობები</Link>
         </div>
         <div className="text-sm text-white/65">
           <p>hooma.ge</p>

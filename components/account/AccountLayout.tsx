@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Profile } from "@/lib/supabase/types";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 
 const links = [
   ["/account", "Overview"],
   ["/account/orders", "Orders"],
+  ["/account/custom-orders", "Custom requests"],
   ["/account/addresses", "Addresses"],
   ["/account/settings", "Settings"],
 ];
@@ -19,7 +21,7 @@ export function AccountLayout({ children, profile }: { children: ReactNode; prof
           {links.map(([href, label]) => (
             <Link key={href} href={href} className="rounded-full px-4 py-3 text-sm text-hooma-muted transition hover:bg-hooma-panel hover:text-hooma-text">{label}</Link>
           ))}
-          <Link href="/logout" className="rounded-full px-4 py-3 text-sm text-hooma-muted transition hover:bg-hooma-panel hover:text-hooma-text">Logout</Link>
+          <LogoutButton className="rounded-full px-4 py-3 text-left text-sm text-hooma-muted transition hover:bg-hooma-panel hover:text-hooma-text disabled:opacity-60" />
         </nav>
       </aside>
       <div>{children}</div>

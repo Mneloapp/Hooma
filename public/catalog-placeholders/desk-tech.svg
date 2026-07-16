@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title">
+  <title id="title">Desk and technology product placeholder</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e8eee3"/><stop offset="1" stop-color="#c5d0bc"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="720" rx="330" ry="50" fill="#1d251b" opacity=".12"/>
+  <path d="M430 650h340l-62 54H492z" fill="#263024"/>
+  <path d="M520 645V330c0-44 36-80 80-80s80 36 80 80v315" fill="none" stroke="#263024" stroke-width="42" stroke-linecap="round"/>
+  <rect x="545" y="285" width="110" height="255" rx="30" fill="#f7f7f2" stroke="#263024" stroke-width="14"/>
+  <circle cx="600" cy="510" r="8" fill="#789166"/>
+  <text x="70" y="92" font-family="Arial,sans-serif" font-size="30" letter-spacing="8" fill="#263024">HOOMA / DESK</text>
+</svg>

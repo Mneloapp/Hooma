@@ -1,13 +1,15 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "./config";
+import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "./config";
 import type { Database, Profile } from "./types";
+import { hasPermission, isStaffRole, type Permission } from "@/lib/auth/permissions";
+import type { UserRole } from "./types";
 
 export async function createClient() {
   if (!isSupabaseConfigured()) return null;
   const cookieStore = await cookies();
 
-  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createServerClient<Database>(supabaseUrl, supabasePublishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -40,8 +42,20 @@ export async function getProfile(): Promise<Profile | null> {
   return (data as Profile | null) ?? null;
 }
 
-export async function requireRole(role: "admin" | "customer") {
+export async function requireRole(...roles: UserRole[]) {
   const profile = await getProfile();
-  if (!profile || profile.role !== role) return null;
+  if (!profile || !profile.is_active || !roles.includes(profile.role)) return null;
+  return profile;
+}
+
+export async function requireStaff() {
+  const profile = await getProfile();
+  if (!profile || !profile.is_active || !isStaffRole(profile.role)) return null;
+  return profile;
+}
+
+export async function requirePermission(permission: Permission) {
+  const profile = await getProfile();
+  if (!profile || !profile.is_active || !hasPermission(profile.role, permission)) return null;
   return profile;
 }
