@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronDown, MapPin, Menu, Package, Search, ShoppingCart, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { catalogCategories } from "@/data/catalog";
@@ -19,6 +20,7 @@ function accountFromUser(user: { email?: string | null; user_metadata?: Record<s
 }
 
 export function Header() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [deliveryCity, setDeliveryCity] = useState("თბილისი");
@@ -47,6 +49,19 @@ export function Header() {
     });
     return () => { active = false; authListener.subscription.unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase) {
+      setAccount(accountFromUser(null));
+      return;
+    }
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setAccount(accountFromUser(data.user));
+    });
+    return () => { active = false; };
+  }, [pathname]);
 
   useEffect(() => {
     document.body.style.overflow = open || locationOpen ? "hidden" : "";
