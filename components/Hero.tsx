@@ -5,7 +5,7 @@ import { Button } from "./Button";
 import { useLanguage } from "./LanguageProvider";
 
 export function Hero() {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
 
   return (
     <section className="relative overflow-hidden border-b border-hooma-text/10 bg-[#e9eee5]">
@@ -49,13 +49,13 @@ export function Hero() {
           <div className="absolute bottom-[17%] left-[18%] right-[18%] rounded-[2rem] border border-white/10 bg-white/10 p-5 text-white backdrop-blur-xl">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/50">Hooma production</p>
-                <p className="mt-2 text-lg font-medium">Made for your order</p>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-white/50">{language === "ka" ? "Hooma-ს წარმოება" : "Hooma production"}</p>
+                <p className="mt-2 text-lg font-medium">{language === "ka" ? "დამზადებული შენი შეკვეთისთვის" : "Made for your order"}</p>
               </div>
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-hooma-text"><Box size={21} /></div>
             </div>
             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-3/4 rounded-full bg-[#c8d8bd]" /></div>
-            <div className="mt-3 flex items-center justify-between text-xs text-white/55"><span>Design</span><span>Make</span><span>Check</span><span>Deliver</span></div>
+            <div className="mt-3 flex items-center justify-between text-xs text-white/55"><span>{language === "ka" ? "დიზაინი" : "Design"}</span><span>{language === "ka" ? "დამზადება" : "Make"}</span><span>{language === "ka" ? "შემოწმება" : "Check"}</span><span>{language === "ka" ? "მიწოდება" : "Deliver"}</span></div>
           </div>
         </div>
       </div>

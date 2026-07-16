@@ -9,7 +9,9 @@ export type DailyDeal = {
   variantId: string;
   slug: string;
   name: string;
+  nameEn: string;
   description: string;
+  descriptionEn: string;
   image: string;
   sku: string;
   sizeLabel: string;
@@ -39,7 +41,9 @@ function previewDeals(date: string): DailyDeal[] {
         variantId: variant.id,
         slug: product.slug,
         name: product.nameKa,
+        nameEn: product.hoomaName,
         description: product.shortDescriptionKa,
+        descriptionEn: product.shortDescription,
         image: variant.image,
         sku: variant.sku,
         sizeLabel: variant.sizeLabel,
@@ -94,7 +98,9 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
       variantId: row.variant_id,
       slug: product.slug,
       name: product.name_ka || product.hooma_name,
+      nameEn: product.hooma_name || product.name_ka,
       description: product.short_description_ka || product.short_description || "",
+      descriptionEn: product.short_description || product.short_description_ka || "",
       image: variant.image || product.hero_image || "/catalog-placeholders/home.svg",
       sku: variant.sku,
       sizeLabel: variant.size_label || "Standard",

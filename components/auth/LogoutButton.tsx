@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/components/LanguageProvider";
 
 export function LogoutButton({ className = "", label = "Logout" }: { className?: string; label?: string }) {
   const [pending, setPending] = useState(false);
+  const { language } = useLanguage();
 
   const logout = async () => {
     if (pending) return;
@@ -23,5 +25,6 @@ export function LogoutButton({ className = "", label = "Logout" }: { className?:
     window.location.replace("/");
   };
 
-  return <button type="button" onClick={logout} disabled={pending} className={className}>{pending ? "გამოსვლა..." : label}</button>;
+  const localizedLabel = label === "Logout" ? (language === "ka" ? "გასვლა" : "Logout") : label;
+  return <button type="button" onClick={logout} disabled={pending} className={className}>{pending ? (language === "ka" ? "გამოსვლა..." : "Signing out...") : localizedLabel}</button>;
 }

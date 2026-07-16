@@ -2,6 +2,13 @@
 
 import { cn } from "@/lib/utils";
 import { productColorHex } from "@/data/product-colors";
+import { useLanguage } from "./LanguageProvider";
+
+const colorNamesEn: Record<string, string> = {
+  "თეთრი": "White", "შავი": "Black", "ნაცრისფერი": "Gray", "ბეჟი": "Beige",
+  "წითელი": "Red", "ლურჯი": "Blue", "მწვანე": "Green", "ყვითელი": "Yellow",
+  "ნარინჯისფერი": "Orange", "იისფერი": "Purple", "ვარდისფერი": "Pink", "ყავისფერი": "Brown",
+};
 
 export function SwatchSelector({
   label,
@@ -14,6 +21,7 @@ export function SwatchSelector({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const { language } = useLanguage();
   const colorMode = label.toLowerCase().includes("color") || label.includes("ფერი");
 
   return (
@@ -30,7 +38,7 @@ export function SwatchSelector({
             )}
           >
             {colorMode ? <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: productColorHex(option) }} /> : null}
-            {option}
+            {language === "en" ? colorNamesEn[option] ?? option : option}
           </button>
         ))}
       </div>

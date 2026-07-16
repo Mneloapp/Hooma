@@ -16,12 +16,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem("hooma-language");
-    if (stored === "ka" || stored === "en") setLanguageState(stored);
+    const initialLanguage = stored === "ka" || stored === "en" ? stored : "ka";
+    setLanguageState(initialLanguage);
+    document.documentElement.lang = initialLanguage;
   }, []);
 
   const setLanguage = (nextLanguage: Language) => {
     setLanguageState(nextLanguage);
     window.localStorage.setItem("hooma-language", nextLanguage);
+    document.documentElement.lang = nextLanguage;
   };
 
   const value = useMemo(
