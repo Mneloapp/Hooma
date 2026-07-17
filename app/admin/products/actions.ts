@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
+import { productColorNames } from "@/data/product-colors";
 
 export type DeleteProductState = { ok?: boolean; message?: string };
 export type BulkDeleteProductState = { ok?: boolean; message?: string; deletedCount?: number };
@@ -13,7 +14,10 @@ export type PublicationState = {
   completedPublication?: boolean;
   nextDraftId?: string | null;
 };
+export type DraftProductUpdateState = { ok?: boolean; message?: string };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const allowedProductColors = new Set<string>(productColorNames);
+const clean = (value: unknown, max: number) => String(value ?? "").trim().slice(0, max);
 
 function deleteError(message: string) {
   if (message.includes("active live order")) return "Archived პროდუქტს აქტიური რეალური შეკვეთა უკავშირდება და მის დასრულებამდე ან გაუქმებამდე ვერ წაიშლება.";
@@ -123,6 +127,79 @@ function refreshCatalog(productId: string) {
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
+}
+
+export async function updateProductDraftAction(
+  _state: DraftProductUpdateState,
+  formData: FormData,
+): Promise<DraftProductUpdateState> {
+  const profile = await requirePermission("catalog.manage");
+  const admin = createAdminClient() as any;
+  if (!profile || !admin || !["owner", "admin", "catalog_manager"].includes(profile.role)) {
+    return { ok: false, message: "Draft-ის რედაქტირება მხოლოდ კატალოგის მართვის უფლების მქონე თანამშრომელს შეუძლია." };
+  }
+
+  const productId = clean(formData.get("product_id"), 36);
+  const categoryId = clean(formData.get("category_id"), 36);
+  const materialId = clean(formData.get("material_profile_id"), 36);
+  const pricingId = clean(formData.get("pricing_profile_id"), 36);
+  if (![productId, categoryId, materialId, pricingId].every((value) => uuidPattern.test(value))) {
+    return { ok: false, message: "პროდუქტი, კატეგორია ან ფასის პროფილი არასწორია." };
+  }
+
+  const name = clean(formData.get("name"), 160);
+  const description = clean(formData.get("description"), 3_000);
+  const operatorReference = clean(formData.get("operator_reference"), 2_000);
+  const colorMode = clean(formData.get("color_mode"), 32);
+  const colors = Array.from(new Set(formData.getAll("colors").map((value) => clean(value, 60)).filter(Boolean)));
+  const grams = Number(formData.get("material_grams"));
+  const hours = Number(formData.get("print_hours"));
+  const minutes = Number(formData.get("print_minutes"));
+  const margin = Number(formData.get("margin_percent"));
+  const totalMinutes = hours * 60 + minutes;
+
+  if (name.length < 2) return { ok: false, message: "სახელი მინიმუმ 2 სიმბოლოს უნდა შეიცავდეს." };
+  if (description.length < 10) return { ok: false, message: "აღწერა მინიმუმ 10 სიმბოლოს უნდა შეიცავდეს." };
+  if (operatorReference.length < 3) return { ok: false, message: "შეავსე ოპერატორის რეფერენსი." };
+  if (!Number.isFinite(grams) || grams <= 0 || grams > 1_000_000) return { ok: false, message: "წონა არასწორია." };
+  if (!Number.isInteger(hours) || hours < 0 || hours > 16_666 || !Number.isInteger(minutes) || minutes < 0 || minutes > 59 || totalMinutes < 1) {
+    return { ok: false, message: "ბეჭდვის დრო არასწორია." };
+  }
+  if (!Number.isFinite(margin) || margin < 0 || margin >= 100) return { ok: false, message: "მარჟა უნდა იყოს 0-დან 99.99%-მდე." };
+  if (!["customer_choice", "fixed_multicolor"].includes(colorMode)) return { ok: false, message: "ფერის რეჟიმი არასწორია." };
+  if (colors.some((color) => !allowedProductColors.has(color)) || colors.length < (colorMode === "fixed_multicolor" ? 2 : 1)) {
+    return { ok: false, message: colorMode === "fixed_multicolor" ? "AMS პროდუქტისთვის აირჩიე მინიმუმ ორი ფერი." : "აირჩიე მინიმუმ ერთი ფერი." };
+  }
+
+  const { data, error } = await admin.rpc("update_catalog_product_draft_v1", {
+    actor_profile_id: profile.id,
+    requested_product_id: productId,
+    product_name: name,
+    product_description: description,
+    selected_category_id: categoryId,
+    selected_material_profile_id: materialId,
+    selected_pricing_profile_id: pricingId,
+    selected_material_grams: grams,
+    selected_print_minutes: totalMinutes,
+    selected_margin_percent: margin,
+    operator_reference: operatorReference,
+    product_available_colors: colors,
+    product_color_mode: colorMode,
+  });
+  if (error) {
+    const message = error.message.includes("Only Draft")
+      ? "მხოლოდ Draft სტატუსის პროდუქტის რედაქტირება შეიძლება."
+      : error.message.includes("function") || error.message.includes("schema cache")
+        ? "ჯერ გაუშვი Draft editor migration."
+        : "Draft-ის მონაცემების შენახვა ვერ დასრულდა.";
+    return { ok: false, message };
+  }
+
+  refreshCatalog(productId);
+  return {
+    ok: true,
+    message: `Draft განახლდა · თვითღირებულება ₾${Number(data?.production_cost ?? 0).toFixed(2)} · გასაყიდი ფასი ₾${Number(data?.final_sale_price ?? 0).toFixed(2)}`,
+  };
 }
 
 async function findNextDraftId(admin: any, currentProductId: string) {
