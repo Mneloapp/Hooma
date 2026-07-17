@@ -10,6 +10,8 @@ button { border: 0; border-radius: 11px; padding: 11px 13px; font: inherit; font
 button:disabled { cursor: wait; opacity: .5; }
 .primary { width: 100%; background: #1e2922; color: white; }
 .secondary { width: 100%; border: 1px solid #1e292222; background: white; color: #1e2922; }
+.ghost { width: 100%; border: 1px dashed #1e292233; background: transparent; color: #536057; }
+.compact { padding: 9px 10px; font-size: 11px; }
 #status { margin: 10px 0 14px; padding: 10px 12px; border-radius: 11px; background: white; color: #536057; white-space: pre-wrap; }
 #status.error { background: #fff0ee; color: #9e2f2f; }
 #status.ok { background: #eaf7ef; color: #17653a; }
@@ -22,6 +24,9 @@ textarea { resize: vertical; }
 .grid.three { grid-template-columns: repeat(3, 1fr); }
 .grid.four { grid-template-columns: repeat(2, 1fr); }
 section { padding-top: 3px; }
+.assisted-panel { display: grid; gap: 9px; margin-bottom: 13px; border: 1px solid #1e29221a; border-radius: 14px; background: #fffdf8; padding: 12px; }
+.button-row, .assisted-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.job-state { border-radius: 10px; background: #f4f1ea; padding: 9px 10px; color: #536057; font-size: 11px; white-space: pre-wrap; }
 .section-title { display: flex; align-items: center; justify-content: space-between; }
 .section-title span { color: #657168; font-size: 11px; }
 .hint { margin: 3px 0 9px; font-size: 11px; }

@@ -9,8 +9,25 @@
   <body>
     <header>
       <div class="brand">H</div>
-      <div><h1>Hooma Catalog Clipper · v1.6.0</h1><p id="source">გახსნილი გვერდი ჯერ არ წაკითხულა.</p></div>
+      <div><h1>Hooma Catalog Clipper · v1.7.0</h1><p id="source">გახსნილი გვერდი ჯერ არ წაკითხულა.</p></div>
     </header>
+
+    <section class="assisted-panel">
+      <div class="section-title"><strong>MakerWorld Assisted Mode</strong><span id="assisted-connection">არ არის დაყენებული</span></div>
+      <p class="hint">მუშაობს ჩვეულებრივ Chrome-ში: შენ გადიხარ verification-ს, Clipper კი მხოლოდ შენი მოქმედებით აგროვებს ბმულებს და აგზავნის Draft-ს.</p>
+      <label>Assisted Agent token<input id="agent-token" type="password" autocomplete="off" placeholder="hooma_ca_..." /></label>
+      <div class="button-row">
+        <button id="save-agent-token" type="button" class="secondary compact">ტოკენის შენახვა</button>
+        <button id="reset-assisted" type="button" class="ghost compact">სესიის გასუფთავება</button>
+      </div>
+      <div id="agent-job" class="job-state">ჯერ აიღე Hooma Admin-ში შექმნილი assisted დავალება.</div>
+      <div class="assisted-actions">
+        <button id="claim-job" type="button" class="secondary" disabled>დავალების აღება</button>
+        <button id="capture-category" type="button" class="secondary" disabled>ხილული პროდუქტების რიგში დამატება</button>
+        <button id="open-next" type="button" class="secondary" disabled>შემდეგი პროდუქტის გახსნა</button>
+        <button id="complete-job" type="button" class="ghost" disabled>დავალების დასრულება</button>
+      </div>
+    </section>
 
     <button id="extract" class="primary">გახსნილი გვერდის წაკითხვა</button>
     <div id="status" role="status">კლიპერი მზადაა.</div>
@@ -46,6 +63,7 @@
 
       <div id="warnings" class="warnings"></div>
       <div class="actions">
+        <button id="submit-assisted" type="button" class="primary" disabled>Draft-ის გაგზავნა Hooma-ში</button>
         <button id="download-package" type="button" class="primary">სრული პაკეტის ჩამოტვირთვა</button>
         <button id="export" type="button" class="secondary">მხოლოდ Hooma JSON</button>
       </div>

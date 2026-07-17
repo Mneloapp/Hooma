@@ -13,6 +13,8 @@ Catalog Agent accepts a whole public catalog category, discovers its product pag
 7. Complete results become `products.status = draft` and `production_status = test_required`. Incomplete results become `source_imports.status = needs_review`.
 8. Existing Owner/Admin publication gates remain authoritative. The agent has no publish, edit, archive, delete, pricing, team, order, or production permissions.
 
+MakerWorld also supports a human-assisted path in the ordinary Chrome Clipper. The operator completes any verification, explicitly captures only the visible category links, explicitly opens one claimed product, reviews its extracted fields and sends the Draft. It uses the same protected job API and server-side validation, but performs no automatic scrolling, unattended navigation, CAPTCHA solving, stealth/fingerprint changes, or access-control bypass. Use a separate agent identity/token for this mode so the background Windows worker cannot claim the same job.
+
 ## Database
 
 Migration `20260716000200_catalog_agent_v1.sql` adds:
@@ -43,6 +45,8 @@ All routes require `Authorization: Bearer hooma_ca_...` and run in the Node.js r
 
 The token is never accepted by browser admin routes and is never a Supabase session or service-role credential.
 
+Production clients must call the canonical `https://www.hooma.ge` host directly. Calling `https://hooma.ge` first can follow a cross-origin redirect that drops the bearer `Authorization` header and causes HTTP 401.
+
 ## Threat review
 
 - **Credential theft:** tokens are shown once, stored hashed, scoped narrowly, and immediately revocable in Admin.
@@ -56,5 +60,4 @@ The token is never accepted by browser admin routes and is never a Supabase sess
 
 ## Windows worker
 
-See `tools/hooma-catalog-agent/README.md`. The worker uses a dedicated persistent Chrome profile and polls Hooma for assigned work. It can run interactively first, then be installed as a Windows startup task or service after the end-to-end test is accepted.
-
+See `tools/hooma-catalog-agent/README.md`. The worker uses a dedicated persistent Chrome profile and polls Hooma for assigned work. It can run interactively first, then be installed as a Windows startup task or service after the end-to-end test is accepted. See `tools/hooma-catalog-clipper/README.md` for the separate MakerWorld Assisted Mode.

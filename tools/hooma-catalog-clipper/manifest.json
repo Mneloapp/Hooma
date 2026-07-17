@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Hooma Catalog Clipper",
-  "version": "1.6.0",
-  "description": "Reads the product page currently open by the operator and prepares a reviewed Hooma product draft.",
-  "permissions": ["activeTab", "scripting", "downloads"],
+  "version": "1.7.0",
+  "description": "Reads operator-opened product pages and can send reviewed MakerWorld results to a Hooma assisted job.",
+  "permissions": ["activeTab", "scripting", "downloads", "storage"],
+  "host_permissions": ["https://www.hooma.ge/*"],
   "action": {
     "default_title": "Hooma Catalog Clipper",
     "default_popup": "popup.html"
