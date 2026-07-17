@@ -117,6 +117,28 @@ export async function setProductPublicationAction(_state: PublicationState, form
   const context = await catalogAdminContext(formData);
   if ("error" in context) return { ok: false, message: context.error };
   const publish = formData.get("publish") === "true";
+  const confirmPublicationReview = formData.get("confirm_publication_review") === "true";
+  if (publish && confirmPublicationReview) {
+    const { error: reviewError } = await context.admin.rpc("confirm_and_publish_catalog_product", {
+      requested_product_id: context.productId,
+      actor_profile_id: context.profile.id,
+      confirmed_publication_authority: true,
+    });
+    if (reviewError) {
+      const message = reviewError.message.includes("schema cache") || reviewError.message.includes("confirm_and_publish_catalog_product")
+        ? "ჯერ გაუშვი Catalog publication confirmation migration."
+        : reviewError.message.includes("explicit confirmation")
+          ? "გამოქვეყნებამდე მონიშნე Admin-ის დადასტურება."
+          : reviewError.message.includes("rejected")
+            ? "უარყოფილი წყაროს publication confirmation-ით გამოქვეყნება შეუძლებელია."
+            : reviewError.message.includes("priced technical variant") || reviewError.message.includes("priced variant")
+              ? "პროდუქტს ფასი და შევსებული ტექნიკური მონაცემები სჭირდება."
+          : "Admin-ის publication confirmation ვერ შეინახა.";
+      return { ok: false, message };
+    }
+    refreshCatalog(context.productId);
+    return { ok: true, message: "დადასტურება შენახულია და პროდუქტი გამოქვეყნებულია." };
+  }
   const { error } = await context.admin.rpc("set_catalog_publication", {
     requested_product_id: context.productId,
     requested_publish: publish,
@@ -124,7 +146,7 @@ export async function setProductPublicationAction(_state: PublicationState, form
   });
   if (error) {
     const message = error.message.includes("commercial and media rights")
-        ? "პროდუქტი საჯაროდ გამოსაქვეყნებლად ჯერ მზად არ არის."
+        ? "მონიშნე Admin publication confirmation და სცადე თავიდან."
         : error.message.includes("priced technical variant") || error.message.includes("priced variant")
           ? "პროდუქტს ფასი და შევსებული ტექნიკური მონაცემები სჭირდება."
           : "გამოქვეყნების გადაწყვეტილება ვერ შესრულდა.";

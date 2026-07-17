@@ -13,6 +13,8 @@ Catalog Agent accepts a whole public catalog category, discovers its product pag
 7. Complete results become `products.status = draft` and `production_status = test_required`. Incomplete results become `source_imports.status = needs_review`.
 8. Existing Owner/Admin publication gates remain authoritative. The agent has no publish, edit, archive, delete, pricing, team, order, or production permissions.
 
+For an Agent-created Draft whose external source has not previously been reviewed, the product page shows one Admin publication confirmation instead of a separate license form. An Admin/Owner must inspect the source reference, product data and media, explicitly confirm publication authority, and submit the form. The review is stored with the source snapshot and actor in `catalog_publication_reviews` plus `audit_log`; only then does the existing publication function run.
+
 MakerWorld also supports a human-assisted path in the ordinary Chrome Clipper. The operator completes any verification, explicitly captures only the visible category links, explicitly opens one claimed product, reviews its extracted fields and sends the Draft. It uses the same protected job API and server-side validation, but performs no automatic scrolling, unattended navigation, CAPTCHA solving, stealth/fingerprint changes, or access-control bypass. Use a separate agent identity/token for this mode so the background Windows worker cannot claim the same job.
 
 ## Database
