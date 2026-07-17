@@ -1,6 +1,5 @@
 import "server-only";
 
-import { products } from "@/data/products";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type DailyDeal = {
@@ -29,38 +28,16 @@ export function getTbilisiDate(date = new Date()) {
   }).format(date);
 }
 
-function previewDeals(date: string): DailyDeal[] {
-  return products
-    .filter((product) => product.categorySlug !== "custom-parts")
-    .slice(0, 100)
-    .map((product) => {
-      const variant = product.variants[0];
-      return {
-        dealDate: date,
-        productId: product.id,
-        variantId: variant.id,
-        slug: product.slug,
-        name: product.nameKa,
-        nameEn: product.hoomaName,
-        description: product.shortDescriptionKa,
-        descriptionEn: product.shortDescription,
-        image: variant.image,
-        sku: variant.sku,
-        sizeLabel: variant.sizeLabel,
-        originalPrice: variant.price,
-        dealPrice: variant.price === null ? null : Math.round(variant.price * 50) / 100,
-        preview: true,
-      };
-    });
-}
-
 export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[]; isPreview: boolean }> {
   const date = getTbilisiDate();
   const admin = createAdminClient() as any;
-  if (!admin) return { date, deals: previewDeals(date), isPreview: true };
+  if (!admin) return { date, deals: [], isPreview: true };
 
   const { error: activationError } = await admin.rpc("activate_daily_deals", { target_date: date });
-  if (activationError) return { date, deals: previewDeals(date), isPreview: true };
+  if (activationError) {
+    console.error("[daily-deals] Failed to activate today\'s deals.", activationError.message);
+    return { date, deals: [], isPreview: true };
+  }
 
   const { data, error } = await admin
     .from("daily_deal_items")
@@ -87,7 +64,11 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
     .eq("deal_date", date)
     .order("position", { ascending: true });
 
-  if (error || !data?.length) return { date, deals: previewDeals(date), isPreview: true };
+  if (error) {
+    console.error("[daily-deals] Failed to load today\'s deals.", error.message);
+    return { date, deals: [], isPreview: true };
+  }
+  if (!data?.length) return { date, deals: [], isPreview: false };
 
   const deals = data.map((row: any) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;

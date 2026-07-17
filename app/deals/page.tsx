@@ -29,12 +29,12 @@ export default async function DailyDealsPage() {
       <div className="mx-auto max-w-[1480px] px-4 py-8 sm:px-6 lg:px-8">
         {isPreview ? (
           <div className="mb-6 rounded-2xl border border-amber-300/50 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
-            <LocalizedText ka="დემო-კატალოგში ჯერ არ გვაქვს 100 აქტიური, წარმოებისთვის დამტკიცებული და ფასიანი პროდუქტი. ქვემოთ ჩანს არსებული კატალოგის ნიმუშები; −50%-იანი რიცხვითი ფასი მხოლოდ ფასის დამტკიცების შემდეგ გამოჩნდება." en="The demo catalog does not yet contain 100 active, production-approved, priced products. Existing samples appear below; the numeric 50%-off price appears after price approval." />
+            <LocalizedText ka="დღის შეთავაზებების რეალური კატალოგი ამჟამად მიუწვდომელია. გვერდი ავტომატურად განახლდება კავშირის აღდგენის შემდეგ." en="The live daily-deals catalog is currently unavailable. This page will update automatically after the connection is restored." />
           </div>
         ) : null}
 
         <div className="mb-5 flex items-end justify-between gap-4">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent"><LocalizedText ka="დღეს ხელმისაწვდომია" en="Available today" /></p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={isPreview ? `${deals.length} დემო პროდუქტი` : `${deals.length} პროდუქტი`} en={isPreview ? `${deals.length} demo products` : `${deals.length} products`} /></h2></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent"><LocalizedText ka="დღეს ხელმისაწვდომია" en="Available today" /></p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={`${deals.length} პროდუქტი`} en={`${deals.length} products`} /></h2></div>
           <p className="text-right text-xs leading-5 text-hooma-muted"><LocalizedText ka={<>შეთავაზება მოქმედებს მხოლოდ<br />მიმდინარე დღის დასრულებამდე</>} en={<>Offer valid only until<br />the end of today</>} /></p>
         </div>
 
