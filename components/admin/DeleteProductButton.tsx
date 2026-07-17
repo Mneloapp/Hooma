@@ -1,20 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState, useState } from "react";
 import { LoaderCircle, Trash2, X } from "lucide-react";
 import { deleteProductDraftAction } from "@/app/admin/products/actions";
 
 export function DeleteProductButton({ productId, productName }: { productId: string; productName: string }) {
   const [confirming, setConfirming] = useState(false);
   const [state, action, pending] = useActionState(deleteProductDraftAction, {});
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!state.ok) return;
-    router.push("/admin/products");
-    router.refresh();
-  }, [router, state.ok]);
 
   if (!confirming) {
     return <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-700"><Trash2 size={16} />Draft-ის წაშლა</button>;
