@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
+import { getTbilisiDate } from "@/lib/daily-deals";
 
 export type MaterialCostProfileResult = {
   id: string;
@@ -31,7 +32,6 @@ export type PricingProfileResult = {
 export type SettingsActionResult<T> = { ok: true; message: string; data: T } | { ok: false; message: string };
 type RecalculationResult = { recalculated_variant_count?: number | string; affected_product_count?: number | string };
 type SavedSettingsPayload<T> = { profile?: T; recalculation?: RecalculationResult };
-type SavedDailyDealPayload<T> = { profile?: T; updated_current_deal_count?: number | string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const numberInRange = (formData: FormData, key: string, min: number, max: number) => {
@@ -149,26 +149,37 @@ export async function saveDailyDealDiscountAction(formData: FormData): Promise<S
 
   try {
     const discountPercent = numberInRange(formData, "daily_deal_discount_percent", 1, 99.99);
-    const { data, error } = await admin.rpc("save_daily_deal_discount_percent", {
-      requested_profile_id: id,
-      requested_discount_percent: discountPercent,
-      actor_profile_id: profile.id,
-    });
-    if (error) {
-      if (error.message?.includes("save_daily_deal_discount_percent") || error.message?.includes("schema cache")) {
-        return { ok: false, message: "გაუშვი ბოლო Supabase migration და სცადე თავიდან." };
-      }
+    const { data: saved, error } = await admin
+      .from("pricing_profiles")
+      .update({ daily_deal_discount_percent: discountPercent })
+      .eq("id", id)
+      .eq("is_default", true)
+      .select("*")
+      .maybeSingle();
+    if (error || !saved?.id) {
+      console.error("[admin-settings] Failed to save daily deal discount.", error?.message);
       return { ok: false, message: "დღის შეთავაზების ფასდაკლება ვერ განახლდა. სცადე თავიდან." };
     }
-    const payload = (Array.isArray(data) ? data[0] : data) as SavedDailyDealPayload<PricingProfileResult> | null;
-    const saved = payload?.profile ?? null;
-    if (!saved?.id) return { ok: false, message: "შენახული დღის შეთავაზების პარამეტრი ვერ დაბრუნდა." };
-    const updatedDeals = Number(payload?.updated_current_deal_count ?? 0);
+
+    const dealDate = getTbilisiDate();
+    const { data: updatedDealCount, error: activationError } = await admin.rpc("activate_daily_deals", { target_date: dealDate });
+    if (activationError) {
+      console.error("[admin-settings] Discount saved but today's deals could not be refreshed.", activationError.message);
+      return { ok: false, message: `${discountPercent}% შენახულია, მაგრამ დღევანდელი შეთავაზებების განახლება ვერ დასრულდა. გახსენი დღის შეთავაზებები და სცადე ხელახლა.` };
+    }
+
+    await admin.from("audit_log").insert({
+      actor_id: profile.id,
+      action: "daily_deal_discount_updated",
+      entity_type: "pricing_profile",
+      entity_id: saved.id,
+      metadata: { daily_deal_discount_percent: discountPercent, updated_current_deal_count: Number(updatedDealCount ?? 0), save_mode: "server_action" },
+    });
     revalidatePath("/admin/settings");
     revalidatePath("/");
     revalidatePath("/deals");
     revalidatePath("/deals/[slug]", "page");
-    return { ok: true, message: `${saved.daily_deal_discount_percent}% ფასდაკლება შენახულია; განახლდა დღევანდელი ${updatedDeals} შეთავაზება.`, data: saved };
+    return { ok: true, message: `${saved.daily_deal_discount_percent}% ფასდაკლება შენახულია; განახლდა დღევანდელი ${Number(updatedDealCount ?? 0)} შეთავაზება.`, data: saved as PricingProfileResult };
   } catch {
     return { ok: false, message: "ფასდაკლება უნდა იყოს 1%-დან 99.99%-მდე." };
   }
