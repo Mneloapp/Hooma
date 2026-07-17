@@ -37,10 +37,15 @@ export default async function AdminProductDetail({ params }: { params: Promise<{
   if (!product) notFound();
   const category = Array.isArray(product.categories) ? product.categories[0] : product.categories;
   const variant = product.product_variants?.[0];
-  const source = product.product_sources?.[0];
+  const sources = Array.isArray(product.product_sources) ? product.product_sources : product.product_sources ? [product.product_sources] : [];
+  const source = sources[0];
   const cost = costResult.data as any;
   const image = typeof product.hero_image === "string" && product.hero_image.startsWith("https://") ? product.hero_image.replace(/["\\\n\r]/g, "") : null;
-  const publicReady = source?.platform === "hooma" || (source?.license_status === "verified" && source?.commercial_use_allowed && source?.media_use_allowed);
+  const publicReady = sources.some((candidate: any) => candidate?.platform === "hooma" || (
+    ["verified", "not_required"].includes(candidate?.license_status)
+    && candidate?.commercial_use_allowed === true
+    && candidate?.media_use_allowed === true
+  ));
   const video = typeof product.video_url === "string" && product.video_url.startsWith("https://") ? product.video_url.replace(/["\\\n\r]/g, "") : null;
   const imageCount = Array.isArray(product.gallery_images) ? product.gallery_images.length : image ? 1 : 0;
   const galleryImages = Array.from(new Set<string>([

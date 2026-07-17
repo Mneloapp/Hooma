@@ -14,6 +14,16 @@ const PRODUCT_COLORS = [
 ];
 
 const elements = {
+  agentToken: document.querySelector("#agent-token"),
+  saveAgentToken: document.querySelector("#save-agent-token"),
+  resetAssisted: document.querySelector("#reset-assisted"),
+  assistedConnection: document.querySelector("#assisted-connection"),
+  agentJob: document.querySelector("#agent-job"),
+  claimJob: document.querySelector("#claim-job"),
+  captureCategory: document.querySelector("#capture-category"),
+  openNext: document.querySelector("#open-next"),
+  completeJob: document.querySelector("#complete-job"),
+  submitAssisted: document.querySelector("#submit-assisted"),
   extract: document.querySelector("#extract"),
   status: document.querySelector("#status"),
   source: document.querySelector("#source"),
@@ -36,11 +46,87 @@ const elements = {
 };
 
 let draft = null;
+let assisted = { token: "", job: null, item: null };
+const HOOMA_BASE_URL = "https://www.hooma.ge";
+const AGENT_TOKEN_PATTERN = /^hooma_ca_[a-f0-9]{12}_[A-Za-z0-9_-]{48}$/;
 
 const show = (message, type = "") => {
   elements.status.className = type;
   elements.status.textContent = message;
 };
+
+async function persistAssisted() {
+  await chrome.storage.local.set({
+    hoomaAssistedToken: assisted.token,
+    hoomaAssistedJob: assisted.job,
+    hoomaAssistedItem: assisted.item,
+  });
+}
+
+function renderAssistedState() {
+  const configured = AGENT_TOKEN_PATTERN.test(assisted.token);
+  elements.assistedConnection.textContent = configured ? `Token · ${assisted.token.split("_")[2]}••••` : "არ არის დაყენებული";
+  if (assisted.job) {
+    const itemLine = assisted.item ? `\nმიმდინარე პროდუქტი: ${assisted.item.source_title || assisted.item.source_url}` : "";
+    elements.agentJob.textContent = `დავალება: ${assisted.job.category_label}\nლიმიტი: ${assisted.job.max_products}${itemLine}`;
+  } else {
+    elements.agentJob.textContent = "ჯერ აიღე Hooma Admin-ში შექმნილი assisted დავალება.";
+  }
+  elements.claimJob.disabled = !configured || Boolean(assisted.job);
+  elements.captureCategory.disabled = !configured || !assisted.job;
+  elements.openNext.disabled = !configured || !assisted.job;
+  elements.completeJob.disabled = !configured || !assisted.job || Boolean(assisted.item);
+  elements.submitAssisted.disabled = !configured || !assisted.job || !assisted.item || !draft;
+}
+
+async function agentApi(pathname, body = {}) {
+  if (!AGENT_TOKEN_PATTERN.test(assisted.token)) throw new Error("ჯერ შეინახე assisted Agent-ის სწორი token.");
+  const response = await fetch(`${HOOMA_BASE_URL}${pathname}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${assisted.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) throw new Error(result.message || `Hooma API returned HTTP ${response.status}`);
+  return result;
+}
+
+async function activeHttpTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https?:\/\//i.test(tab.url ?? "")) throw new Error("გახსენი ჩვეულებრივი HTTP/HTTPS გვერდი.");
+  return tab;
+}
+
+function normalizedCatalogUrl(value) {
+  const url = new URL(value);
+  url.hash = "";
+  ["from", "ref", "source", "spm_id_from"].forEach((key) => url.searchParams.delete(key));
+  Array.from(url.searchParams.keys()).forEach((key) => {
+    if (key.toLowerCase().startsWith("utm_")) url.searchParams.delete(key);
+  });
+  return url.toString();
+}
+
+async function pageRequestsVerification(tabId) {
+  const result = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const snapshot = `${document.title} ${document.body?.innerText || ""}`.slice(0, 20_000);
+      return /performing security verification|verify you are (?:a )?human|verify you are not a bot|checking your browser|captcha|access denied|unusual traffic|robot verification/i.test(snapshot);
+    },
+  });
+  return Boolean(result?.[0]?.result);
+}
+
+async function loadAssistedState() {
+  const stored = await chrome.storage.local.get(["hoomaAssistedToken", "hoomaAssistedJob", "hoomaAssistedItem"]);
+  assisted = {
+    token: typeof stored.hoomaAssistedToken === "string" ? stored.hoomaAssistedToken.trim() : "",
+    job: stored.hoomaAssistedJob && typeof stored.hoomaAssistedJob === "object" ? stored.hoomaAssistedJob : null,
+    item: stored.hoomaAssistedItem && typeof stored.hoomaAssistedItem === "object" ? stored.hoomaAssistedItem : null,
+  };
+  renderAssistedState();
+}
 const numeric = (element) => element.value === "" ? null : Number(element.value);
 const selectedImages = () => Array.from(elements.images.querySelectorAll('input[type="checkbox"]:checked')).map((item) => item.value).slice(0, 12);
 const selectedColors = () => Array.from(elements.colors.querySelectorAll('input[type="checkbox"]:checked')).map((item) => item.value);
@@ -179,6 +265,7 @@ function render(data) {
   });
   elements.form.hidden = false;
   updateImageCount();
+  renderAssistedState();
 }
 
 renderColorOptions();
@@ -188,8 +275,13 @@ elements.extract.addEventListener("click", async () => {
   elements.extract.disabled = true;
   show("გვერდის საჯარო მონაცემები იკითხება...");
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !/^https?:\/\//i.test(tab.url ?? "")) throw new Error("გახსენი პროდუქტის ჩვეულებრივი HTTP/HTTPS გვერდი.");
+    const tab = await activeHttpTab();
+    if (await pageRequestsVerification(tab.id)) {
+      throw new Error("ჯერ დაასრულე გვერდზე human verification, დაელოდე პროდუქტის სრულად გახსნას და შემდეგ სცადე თავიდან.");
+    }
+    if (assisted.item && normalizedCatalogUrl(tab.url) !== normalizedCatalogUrl(assisted.item.source_url)) {
+      throw new Error("გახსნილი გვერდი რიგიდან აღებულ პროდუქტს არ ემთხვევა. დააჭირე „შემდეგი პროდუქტის გახსნა“.");
+    }
     const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["extractor.js"] });
     const data = results?.[0]?.result;
     if (!data?.product || data.schema !== "hooma-catalog-clipper-v1") throw new Error("გვერდიდან პროდუქტის მონაცემები ვერ მომზადდა.");
@@ -199,6 +291,191 @@ elements.extract.addEventListener("click", async () => {
     show(error instanceof Error ? error.message : "გვერდი ვერ წავიკითხე. განაახლე და სცადე თავიდან.", "error");
   } finally {
     elements.extract.disabled = false;
+  }
+});
+
+elements.saveAgentToken.addEventListener("click", async () => {
+  const token = elements.agentToken.value.trim();
+  if (!AGENT_TOKEN_PATTERN.test(token)) {
+    show("ტოკენი არასწორია. ჩასვი Admin → Catalog Agent-ში რეგისტრირებული ცალკე Assisted Agent-ის სრული token.", "error");
+    return;
+  }
+  assisted.token = token;
+  assisted.job = null;
+  assisted.item = null;
+  draft = null;
+  elements.form.hidden = true;
+  elements.agentToken.value = "";
+  elements.agentToken.placeholder = "ტოკენი შენახულია";
+  await persistAssisted();
+  renderAssistedState();
+  show("Assisted Agent-ის ტოკენი ლოკალურად შეინახა ამ Chrome პროფილმა.", "ok");
+});
+
+elements.resetAssisted.addEventListener("click", async () => {
+  assisted.job = null;
+  assisted.item = null;
+  draft = null;
+  elements.form.hidden = true;
+  await persistAssisted();
+  renderAssistedState();
+  show("Assisted სესია გასუფთავდა. შენახული Agent token დარჩა აქტიური.", "ok");
+});
+
+elements.claimJob.addEventListener("click", async () => {
+  elements.claimJob.disabled = true;
+  show("Hooma Admin-იდან assisted დავალება იძებნება...");
+  try {
+    const result = await agentApi("/api/catalog-agent/jobs/claim", { workerName: "Hooma MakerWorld Assisted · Chrome" });
+    if (!result.job) {
+      show("ამ Assisted Agent-ზე რიგში დავალება არ არის. შექმენი Admin → Catalog Agent-ში და ისევ სცადე.", "error");
+      return;
+    }
+    assisted.job = result.job;
+    assisted.item = null;
+    draft = null;
+    elements.form.hidden = true;
+    await persistAssisted();
+    renderAssistedState();
+    show(`დავალება აღებულია: ${result.job.category_label}. ახლა გახსენი კატეგორიის გვერდი და დაამატე ხილული პროდუქტები რიგში.`, "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "დავალება ვერ აიღო.", "error");
+  } finally {
+    renderAssistedState();
+  }
+});
+
+elements.captureCategory.addEventListener("click", async () => {
+  elements.captureCategory.disabled = true;
+  show("გახსნილ გვერდზე ხილული პროდუქტების ბმულები იკრიბება...");
+  try {
+    if (!assisted.job) throw new Error("ჯერ აიღე assisted დავალება.");
+    const tab = await activeHttpTab();
+    if (await pageRequestsVerification(tab.id)) {
+      throw new Error("ჯერ დაასრულე human verification და დაელოდე კატეგორიის პროდუქტების გამოჩენას.");
+    }
+    const expectedHost = new URL(assisted.job.source_url).hostname.toLowerCase();
+    const activeHost = new URL(tab.url).hostname.toLowerCase();
+    if (activeHost !== expectedHost && !activeHost.endsWith(`.${expectedHost}`) && !expectedHost.endsWith(`.${activeHost}`)) {
+      throw new Error(`გახსენი დავალების წყაროს გვერდი: ${expectedHost}`);
+    }
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (host) => {
+        const acceptedHost = (candidate) => candidate === host || candidate.endsWith(`.${host}`) || host.endsWith(`.${candidate}`);
+        const discovered = new Map();
+        for (const link of document.querySelectorAll('a[href*="/models/"]')) {
+          try {
+            const rect = link.getBoundingClientRect();
+            const style = getComputedStyle(link);
+            if (
+              style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0
+              || rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= innerHeight
+              || rect.right <= 0 || rect.left >= innerWidth
+            ) continue;
+            const url = new URL(link.href, location.href);
+            if (url.protocol !== "https:" || !acceptedHost(url.hostname.toLowerCase())) continue;
+            const modelId = url.pathname.match(/\/models\/(\d+)/i)?.[1] ?? null;
+            if (!modelId) continue;
+            url.hash = "";
+            for (const key of ["from", "ref", "source", "spm_id_from"]) url.searchParams.delete(key);
+            for (const key of Array.from(url.searchParams.keys())) {
+              if (key.toLowerCase().startsWith("utm_")) url.searchParams.delete(key);
+            }
+            const sourceUrl = url.toString();
+            const sourceTitle = (link.getAttribute("title") || link.getAttribute("aria-label") || link.textContent || "")
+              .replace(/\s+/g, " ").trim().slice(0, 240) || null;
+            if (!discovered.has(sourceUrl)) discovered.set(sourceUrl, { sourceUrl, sourceTitle, sourceModelId: modelId });
+          } catch { /* Ignore malformed or off-site links. */ }
+        }
+        return Array.from(discovered.values()).slice(0, 100);
+      },
+      args: [expectedHost],
+    });
+    const items = results?.[0]?.result ?? [];
+    if (!items.length) throw new Error("ამ ეკრანზე პროდუქტის ბმულები ვერ ვიპოვე. დარწმუნდი, რომ კატეგორიის პროდუქტები ჩანს.");
+    const result = await agentApi(`/api/catalog-agent/jobs/${assisted.job.id}/discover`, {
+      items,
+      cursor: { mode: "human_assisted", capturedAt: new Date().toISOString(), pageUrl: tab.url },
+    });
+    const suffix = result.limitReached ? " დავალების ლიმიტიც შევსებულია." : " თუ ქვემოთ კიდევ პროდუქტებია, თავად ჩამოსქროლე და ღილაკს ხელახლა დააჭირე.";
+    show(`${result.accepted} ხილული პროდუქტი დაემატა რიგში.${suffix}`, "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "პროდუქტების ბმულები ვერ დაემატა.", "error");
+  } finally {
+    renderAssistedState();
+  }
+});
+
+elements.openNext.addEventListener("click", async () => {
+  elements.openNext.disabled = true;
+  show("შემდეგი პროდუქტი მზადდება გასახსნელად...");
+  try {
+    if (!assisted.job) throw new Error("ჯერ აიღე assisted დავალება.");
+    if (!assisted.item) {
+      const result = await agentApi(`/api/catalog-agent/jobs/${assisted.job.id}/items/claim`);
+      if (!result.item) {
+        show("რიგში დაუმუშავებელი პროდუქტი აღარ არის. საჭიროების შემთხვევაში დაამატე კიდევ ხილული ბმულები ან დაასრულე დავალება.", "ok");
+        return;
+      }
+      assisted.item = result.item;
+      draft = null;
+      elements.form.hidden = true;
+      await persistAssisted();
+    }
+    const tab = await activeHttpTab();
+    await chrome.tabs.update(tab.id, { url: assisted.item.source_url });
+  } catch (error) {
+    show(error instanceof Error ? error.message : "პროდუქტის გვერდი ვერ გაიხსნა.", "error");
+    renderAssistedState();
+  }
+});
+
+elements.submitAssisted.addEventListener("click", async () => {
+  elements.submitAssisted.disabled = true;
+  show("Draft იგზავნება Hooma-ში...");
+  try {
+    if (!assisted.job || !assisted.item) throw new Error("ამ გვერდისთვის რიგიდან პროდუქტი ჯერ არ აგიღია.");
+    const data = syncDraft();
+    if (!data) return;
+    const result = await agentApi(`/api/catalog-agent/jobs/${assisted.job.id}/items/${assisted.item.id}/draft`, { payload: data });
+    const statusMessages = {
+      draft_created: "პროდუქტის Draft შეიქმნა Hooma-ში.",
+      needs_review: `მონაცემები შენახულია გადასახედად${Array.isArray(result.missing) && result.missing.length ? `: ${result.missing.join(", ")}` : "."}`,
+      duplicate: "ეს პროდუქტი Hooma-ში უკვე არსებობდა და დუბლიკატი აღარ შექმნილა.",
+    };
+    const message = statusMessages[result.status] || `პროდუქტი დამუშავდა: ${result.status}.`;
+    assisted.item = null;
+    draft = null;
+    elements.form.hidden = true;
+    await persistAssisted();
+    renderAssistedState();
+    show(`${message} შემდეგი პროდუქტის გასახსნელად დააჭირე შესაბამის ღილაკს.`, "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "Draft ვერ გაიგზავნა Hooma-ში.", "error");
+  } finally {
+    renderAssistedState();
+  }
+});
+
+elements.completeJob.addEventListener("click", async () => {
+  elements.completeJob.disabled = true;
+  show("დავალება სრულდება...");
+  try {
+    if (!assisted.job) throw new Error("აქტიური დავალება არ არის.");
+    const result = await agentApi(`/api/catalog-agent/jobs/${assisted.job.id}/complete`, { status: "completed" });
+    const counters = result.counters ?? {};
+    assisted.job = null;
+    assisted.item = null;
+    draft = null;
+    elements.form.hidden = true;
+    await persistAssisted();
+    renderAssistedState();
+    show(`დავალება დასრულდა. Draft: ${Number(counters.draft_count ?? 0)}, გადასახედი: ${Number(counters.review_count ?? 0)}, დუბლიკატი: ${Number(counters.duplicate_count ?? 0)}.`, "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "დავალება ვერ დასრულდა.", "error");
+  } finally {
+    renderAssistedState();
   }
 });
 
@@ -252,4 +529,10 @@ elements.downloadPackage.addEventListener("click", async () => {
       : `სრული პაკეტი ჩამოიტვირთა: JSON და ${images.length} ფოტო${directVideo ? ", ვიდეო" : ""}.`,
     failures ? "" : "ok",
   );
+});
+
+loadAssistedState().catch(() => {
+  assisted = { token: "", job: null, item: null };
+  renderAssistedState();
+  show("Assisted Mode-ის ლოკალური მდგომარეობა ვერ წავიკითხე. თავიდან შეინახე token.", "error");
 });
