@@ -1,12 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 
 export type DeleteProductState = { ok?: boolean; message?: string };
 export type BulkDeleteProductState = { ok?: boolean; message?: string; deletedCount?: number };
-export type PublicationState = { ok?: boolean; message?: string };
+export type PublicationState = {
+  ok?: boolean;
+  message?: string;
+  completedPublication?: boolean;
+  nextDraftId?: string | null;
+};
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function deleteError(message: string) {
@@ -91,7 +97,13 @@ export async function deleteProductDraftAction(_state: DeleteProductState, formD
   const productId = String(formData.get("product_id") ?? "");
   if (!uuidPattern.test(productId)) return { ok: false, message: "პროდუქტის ID არასწორია." };
   const result = await deleteCatalogProducts([productId]);
-  return { ok: result.ok, message: result.message };
+  if (!result.ok) return { ok: false, message: result.message };
+
+  const admin = createAdminClient() as any;
+  const { data: nextDraft } = admin
+    ? await admin.from("products").select("id").eq("status", "draft").order("created_at", { ascending: true }).limit(1).maybeSingle()
+    : { data: null };
+  redirect(nextDraft?.id ? `/admin/products/${nextDraft.id}` : "/admin/products");
 }
 
 async function catalogAdminContext(formData: FormData) {
@@ -111,6 +123,18 @@ function refreshCatalog(productId: string) {
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
+}
+
+async function findNextDraftId(admin: any, currentProductId: string) {
+  const { data } = await admin
+    .from("products")
+    .select("id")
+    .eq("status", "draft")
+    .neq("id", currentProductId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return typeof data?.id === "string" ? data.id : null;
 }
 
 export async function setProductPublicationAction(_state: PublicationState, formData: FormData): Promise<PublicationState> {
@@ -137,7 +161,12 @@ export async function setProductPublicationAction(_state: PublicationState, form
       return { ok: false, message };
     }
     refreshCatalog(context.productId);
-    return { ok: true, message: "დადასტურება შენახულია და პროდუქტი გამოქვეყნებულია." };
+    return {
+      ok: true,
+      message: "დადასტურება შენახულია და პროდუქტი გამოქვეყნებულია.",
+      completedPublication: true,
+      nextDraftId: await findNextDraftId(context.admin, context.productId),
+    };
   }
   const { error } = await context.admin.rpc("set_catalog_publication", {
     requested_product_id: context.productId,
@@ -153,5 +182,12 @@ export async function setProductPublicationAction(_state: PublicationState, form
     return { ok: false, message };
   }
   refreshCatalog(context.productId);
-  return { ok: true, message: publish ? "პროდუქტი გამოქვეყნებულია." : "პროდუქტი საჯარო კატალოგიდან მოიხსნა." };
+  return publish
+    ? {
+        ok: true,
+        message: "პროდუქტი გამოქვეყნებულია.",
+        completedPublication: true,
+        nextDraftId: await findNextDraftId(context.admin, context.productId),
+      }
+    : { ok: true, message: "პროდუქტი საჯარო კატალოგიდან მოიხსნა." };
 }
