@@ -1,6 +1,31 @@
 import "server-only";
 
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+const DEFAULT_DAILY_DEAL_DISCOUNT_PERCENT = 50;
+
+function validDiscountPercent(value: unknown) {
+  const discount = Number(value);
+  return Number.isFinite(discount) && discount >= 1 && discount < 100
+    ? discount
+    : DEFAULT_DAILY_DEAL_DISCOUNT_PERCENT;
+}
+
+export const getDailyDealDiscountPercent = cache(async () => {
+  const admin = createAdminClient() as any;
+  if (!admin) return DEFAULT_DAILY_DEAL_DISCOUNT_PERCENT;
+  const { data, error } = await admin
+    .from("pricing_profiles")
+    .select("daily_deal_discount_percent")
+    .eq("is_default", true)
+    .maybeSingle();
+  if (error) {
+    console.error("[daily-deals] Failed to load the configured discount percent.", error.message);
+    return DEFAULT_DAILY_DEAL_DISCOUNT_PERCENT;
+  }
+  return validDiscountPercent(data?.daily_deal_discount_percent);
+});
 
 export type DailyDeal = {
   dealDate: string;
@@ -16,6 +41,7 @@ export type DailyDeal = {
   sizeLabel: string;
   originalPrice: number | null;
   dealPrice: number | null;
+  discountPercent: number;
   preview: boolean;
 };
 
@@ -28,15 +54,16 @@ export function getTbilisiDate(date = new Date()) {
   }).format(date);
 }
 
-export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[]; isPreview: boolean }> {
+export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[]; isPreview: boolean; discountPercent: number }> {
   const date = getTbilisiDate();
+  const discountPercent = await getDailyDealDiscountPercent();
   const admin = createAdminClient() as any;
-  if (!admin) return { date, deals: [], isPreview: true };
+  if (!admin) return { date, deals: [], isPreview: true, discountPercent };
 
   const { error: activationError } = await admin.rpc("activate_daily_deals", { target_date: date });
   if (activationError) {
-    console.error("[daily-deals] Failed to activate today\'s deals.", activationError.message);
-    return { date, deals: [], isPreview: true };
+    console.error("[daily-deals] Failed to activate today's deals.", activationError.message);
+    return { date, deals: [], isPreview: true, discountPercent };
   }
 
   const { data, error } = await admin
@@ -47,6 +74,7 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
       variant_id,
       original_price,
       deal_price,
+      discount_percent,
       products!daily_deal_items_product_id_fkey (
         slug,
         hooma_name,
@@ -65,10 +93,10 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
     .order("position", { ascending: true });
 
   if (error) {
-    console.error("[daily-deals] Failed to load today\'s deals.", error.message);
-    return { date, deals: [], isPreview: true };
+    console.error("[daily-deals] Failed to load today's deals.", error.message);
+    return { date, deals: [], isPreview: true, discountPercent };
   }
-  if (!data?.length) return { date, deals: [], isPreview: false };
+  if (!data?.length) return { date, deals: [], isPreview: false, discountPercent };
 
   const deals = data.map((row: any) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
@@ -87,9 +115,10 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
       sizeLabel: variant.size_label || "Standard",
       originalPrice: Number(row.original_price),
       dealPrice: Number(row.deal_price),
+      discountPercent: validDiscountPercent(row.discount_percent),
       preview: false,
     } satisfies DailyDeal;
   });
 
-  return { date, deals, isPreview: false };
+  return { date, deals, isPreview: false, discountPercent: deals[0]?.discountPercent ?? discountPercent };
 }

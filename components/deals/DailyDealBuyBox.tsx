@@ -35,7 +35,7 @@ export function DailyDealBuyBox({ deal }: { deal: DailyDeal }) {
 
   return (
     <aside className="rounded-2xl border border-hooma-text/10 bg-white p-5 shadow-sm lg:sticky lg:top-32">
-      <div className="flex items-center gap-2 text-red-600"><BadgePercent size={19} /><span className="text-sm font-bold">{georgian ? "დღის შეთავაზება" : "Daily deal"} · −50%</span></div>
+      <div className="flex items-center gap-2 text-red-600"><BadgePercent size={19} /><span className="text-sm font-bold">{georgian ? "დღის შეთავაზება" : "Daily deal"} · −{deal.discountPercent}%</span></div>
       {purchasable ? (
         <div className="mt-4 flex items-baseline gap-2"><span className="text-3xl font-bold text-red-600">{money.format(deal.dealPrice!)}</span><span className="text-sm text-hooma-muted line-through">{money.format(deal.originalPrice!)}</span></div>
       ) : <p className="mt-4 text-lg font-semibold">{georgian ? "ფასი დამტკიცების შემდეგ" : "Price after approval"}</p>}

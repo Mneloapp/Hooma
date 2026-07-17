@@ -1,6 +1,6 @@
 # Daily deals
 
-`/deals` is a standalone page. At midnight in Tbilisi, a protected Vercel cron asks Supabase to select up to 100 distinct, active, production-approved products with real prices and applies an exact 50% discount for that date.
+`/deals` is a standalone page. At midnight in Tbilisi, a protected Vercel cron asks Supabase to select up to 100 distinct, active, production-approved products with real prices and applies the discount percentage saved in Admin → Settings for that date.
 
 ## Rotation
 
