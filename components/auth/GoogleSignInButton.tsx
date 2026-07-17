@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { googleLoginAction } from "@/app/auth/actions";
 import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/components/LanguageProvider";
 
 type GoogleCredentialResponse = {
   credential?: string;
@@ -57,6 +58,8 @@ export function GoogleSignInButton({
   next: string;
   mode?: "login" | "signup";
 }) {
+  const { language } = useLanguage();
+  const georgian = language === "ka";
   const buttonRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
 
@@ -81,7 +84,7 @@ export function GoogleSignInButton({
           setError("");
           const supabase = createClient();
           if (!supabase || !response.credential) {
-            setError("Google ავტორიზაცია ვერ დასრულდა. სცადე ხელახლა.");
+            setError(georgian ? "Google ავტორიზაცია ვერ დასრულდა. სცადე ხელახლა." : "Google sign-in could not be completed. Please try again.");
             return;
           }
 
@@ -92,7 +95,7 @@ export function GoogleSignInButton({
           });
 
           if (signInError) {
-            setError("Google ავტორიზაცია ვერ დასრულდა. სცადე ხელახლა.");
+            setError(georgian ? "Google ავტორიზაცია ვერ დასრულდა. სცადე ხელახლა." : "Google sign-in could not be completed. Please try again.");
             return;
           }
 
@@ -108,7 +111,7 @@ export function GoogleSignInButton({
         shape: "pill",
         text: mode === "signup" ? "signup_with" : "continue_with",
         logo_alignment: "left",
-        locale: "ka",
+        locale: language,
         width: Math.max(240, Math.min(400, Math.floor(target.clientWidth || 400))),
       });
     };
@@ -134,14 +137,14 @@ export function GoogleSignInButton({
     return () => {
       cancelled = true;
     };
-  }, [mode, next]);
+  }, [georgian, language, mode, next]);
 
   if (!googleClientId) {
     return (
       <form action={googleLoginAction}>
         <input type="hidden" name="next" value={next} />
         <button type="submit" className="flex w-full items-center justify-center gap-3 rounded-full border border-hooma-text/15 bg-white px-5 py-3 text-sm font-semibold transition hover:border-hooma-text/35">
-          <GoogleMark /> {mode === "signup" ? "Google-ით ანგარიშის შექმნა" : "Google-ით გაგრძელება"}
+          <GoogleMark /> {mode === "signup" ? (georgian ? "Google-ით ანგარიშის შექმნა" : "Sign up with Google") : (georgian ? "Google-ით გაგრძელება" : "Continue with Google")}
         </button>
       </form>
     );

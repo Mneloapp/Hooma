@@ -1,10 +1,13 @@
+"use client";
+
 import { ShoppingBag, Star } from "lucide-react";
+import { useLanguage } from "@/components/LanguageProvider";
 
 export function ProductRatingSummary({
   average,
   ratingCount,
   salesCount,
-  language = "ka",
+  language,
   detailed = false,
 }: {
   average: number;
@@ -13,9 +16,11 @@ export function ProductRatingSummary({
   language?: "ka" | "en";
   detailed?: boolean;
 }) {
+  const context = useLanguage();
+  const activeLanguage = language ?? context.language;
   const hasRatings = ratingCount > 0;
-  const ratingLabel = hasRatings ? average.toFixed(1) : language === "ka" ? "ახალი" : "New";
-  const salesLabel = language === "ka" ? `${salesCount} გაყიდვა` : `${salesCount} sold`;
+  const ratingLabel = hasRatings ? average.toFixed(1) : activeLanguage === "ka" ? "ახალი" : "New";
+  const salesLabel = activeLanguage === "ka" ? `${salesCount} გაყიდვა` : `${salesCount} sold`;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-hooma-muted" aria-label={`${ratingLabel}; ${ratingCount} reviews; ${salesLabel}`}>
@@ -29,7 +34,7 @@ export function ProductRatingSummary({
         ) : <Star size={14} className={hasRatings ? "fill-amber-400 text-amber-400" : "text-hooma-text/25"} />}
         {ratingLabel}
       </span>
-      <span>{hasRatings ? `(${ratingCount})` : language === "ka" ? "ჯერ შეფასება არ აქვს" : "No reviews yet"}</span>
+      <span>{hasRatings ? `(${ratingCount})` : activeLanguage === "ka" ? "ჯერ შეფასება არ აქვს" : "No reviews yet"}</span>
       <span className="inline-flex items-center gap-1.5"><ShoppingBag size={13} />{salesLabel}</span>
     </div>
   );

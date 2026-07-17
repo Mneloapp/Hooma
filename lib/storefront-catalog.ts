@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { products as previewProducts, type Product, type ProductCategory, type ProductVariant } from "@/data/products";
+import type { Product, ProductCategory, ProductVariant } from "@/data/products";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 
@@ -98,7 +98,10 @@ function variantColorProfile(value: unknown) {
 
 export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const admin = createAdminClient() as any;
-  if (!admin) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
+  if (!admin) {
+    console.error("[storefront-catalog] Supabase admin client is not configured; returning an empty catalog.");
+    return [];
+  }
 
   const [{ data: productRows, error: productError }, { data: categoryRows, error: categoryError }] = await Promise.all([
     admin
@@ -109,7 +112,14 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       .order("created_at", { ascending: false }),
     admin.from("categories").select("id,parent_id,slug,name_en,name_ka"),
   ]);
-  if (productError || categoryError || !productRows?.length) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
+  if (productError || categoryError) {
+    console.error("[storefront-catalog] Failed to load products or categories.", {
+      productError: productError?.message,
+      categoryError: categoryError?.message,
+    });
+    return [];
+  }
+  if (!productRows?.length) return [];
 
   const productIds = productRows.map((row: any) => row.id);
   const [
@@ -134,7 +144,13 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       .select("product_id,average_rating,rating_count,review_count,sold_quantity,popularity_score")
       .in("product_id", productIds),
   ]);
-  if (variantError || sourceError) return previewProducts.filter((product) => product.categorySlug !== "custom-parts");
+  if (variantError || sourceError) {
+    console.error("[storefront-catalog] Failed to load product variants or sources.", {
+      variantError: variantError?.message,
+      sourceError: sourceError?.message,
+    });
+    return [];
+  }
 
   const categories = new Map(((categoryRows ?? []) as CategoryRow[]).map((row) => [row.id, row]));
   const variantsByProduct = new Map<string, any[]>();
@@ -225,13 +241,12 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
     }];
   });
 
-  return catalog.length ? catalog : previewProducts.filter((product) => product.categorySlug !== "custom-parts");
+  return catalog;
 });
 
 export async function getStorefrontProductBySlug(slug: string) {
   const catalog = await getStorefrontCatalog();
-  return catalog.find((product) => product.slug === slug)
-    ?? previewProducts.find((product) => product.slug === slug);
+  return catalog.find((product) => product.slug === slug);
 }
 
 export async function getAdminPreviewProductById(productId: string): Promise<Product | null> {

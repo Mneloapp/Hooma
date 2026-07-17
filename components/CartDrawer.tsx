@@ -4,9 +4,12 @@ import Image from "next/image";
 import { X } from "lucide-react";
 import { Button } from "./Button";
 import { useCart } from "./CartContext";
+import { useLanguage } from "./LanguageProvider";
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, keyFor } = useCart();
+  const { language } = useLanguage();
+  const georgian = language === "ka";
 
   return (
     <div className={`fixed inset-0 z-50 ${isOpen ? "" : "pointer-events-none"}`}>
@@ -17,13 +20,13 @@ export function CartDrawer() {
         }`}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">კალათა</h2>
+          <h2 className="text-xl font-semibold">{georgian ? "კალათა" : "Cart"}</h2>
           <button aria-label="Close cart" onClick={closeCart} className="rounded-full p-2 hover:bg-hooma-panel">
             <X size={20} />
           </button>
         </div>
         <div className="mt-8 space-y-5">
-          {items.length === 0 ? <p className="text-sm text-hooma-muted">კალათა ცარიელია.</p> : null}
+          {items.length === 0 ? <p className="text-sm text-hooma-muted">{georgian ? "კალათა ცარიელია." : "Your cart is empty."}</p> : null}
           {items.map((item) => (
             <div key={keyFor(item)} className="grid grid-cols-[88px_1fr] gap-4 border-b border-hooma-text/10 pb-5">
               <div className="relative aspect-square overflow-hidden rounded-lg bg-hooma-panel">
@@ -31,7 +34,7 @@ export function CartDrawer() {
               </div>
               <div>
                 <div className="flex justify-between gap-3">
-                  <h3 className="font-medium">{item.name}</h3>
+                  <h3 className="font-medium">{georgian ? item.name : item.product_name}</h3>
                   <span className="text-sm text-hooma-muted">{item.price ?? item.pricePlaceholder}</span>
                 </div>
                 <p className="mt-1 text-xs text-hooma-muted">{item.size_label} / {item.material} / {item.color}</p>
@@ -45,7 +48,7 @@ export function CartDrawer() {
           ))}
         </div>
         <Button href="/checkout" className="mt-8 w-full" onClick={closeCart}>
-          შეკვეთის გაგრძელება
+          {georgian ? "შეკვეთის გაგრძელება" : "Continue to checkout"}
         </Button>
       </aside>
     </div>

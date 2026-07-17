@@ -2,6 +2,7 @@ import { Check, Clock3, Package, Truck } from "lucide-react";
 import Link from "next/link";
 import { OrdersAutoRefresh } from "@/components/account/OrdersAutoRefresh";
 import { createClient } from "@/lib/supabase/server";
+import { LocalizedText } from "@/components/LocalizedText";
 
 export const dynamic = "force-dynamic";
 
@@ -39,13 +40,19 @@ type OrderEvent = {
 };
 
 const stages = [
-  "შეკვეთა მიღებულია",
-  "წარმოება დაწყებულია",
-  "ხარისხის შემოწმება",
-  "მზადაა საკურიეროსთვის",
-  "გზაშია",
-  "მიწოდებულია",
+  ["შეკვეთა მიღებულია", "Order received"],
+  ["წარმოება დაწყებულია", "Production started"],
+  ["ხარისხის შემოწმება", "Quality check"],
+  ["მზადაა საკურიეროსთვის", "Ready for courier"],
+  ["გზაშია", "Out for delivery"],
+  ["მიწოდებულია", "Delivered"],
 ];
+
+const eventLabelsEn: Record<string, string> = {
+  order_received: "Order received", confirmed: "Order confirmed", production_queued: "Queued for production",
+  production_started: "Production started", in_production: "In production", quality_check: "Quality check",
+  ready_for_delivery: "Ready for courier", out_for_delivery: "Out for delivery", delivered: "Delivered", cancelled: "Order cancelled",
+};
 
 const stageByStatus: Record<string, number> = {
   order_received: 0,
@@ -88,11 +95,11 @@ export default async function AccountOrdersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">შეკვეთის ისტორია</p><h1 className="mt-3 text-4xl font-medium">შეკვეთები</h1><p className="mt-3 text-sm text-hooma-muted">აქ ჩანს შეკვეთის მიმდინარე ეტაპი შეკვეთიდან მიწოდებამდე.</p></div>
+        <div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted"><LocalizedText ka="შეკვეთის ისტორია" en="Order history" /></p><h1 className="mt-3 text-4xl font-medium"><LocalizedText ka="შეკვეთები" en="Orders" /></h1><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="აქ ჩანს შეკვეთის მიმდინარე ეტაპი შეკვეთიდან მიწოდებამდე." en="Track every order from confirmation through delivery." /></p></div>
         <OrdersAutoRefresh />
       </div>
 
-      {orderError ? <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">შეკვეთების ჩატვირთვა ვერ მოხერხდა. სცადე გვერდის განახლება.</p> : null}
+      {orderError ? <p className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900"><LocalizedText ka="შეკვეთების ჩატვირთვა ვერ მოხერხდა. სცადე გვერდის განახლება." en="Orders could not be loaded. Refresh the page and try again." /></p> : null}
 
       {orders.map((order) => {
         const currentStage = stageByStatus[order.fulfillment_status] ?? 0;
@@ -102,20 +109,20 @@ export default async function AccountOrdersPage() {
         return (
           <article key={order.id} className="overflow-hidden rounded-[2rem] border border-hooma-text/10 bg-white/75 shadow-soft">
             <div className="flex flex-col justify-between gap-4 border-b border-hooma-text/10 p-5 sm:flex-row sm:items-start lg:p-6">
-              <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold">{cancelled ? "შეკვეთა გაუქმებულია" : stages[currentStage]}</h2><p className="mt-2 text-xs text-hooma-muted">შეკვეთა: {dateFormat.format(new Date(order.created_at))}</p></div>
-              <div className="text-left sm:text-right"><p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p><p className="mt-1 text-xs text-hooma-muted">{order.test_mode ? "სატესტო შეკვეთა — თანხა არ ჩამოგეჭრება" : order.payment_status === "paid" ? "გადახდილია" : "გადახდას ელოდება"}</p></div>
+              <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={cancelled ? "შეკვეთა გაუქმებულია" : stages[currentStage][0]} en={cancelled ? "Order cancelled" : stages[currentStage][1]} /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
+              <div className="text-left sm:text-right"><p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p><p className="mt-1 text-xs text-hooma-muted"><LocalizedText ka={order.test_mode ? "სატესტო შეკვეთა — თანხა არ ჩამოგეჭრება" : order.payment_status === "paid" ? "გადახდილია" : "გადახდას ელოდება"} en={order.test_mode ? "Test order — you will not be charged" : order.payment_status === "paid" ? "Paid" : "Awaiting payment"} /></p></div>
             </div>
 
             {!cancelled ? (
               <div className="border-b border-hooma-text/10 bg-hooma-background/65 p-5 lg:p-6">
                 <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
-                  {stages.map((stage, index) => {
+                  {stages.map(([stageKa, stageEn], index) => {
                     const reached = index <= currentStage;
                     const current = index === currentStage;
                     return (
-                      <div key={stage} className={`rounded-2xl border p-3 ${current ? "border-hooma-accent bg-white shadow-sm" : reached ? "border-emerald-200 bg-emerald-50" : "border-hooma-text/10 bg-white/55"}`}>
+                      <div key={stageEn} className={`rounded-2xl border p-3 ${current ? "border-hooma-accent bg-white shadow-sm" : reached ? "border-emerald-200 bg-emerald-50" : "border-hooma-text/10 bg-white/55"}`}>
                         <span className={`flex h-7 w-7 items-center justify-center rounded-full ${reached ? "bg-hooma-text text-white" : "bg-hooma-panel text-hooma-muted"}`}>{index < currentStage ? <Check size={15} /> : index + 1}</span>
-                        <p className={`mt-3 text-xs leading-5 ${reached ? "font-semibold text-hooma-text" : "text-hooma-muted"}`}>{stage}</p>
+                        <p className={`mt-3 text-xs leading-5 ${reached ? "font-semibold text-hooma-text" : "text-hooma-muted"}`}><LocalizedText ka={stageKa} en={stageEn} /></p>
                       </div>
                     );
                   })}
@@ -125,26 +132,26 @@ export default async function AccountOrdersPage() {
 
             <div className="grid gap-6 p-5 lg:grid-cols-[1.35fr_0.65fr] lg:p-6">
               <div>
-                <h3 className="flex items-center gap-2 font-semibold"><Package size={18} className="text-hooma-accent" />პროდუქტები</h3>
+                <h3 className="flex items-center gap-2 font-semibold"><Package size={18} className="text-hooma-accent" /><LocalizedText ka="პროდუქტები" en="Products" /></h3>
                 <div className="mt-3 divide-y divide-hooma-text/10 rounded-2xl border border-hooma-text/10 bg-white">
                   {orderItems.map((item) => { const joinedProduct = Array.isArray(item.products) ? item.products[0] : item.products; return (
-                    <div key={item.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{item.product_name || "ინდივიდუალური პროდუქტი"}</p><p className="mt-1 text-xs text-hooma-muted">{[item.size_label, item.material, item.color].filter(Boolean).join(" · ") || "კონფიგურაცია"}</p></div><div className="flex items-center gap-3"><strong className="text-sm">×{item.quantity}</strong>{order.fulfillment_status === "delivered" && joinedProduct?.slug ? <Link href={`/product/${joinedProduct.slug}#reviews`} className="rounded-full bg-hooma-text px-3 py-1.5 text-xs font-semibold text-white">შეფასება</Link> : null}</div></div>
+                    <div key={item.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{item.product_name || <LocalizedText ka="ინდივიდუალური პროდუქტი" en="Custom product" />}</p><p className="mt-1 text-xs text-hooma-muted">{[item.size_label, item.material, item.color].filter(Boolean).join(" · ") || <LocalizedText ka="კონფიგურაცია" en="Configuration" />}</p></div><div className="flex items-center gap-3"><strong className="text-sm">×{item.quantity}</strong>{order.fulfillment_status === "delivered" && joinedProduct?.slug ? <Link href={`/product/${joinedProduct.slug}#reviews`} className="rounded-full bg-hooma-text px-3 py-1.5 text-xs font-semibold text-white"><LocalizedText ka="შეფასება" en="Review" /></Link> : null}</div></div>
                   ); })}
-                  {!orderItems.length ? <p className="p-4 text-sm text-hooma-muted">პროდუქტის მონაცემები ვერ ჩაიტვირთა.</p> : null}
+                  {!orderItems.length ? <p className="p-4 text-sm text-hooma-muted"><LocalizedText ka="პროდუქტის მონაცემები ვერ ჩაიტვირთა." en="Product details could not be loaded." /></p> : null}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3 text-xs text-hooma-muted">
-                  <span className="inline-flex items-center gap-1.5"><Clock3 size={14} />{order.promised_at ? `სავარაუდო მიწოდება: ${dateFormat.format(new Date(order.promised_at))}` : "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"}</span>
-                  {order.fulfillment_status === "out_for_delivery" ? <span className="inline-flex items-center gap-1.5 font-semibold text-hooma-text"><Truck size={14} />საკურიერო მომსახურებასთანაა</span> : null}
+                  <span className="inline-flex items-center gap-1.5"><Clock3 size={14} /><LocalizedText ka={order.promised_at ? `სავარაუდო მიწოდება: ${dateFormat.format(new Date(order.promised_at))}` : "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"} en={order.promised_at ? `Estimated delivery: ${dateFormat.format(new Date(order.promised_at))}` : "3 business days from order to delivery"} /></span>
+                  {order.fulfillment_status === "out_for_delivery" ? <span className="inline-flex items-center gap-1.5 font-semibold text-hooma-text"><Truck size={14} /><LocalizedText ka="საკურიერო მომსახურებასთანაა" en="With the courier" /></span> : null}
                 </div>
               </div>
 
               <div>
-                <h3 className="font-semibold">სტატუსის ისტორია</h3>
+                <h3 className="font-semibold"><LocalizedText ka="სტატუსის ისტორია" en="Status history" /></h3>
                 <ol className="mt-3 space-y-3">
                   {events.slice().reverse().map((event) => (
-                    <li key={event.id} className="border-l-2 border-hooma-accent/35 pl-3"><p className="text-sm font-medium">{event.customer_label_ka}</p><time className="mt-1 block text-xs text-hooma-muted">{dateFormat.format(new Date(event.created_at))}</time></li>
+                    <li key={event.id} className="border-l-2 border-hooma-accent/35 pl-3"><p className="text-sm font-medium"><LocalizedText ka={event.customer_label_ka} en={eventLabelsEn[event.event_type] ?? "Order updated"} /></p><time className="mt-1 block text-xs text-hooma-muted">{dateFormat.format(new Date(event.created_at))}</time></li>
                   ))}
-                  {!events.length ? <li className="text-sm text-hooma-muted">შეკვეთა მიღებულია.</li> : null}
+                  {!events.length ? <li className="text-sm text-hooma-muted"><LocalizedText ka="შეკვეთა მიღებულია." en="Order received." /></li> : null}
                 </ol>
               </div>
             </div>
@@ -153,7 +160,7 @@ export default async function AccountOrdersPage() {
       })}
 
       {!orders.length ? (
-        <div className="rounded-[2rem] border border-dashed border-hooma-text/15 bg-white/55 px-6 py-16 text-center"><Package className="mx-auto text-hooma-muted" /><p className="mt-4 font-semibold">შეკვეთა ჯერ არ გაქვს</p><p className="mt-2 text-sm text-hooma-muted">შეკვეთის გაფორმების შემდეგ მისი ეტაპები აქ გამოჩნდება.</p></div>
+        <div className="rounded-[2rem] border border-dashed border-hooma-text/15 bg-white/55 px-6 py-16 text-center"><Package className="mx-auto text-hooma-muted" /><p className="mt-4 font-semibold"><LocalizedText ka="შეკვეთა ჯერ არ გაქვს" en="You have no orders yet" /></p><p className="mt-2 text-sm text-hooma-muted"><LocalizedText ka="შეკვეთის გაფორმების შემდეგ მისი ეტაპები აქ გამოჩნდება." en="Order stages will appear here after checkout." /></p></div>
       ) : null}
     </div>
   );

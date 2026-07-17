@@ -14,6 +14,7 @@ type AuthState = {
 
 const getString = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isGeorgian = (value: unknown) => value === "ka";
 
 const safeNextPath = (value: string, fallback = "/account") => {
   const safePath = value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : fallback;
@@ -29,8 +30,9 @@ async function siteOrigin() {
 }
 
 export async function loginAction(_state: AuthState, formData: FormData): Promise<AuthState> {
+  const georgian = isGeorgian(getString(formData, "language"));
   const supabase = await createClient();
-  if (!supabase) return { message: "Supabase is not configured yet." };
+  if (!supabase) return { message: georgian ? "Supabase ჯერ არ არის დაკავშირებული." : "Supabase is not configured yet." };
 
   const email = getString(formData, "email");
   const password = getString(formData, "password");
@@ -38,7 +40,7 @@ export async function loginAction(_state: AuthState, formData: FormData): Promis
   const next = safeNextPath(requestedNext);
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) return { message: "ელფოსტა ან პაროლი არასწორია." };
+  if (error) return { message: georgian ? "ელფოსტა ან პაროლი არასწორია." : "The email or password is incorrect." };
   const { data } = await supabase.auth.getUser();
   if (data.user) await (supabase as any).from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", data.user.id);
   revalidatePath("/", "layout");
@@ -62,8 +64,9 @@ export async function googleLoginAction(formData: FormData) {
 }
 
 export async function signupAction(_state: AuthState, formData: FormData): Promise<AuthState> {
+  const georgian = isGeorgian(getString(formData, "language"));
   const supabase = await createClient();
-  if (!supabase) return { message: "Supabase is not configured yet." };
+  if (!supabase) return { message: georgian ? "Supabase ჯერ არ არის დაკავშირებული." : "Supabase is not configured yet." };
 
   const email = getString(formData, "email");
   const password = getString(formData, "password");
@@ -81,8 +84,8 @@ export async function signupAction(_state: AuthState, formData: FormData): Promi
     },
   });
 
-  if (error) return { message: error.message };
-  return { ok: true, message: "ანგარიში შეიქმნა. თუ ელფოსტის დადასტურება ჩართულია, შეამოწმე შემოსული წერილები." };
+  if (error) return { message: georgian ? "ანგარიშის შექმნა ვერ მოხერხდა. გადაამოწმე მონაცემები და სცადე ხელახლა." : "The account could not be created. Check your details and try again." };
+  return { ok: true, message: georgian ? "ანგარიში შეიქმნა. თუ ელფოსტის დადასტურება ჩართულია, შეამოწმე შემოსული წერილები." : "Your account was created. If email confirmation is enabled, check your inbox." };
 }
 
 export async function logoutAction() {
@@ -121,6 +124,7 @@ export async function createOrderAction(formData: FormData) {
     city?: string;
     address_line_1?: string;
     notes?: string;
+    language?: "ka" | "en";
     items?: Array<{
       product_id: string;
       variant_id: string;
@@ -137,18 +141,20 @@ export async function createOrderAction(formData: FormData) {
     return { ok: false, message: "Invalid order payload." };
   }
 
-  if (!payload.items?.length) return { ok: false, message: "Your cart is empty." };
+  const georgian = isGeorgian(payload.language);
+
+  if (!payload.items?.length) return { ok: false, message: georgian ? "კალათა ცარიელია." : "Your cart is empty." };
   if (!payload.guest_phone?.trim() || !payload.full_name?.trim() || !payload.city?.trim() || !payload.address_line_1?.trim()) {
-    return { ok: false, message: "Please complete the required contact and delivery fields." };
+    return { ok: false, message: georgian ? "შეავსე აუცილებელი საკონტაქტო და მიწოდების ველები." : "Please complete the required contact and delivery fields." };
   }
-  if (!admin) return { ok: false, message: "Test order storage is not connected yet. Add the server-only Supabase service role key." };
-  if (!supabase) return { ok: false, message: "შეკვეთის გასაფორმებლად ანგარიშში შესვლაა საჭირო." };
+  if (!admin) return { ok: false, message: georgian ? "სატესტო შეკვეთების საცავი ჯერ არ არის დაკავშირებული." : "Test order storage is not connected yet." };
+  if (!supabase) return { ok: false, message: georgian ? "შეკვეთის გასაფორმებლად ანგარიშში შესვლაა საჭირო." : "Sign in to place an order." };
 
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
-  if (!user) return { ok: false, message: "შეკვეთის გასაფორმებლად ჯერ ანგარიშში შედი." };
+  if (!user) return { ok: false, message: georgian ? "შეკვეთის გასაფორმებლად ჯერ ანგარიშში შედი." : "Sign in before placing an order." };
   const { data: customer } = await supabase.from("customers").select("id").eq("profile_id", user.id).maybeSingle();
-  if (!customer?.id) return { ok: false, message: "მომხმარებლის პროფილი ვერ მოიძებნა. გამოდი ანგარიშიდან და ხელახლა შედი." };
+  if (!customer?.id) return { ok: false, message: georgian ? "მომხმარებლის პროფილი ვერ მოიძებნა. გამოდი ანგარიშიდან და ხელახლა შედი." : "Your customer profile could not be found. Sign out and sign in again." };
   const customerId = customer.id;
 
   const authoritativeItems = await Promise.all(payload.items.map(async (item) => {
@@ -196,7 +202,7 @@ export async function createOrderAction(formData: FormData) {
       color,
     };
   }));
-  if (authoritativeItems.some((item) => item === null)) return { ok: false, message: "One or more cart items are invalid." };
+  if (authoritativeItems.some((item) => item === null)) return { ok: false, message: georgian ? "კალათაში ერთი ან მეტი პროდუქტი არასწორია." : "One or more cart items are invalid." };
 
   const safeItems = authoritativeItems.filter((item): item is NonNullable<typeof item> => item !== null);
   const subtotal = safeItems.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
@@ -230,7 +236,7 @@ export async function createOrderAction(formData: FormData) {
   };
 
   const { data: order, error } = await admin.from("orders").insert(orderInsert).select("id, tracking_code").single();
-  if (error || !order) return { ok: false, message: error?.message ?? "Could not create order." };
+  if (error || !order) return { ok: false, message: georgian ? "შეკვეთის შექმნა ვერ მოხერხდა." : "Could not create order." };
 
   const items = safeItems.map(({ productId, variantId, productName, variant, unitPrice, quantity, material, color }) => ({
     order_id: order.id,
@@ -264,5 +270,5 @@ export async function createOrderAction(formData: FormData) {
 
   revalidatePath("/admin/orders");
   revalidatePath("/account/orders");
-  return { ok: true, message: `სატესტო შეკვეთა მიღებულია. ტრეკინგის კოდი: ${order.tracking_code}` };
+  return { ok: true, message: georgian ? `სატესტო შეკვეთა მიღებულია. ტრეკინგის კოდი: ${order.tracking_code}` : `Test order received. Tracking code: ${order.tracking_code}` };
 }
