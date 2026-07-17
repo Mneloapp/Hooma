@@ -171,7 +171,7 @@ export async function updateProductDraftAction(
     return { ok: false, message: colorMode === "fixed_multicolor" ? "AMS პროდუქტისთვის აირჩიე მინიმუმ ორი ფერი." : "აირჩიე მინიმუმ ერთი ფერი." };
   }
 
-  const { data, error } = await admin.rpc("update_catalog_product_draft_v1", {
+  const { data, error } = await admin.rpc("update_catalog_product_v2", {
     actor_profile_id: profile.id,
     requested_product_id: productId,
     product_name: name,
@@ -187,10 +187,10 @@ export async function updateProductDraftAction(
     product_color_mode: colorMode,
   });
   if (error) {
-    const message = error.message.includes("Only Draft")
-      ? "მხოლოდ Draft სტატუსის პროდუქტის რედაქტირება შეიძლება."
+    const message = error.message.includes("Product status cannot be edited")
+      ? "ამ სტატუსის პროდუქტის რედაქტირება შეუძლებელია."
       : error.message.includes("function") || error.message.includes("schema cache")
-        ? "ჯერ გაუშვი Draft editor migration."
+        ? "ჯერ გაუშვი Product editor migration."
         : "Draft-ის მონაცემების შენახვა ვერ დასრულდა.";
     return { ok: false, message };
   }
@@ -198,7 +198,7 @@ export async function updateProductDraftAction(
   refreshCatalog(productId);
   return {
     ok: true,
-    message: `Draft განახლდა · თვითღირებულება ₾${Number(data?.production_cost ?? 0).toFixed(2)} · გასაყიდი ფასი ₾${Number(data?.final_sale_price ?? 0).toFixed(2)}`,
+    message: `პროდუქტი განახლდა · თვითღირებულება ₾${Number(data?.production_cost ?? 0).toFixed(2)} · გასაყიდი ფასი ₾${Number(data?.final_sale_price ?? 0).toFixed(2)}`,
   };
 }
 
