@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Calculator, LoaderCircle, LockKeyhole, Save } from "lucide-react";
-import { saveMaterialCostAction, savePricingProfileAction } from "@/app/admin/settings/actions";
+import { BadgePercent, Calculator, LoaderCircle, LockKeyhole, Save } from "lucide-react";
+import { saveDailyDealDiscountAction, saveMaterialCostAction, savePricingProfileAction } from "@/app/admin/settings/actions";
 import { useCatalogPricePreview } from "@/components/admin/useCatalogPricePreview";
 
 export type MaterialCostProfile = {
@@ -39,7 +39,6 @@ type PricingNumberKey =
   | "overhead_percent"
   | "failure_reserve_percent"
   | "default_margin_percent"
-  | "daily_deal_discount_percent"
   | "vat_percent"
   | "rounding_step";
 
@@ -55,7 +54,6 @@ const pricingFields: Array<{
   { name: "overhead_percent", label: "ზედნადები ხარჯი, %", max: 100 },
   { name: "failure_reserve_percent", label: "წარუმატებელი ბეჭდვის რეზერვი, %", max: 100 },
   { name: "default_margin_percent", label: "საბაზო მოგების მარჟა, %", max: 99.99 },
-  { name: "daily_deal_discount_percent", label: "დღის შეთავაზების ფასდაკლება, %", min: 1, max: 99.99 },
   { name: "vat_percent", label: "დღგ, %", max: 100 },
   { name: "rounding_step", label: "ფასის დამრგვალება, ₾", min: 0.01 },
 ];
@@ -99,7 +97,6 @@ const pricingDraft = (profile: PricingProfile): Record<PricingNumberKey, string>
   overhead_percent: String(profile.overhead_percent),
   failure_reserve_percent: String(profile.failure_reserve_percent),
   default_margin_percent: String(profile.default_margin_percent),
-  daily_deal_discount_percent: String(profile.daily_deal_discount_percent),
   vat_percent: String(profile.vat_percent),
   rounding_step: String(profile.rounding_step),
 });
@@ -123,6 +120,16 @@ function SaveButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function DailyDealSaveButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">
+      {pending ? <LoaderCircle size={17} className="animate-spin" /> : <Save size={17} />}
+      {pending ? "ინახება..." : "დღის შეთავაზების შენახვა"}
+    </button>
+  );
+}
+
 export function CostSettingsEditor({
   materials,
   pricing,
@@ -142,6 +149,8 @@ export function CostSettingsEditor({
   );
   const [materialMessages, setMaterialMessages] = useState<Record<string, SaveMessage>>({});
   const [pricingMessage, setPricingMessage] = useState<SaveMessage | null>(null);
+  const [dailyDealDiscount, setDailyDealDiscount] = useState(initialPricing ? String(initialPricing.daily_deal_discount_percent) : "50");
+  const [dailyDealMessage, setDailyDealMessage] = useState<SaveMessage | null>(null);
   const [materialId, setMaterialId] = useState(initialMaterials[0]?.id ?? "");
   const [grams, setGrams] = useState("");
   const [minutes, setMinutes] = useState("");
@@ -194,6 +203,18 @@ export function CostSettingsEditor({
     setPricingValues(pricingDraft(saved));
     setMargin(String(saved.default_margin_percent));
     setPricingMessage({ ok: true, text: response.message });
+  };
+
+  const submitDailyDealDiscount = async (formData: FormData) => {
+    const response = await saveDailyDealDiscountAction(formData);
+    if (!response.ok) {
+      setDailyDealMessage({ ok: false, text: response.message });
+      return;
+    }
+    const saved = normalizePricing(response.data as PricingProfile);
+    setSavedPricing(saved);
+    setDailyDealDiscount(String(saved.daily_deal_discount_percent));
+    setDailyDealMessage({ ok: true, text: response.message });
   };
 
   return (
@@ -273,7 +294,6 @@ export function CostSettingsEditor({
             ეს არის Hooma-ს ერთი საერთო ფასის პროფილი. შენახვისას ყველა არსებული პროდუქტის თვითღირებულება და გასაყიდი ფასი განახლდება; პროდუქტის ინდივიდუალური მარჟა უცვლელი დარჩება.
           </p>
           <p className="mt-1 text-xs leading-5 text-hooma-muted">უკვე მიღებულ შეკვეთებში დაფიქსირებული ფასი არ შეიცვლება.</p>
-          <p className="mt-1 text-xs leading-5 text-hooma-muted">დღის შეთავაზების ფასდაკლების ცვლილება შენახვისთანავე გავრცელდება დღევანდელ შეთავაზებებზე და მომავალ ყოველდღიურ როტაციებზე.</p>
           <form action={submitPricing} className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <input type="hidden" name="id" value={savedPricing.id} />
             {pricingFields.map((field) => (
@@ -307,6 +327,21 @@ export function CostSettingsEditor({
               </p>
             ) : null}
           </form>
+        </section>
+      ) : null}
+
+      {savedPricing ? (
+        <section className="rounded-[1.5rem] border border-red-200 bg-red-50/80 p-6 shadow-sm">
+          <div className="flex items-center gap-2 text-red-700"><BadgePercent size={20} /><h2 className="text-xl font-semibold">დღის შეთავაზების ფასდაკლება</h2></div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-hooma-muted">ეს პარამეტრი დამოუკიდებელია წარმოების თვითღირებულებისა და პროდუქტის საბაზო ფასისგან. ცვლილება შენახვისთანავე გავრცელდება დღევანდელ შეთავაზებებსა და მომავალ ყოველდღიურ როტაციებზე.</p>
+          <form action={submitDailyDealDiscount} className="mt-5 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-end">
+            <input type="hidden" name="id" value={savedPricing.id} />
+            <label className="min-w-0 flex-1 text-sm font-medium">ფასდაკლება, %
+              <input name="daily_deal_discount_percent" type="number" min="1" max="99.99" step="0.01" required value={dailyDealDiscount} onChange={(event) => { setDailyDealDiscount(event.target.value); setDailyDealMessage(null); }} className={inputClass} />
+            </label>
+            <DailyDealSaveButton />
+          </form>
+          {dailyDealMessage ? <p aria-live="polite" className={`mt-3 text-sm ${dailyDealMessage.ok ? "text-emerald-700" : "text-red-700"}`}>{dailyDealMessage.text}</p> : null}
         </section>
       ) : null}
 
