@@ -179,7 +179,10 @@ export async function POST(
   if (!selectedColors.length) selectedColors.push("თეთრი");
   const requestedColorMode = payload.product.technical.colorMode === "fixed_multicolor" ? "fixed_multicolor" : "customer_choice";
   const colorMode = requestedColorMode === "fixed_multicolor" && selectedColors.length >= 2 ? "fixed_multicolor" : "customer_choice";
-  const marginValue = Number(payload.product.technical.marginPercent);
+  const rawMargin = payload.product.technical.marginPercent;
+  const marginValue = rawMargin === null || rawMargin === undefined
+    ? Number.NaN
+    : Number(rawMargin);
   const margin = Number.isFinite(marginValue) && marginValue >= 0 && marginValue < 100
     ? marginValue
     : Number(pricing.default_margin_percent);
