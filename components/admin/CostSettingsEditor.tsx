@@ -24,6 +24,7 @@ export type PricingProfile = {
   overhead_percent: number;
   failure_reserve_percent: number;
   default_margin_percent: number;
+  daily_deal_discount_percent: number;
   vat_percent: number;
   rounding_step: number;
   is_default: boolean;
@@ -38,6 +39,7 @@ type PricingNumberKey =
   | "overhead_percent"
   | "failure_reserve_percent"
   | "default_margin_percent"
+  | "daily_deal_discount_percent"
   | "vat_percent"
   | "rounding_step";
 
@@ -53,6 +55,7 @@ const pricingFields: Array<{
   { name: "overhead_percent", label: "ზედნადები ხარჯი, %", max: 100 },
   { name: "failure_reserve_percent", label: "წარუმატებელი ბეჭდვის რეზერვი, %", max: 100 },
   { name: "default_margin_percent", label: "საბაზო მოგების მარჟა, %", max: 99.99 },
+  { name: "daily_deal_discount_percent", label: "დღის შეთავაზების ფასდაკლება, %", min: 1, max: 99.99 },
   { name: "vat_percent", label: "დღგ, %", max: 100 },
   { name: "rounding_step", label: "ფასის დამრგვალება, ₾", min: 0.01 },
 ];
@@ -79,6 +82,7 @@ const normalizePricing = (profile: PricingProfile): PricingProfile => ({
   overhead_percent: Number(profile.overhead_percent),
   failure_reserve_percent: Number(profile.failure_reserve_percent),
   default_margin_percent: Number(profile.default_margin_percent),
+  daily_deal_discount_percent: Number(profile.daily_deal_discount_percent ?? 50),
   vat_percent: Number(profile.vat_percent),
   rounding_step: Number(profile.rounding_step),
 });
@@ -95,6 +99,7 @@ const pricingDraft = (profile: PricingProfile): Record<PricingNumberKey, string>
   overhead_percent: String(profile.overhead_percent),
   failure_reserve_percent: String(profile.failure_reserve_percent),
   default_margin_percent: String(profile.default_margin_percent),
+  daily_deal_discount_percent: String(profile.daily_deal_discount_percent),
   vat_percent: String(profile.vat_percent),
   rounding_step: String(profile.rounding_step),
 });
@@ -268,6 +273,7 @@ export function CostSettingsEditor({
             ეს არის Hooma-ს ერთი საერთო ფასის პროფილი. შენახვისას ყველა არსებული პროდუქტის თვითღირებულება და გასაყიდი ფასი განახლდება; პროდუქტის ინდივიდუალური მარჟა უცვლელი დარჩება.
           </p>
           <p className="mt-1 text-xs leading-5 text-hooma-muted">უკვე მიღებულ შეკვეთებში დაფიქსირებული ფასი არ შეიცვლება.</p>
+          <p className="mt-1 text-xs leading-5 text-hooma-muted">დღის შეთავაზების ფასდაკლების ცვლილება შენახვისთანავე გავრცელდება დღევანდელ შეთავაზებებზე და მომავალ ყოველდღიურ როტაციებზე.</p>
           <form action={submitPricing} className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <input type="hidden" name="id" value={savedPricing.id} />
             {pricingFields.map((field) => (

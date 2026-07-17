@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { ProductShelf } from "@/components/ProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
 
-export function HomeStorefrontClient({ catalogProducts }: { catalogProducts: Product[] }) {
+export function HomeStorefrontClient({ catalogProducts, dailyDealDiscountPercent }: { catalogProducts: Product[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
   const georgian = language === "ka";
   const popularProducts = [...catalogProducts]
@@ -20,7 +20,7 @@ export function HomeStorefrontClient({ catalogProducts }: { catalogProducts: Pro
         <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-hooma-text text-white md:grid-cols-[1fr_auto] md:items-center">
           <div className="p-6 sm:p-8">
             <div className="flex items-center gap-3 text-[#c8d8bd]"><BadgePercent size={22} /><p className="text-xs font-semibold uppercase tracking-[0.18em]">{georgian ? "Hooma-ს დღის შეთავაზებები" : "Hooma daily deals"}</p></div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{georgian ? "100 განსხვავებული პროდუქტი ყოველდღე −50%-ად" : "100 different products at 50% off every day"}</h1>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{georgian ? `100 განსხვავებული პროდუქტი ყოველდღე −${dailyDealDiscountPercent}%-ად` : `100 different products at ${dailyDealDiscountPercent}% off every day`}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">{georgian ? "შეთავაზებები თბილისის დროით ყოველ დღე იცვლება. ფასდაკლება მოქმედებს მხოლოდ იმ დღის შერჩეულ პროდუქტებზე." : "Deals rotate every day on Tbilisi time and apply only to that day’s selected products."}</p>
           </div>
           <div className="border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8"><Button href="/deals" variant="secondary" className="border-white/15 bg-white text-hooma-text">{georgian ? "დღის შეთავაზებების ნახვა" : "See today’s deals"}<ArrowRight size={15} className="ml-2" /></Button></div>

@@ -22,6 +22,7 @@ export type PricingProfileResult = {
   overhead_percent: number | string;
   failure_reserve_percent: number | string;
   default_margin_percent: number | string;
+  daily_deal_discount_percent: number | string;
   vat_percent: number | string;
   rounding_step: number | string;
   is_default: boolean;
@@ -98,10 +99,11 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
       overhead_percent: numberInRange(formData, "overhead_percent", 0, 100),
       failure_reserve_percent: numberInRange(formData, "failure_reserve_percent", 0, 100),
       default_margin_percent: numberInRange(formData, "default_margin_percent", 0, 99.99),
+      daily_deal_discount_percent: numberInRange(formData, "daily_deal_discount_percent", 1, 99.99),
       vat_percent: numberInRange(formData, "vat_percent", 0, 100),
       rounding_step: numberInRange(formData, "rounding_step", 0.01, 1_000),
     };
-    const { data, error } = await admin.rpc("save_default_pricing_profile_v2", {
+    const { data, error } = await admin.rpc("save_default_pricing_profile_v3", {
       requested_profile_id: id,
       requested_machine_hour_cost: values.machine_hour_cost,
       requested_labor_cost_per_order: values.labor_cost_per_order,
@@ -109,12 +111,13 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
       requested_overhead_percent: values.overhead_percent,
       requested_failure_reserve_percent: values.failure_reserve_percent,
       requested_default_margin_percent: values.default_margin_percent,
+      requested_daily_deal_discount_percent: values.daily_deal_discount_percent,
       requested_vat_percent: values.vat_percent,
       requested_rounding_step: values.rounding_step,
       actor_profile_id: profile.id,
     });
     if (error) {
-      if (error.message?.includes("save_default_pricing_profile_v2") || error.message?.includes("schema cache")) {
+      if (error.message?.includes("save_default_pricing_profile_v3") || error.message?.includes("schema cache")) {
         return { ok: false, message: "გაუშვი ბოლო Supabase migration და სცადე თავიდან." };
       }
       return { ok: false, message: "წარმოებისა და ფასის პარამეტრები და პროდუქტების ფასები ვერ განახლდა. სცადე თავიდან." };
@@ -132,7 +135,7 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
     revalidatePath("/");
     revalidatePath("/shop");
     revalidatePath("/deals");
-    return { ok: true, message: `საერთო პარამეტრები შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
+    return { ok: true, message: `საერთო პარამეტრები და დღის შეთავაზების ${saved.daily_deal_discount_percent}% ფასდაკლება შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
   } catch {
     return { ok: false, message: "შეამოწმე წარმოებისა და ფასის ყველა მნიშვნელობა." };
   }
