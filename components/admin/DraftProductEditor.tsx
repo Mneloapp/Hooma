@@ -10,6 +10,7 @@ import type { CategoryOption } from "@/lib/catalog-categories";
 type MaterialOption = { id: string; code: string; name: string };
 type DraftValues = {
   id: string;
+  status: string;
   name: string;
   description: string;
   categoryId: string;
@@ -60,9 +61,9 @@ export function DraftProductEditor({
       <input type="hidden" name="pricing_profile_id" value={initial.pricingProfileId} />
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-hooma-muted">Draft editor</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-hooma-muted">{initial.status === "draft" ? "Draft editor" : "Catalog editor"}</p>
           <h2 className="mt-2 text-xl font-semibold">პროდუქტის მონაცემების რედაქტირება</h2>
-          <p className="mt-2 text-sm leading-6 text-hooma-muted">შეცვალე Clipper-იდან მიღებული ინფორმაცია. შენახვისას თვითღირებულება და გასაყიდი ფასი თავიდან დაითვლება.</p>
+          <p className="mt-2 text-sm leading-6 text-hooma-muted">შეცვალე პროდუქტის ინფორმაცია. შენახვისას თვითღირებულება და გასაყიდი ფასი თავიდან დაითვლება, მიმდინარე სტატუსი კი შენარჩუნდება.</p>
         </div>
         <button disabled={pending || price.loading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-hooma-text px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">
           {pending ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
