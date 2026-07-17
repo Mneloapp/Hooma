@@ -31,6 +31,7 @@ export type PricingProfileResult = {
 export type SettingsActionResult<T> = { ok: true; message: string; data: T } | { ok: false; message: string };
 type RecalculationResult = { recalculated_variant_count?: number | string; affected_product_count?: number | string };
 type SavedSettingsPayload<T> = { profile?: T; recalculation?: RecalculationResult };
+type SavedDailyDealPayload<T> = { profile?: T; updated_current_deal_count?: number | string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const numberInRange = (formData: FormData, key: string, min: number, max: number) => {
@@ -99,11 +100,10 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
       overhead_percent: numberInRange(formData, "overhead_percent", 0, 100),
       failure_reserve_percent: numberInRange(formData, "failure_reserve_percent", 0, 100),
       default_margin_percent: numberInRange(formData, "default_margin_percent", 0, 99.99),
-      daily_deal_discount_percent: numberInRange(formData, "daily_deal_discount_percent", 1, 99.99),
       vat_percent: numberInRange(formData, "vat_percent", 0, 100),
       rounding_step: numberInRange(formData, "rounding_step", 0.01, 1_000),
     };
-    const { data, error } = await admin.rpc("save_default_pricing_profile_v3", {
+    const { data, error } = await admin.rpc("save_default_pricing_profile_v2", {
       requested_profile_id: id,
       requested_machine_hour_cost: values.machine_hour_cost,
       requested_labor_cost_per_order: values.labor_cost_per_order,
@@ -111,13 +111,12 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
       requested_overhead_percent: values.overhead_percent,
       requested_failure_reserve_percent: values.failure_reserve_percent,
       requested_default_margin_percent: values.default_margin_percent,
-      requested_daily_deal_discount_percent: values.daily_deal_discount_percent,
       requested_vat_percent: values.vat_percent,
       requested_rounding_step: values.rounding_step,
       actor_profile_id: profile.id,
     });
     if (error) {
-      if (error.message?.includes("save_default_pricing_profile_v3") || error.message?.includes("schema cache")) {
+      if (error.message?.includes("save_default_pricing_profile_v2") || error.message?.includes("schema cache")) {
         return { ok: false, message: "გაუშვი ბოლო Supabase migration და სცადე თავიდან." };
       }
       return { ok: false, message: "წარმოებისა და ფასის პარამეტრები და პროდუქტების ფასები ვერ განახლდა. სცადე თავიდან." };
@@ -135,8 +134,42 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
     revalidatePath("/");
     revalidatePath("/shop");
     revalidatePath("/deals");
-    return { ok: true, message: `საერთო პარამეტრები და დღის შეთავაზების ${saved.daily_deal_discount_percent}% ფასდაკლება შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
+    return { ok: true, message: `საერთო პარამეტრები შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
   } catch {
     return { ok: false, message: "შეამოწმე წარმოებისა და ფასის ყველა მნიშვნელობა." };
+  }
+}
+
+export async function saveDailyDealDiscountAction(formData: FormData): Promise<SettingsActionResult<PricingProfileResult>> {
+  const profile = await requirePermission("pricing.manage");
+  const admin = createAdminClient() as any;
+  const id = String(formData.get("id") ?? "");
+  if (!profile || !admin) return { ok: false, message: "ამ მოქმედებისთვის Owner ან Admin ანგარიშია საჭირო." };
+  if (!uuidPattern.test(id)) return { ok: false, message: "ფასის პროფილი არასწორია." };
+
+  try {
+    const discountPercent = numberInRange(formData, "daily_deal_discount_percent", 1, 99.99);
+    const { data, error } = await admin.rpc("save_daily_deal_discount_percent", {
+      requested_profile_id: id,
+      requested_discount_percent: discountPercent,
+      actor_profile_id: profile.id,
+    });
+    if (error) {
+      if (error.message?.includes("save_daily_deal_discount_percent") || error.message?.includes("schema cache")) {
+        return { ok: false, message: "გაუშვი ბოლო Supabase migration და სცადე თავიდან." };
+      }
+      return { ok: false, message: "დღის შეთავაზების ფასდაკლება ვერ განახლდა. სცადე თავიდან." };
+    }
+    const payload = (Array.isArray(data) ? data[0] : data) as SavedDailyDealPayload<PricingProfileResult> | null;
+    const saved = payload?.profile ?? null;
+    if (!saved?.id) return { ok: false, message: "შენახული დღის შეთავაზების პარამეტრი ვერ დაბრუნდა." };
+    const updatedDeals = Number(payload?.updated_current_deal_count ?? 0);
+    revalidatePath("/admin/settings");
+    revalidatePath("/");
+    revalidatePath("/deals");
+    revalidatePath("/deals/[slug]", "page");
+    return { ok: true, message: `${saved.daily_deal_discount_percent}% ფასდაკლება შენახულია; განახლდა დღევანდელი ${updatedDeals} შეთავაზება.`, data: saved };
+  } catch {
+    return { ok: false, message: "ფასდაკლება უნდა იყოს 1%-დან 99.99%-მდე." };
   }
 }
