@@ -1,10 +1,10 @@
 # Daily deals
 
-`/deals` is a standalone page. At midnight in Tbilisi, a protected Vercel cron asks Supabase to select up to 100 distinct, active, production-approved products with real prices and applies the discount percentage saved in Admin → Settings for that date.
+`/deals` is a standalone page. At midnight in Tbilisi, a protected Vercel cron asks Supabase to select up to 50 distinct, active, production-approved products with real prices and applies the discount percentage saved in Admin → Settings for that date.
 
 ## Rotation
 
-Selection uses the least recently featured products first. Products that have never appeared are prioritized, then the oldest appearances. This completes the broadest possible catalog rotation before reusing products. If fewer than 100 eligible products exist, the page displays the available count without creating fake products or prices.
+Selection prioritizes products that were not used on the previous day, then applies a deterministic daily hash. This gives a random-looking selection that stays stable during the day and changes at the next Tbilisi calendar day. If fewer than 50 eligible products exist, the page displays the available count without creating fake products or prices.
 
 ## Required setup
 

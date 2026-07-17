@@ -63,7 +63,6 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
   const { error: activationError } = await admin.rpc("activate_daily_deals", { target_date: date });
   if (activationError) {
     console.error("[daily-deals] Failed to activate today's deals.", activationError.message);
-    return { date, deals: [], isPreview: true, discountPercent };
   }
 
   const { data, error } = await admin
@@ -96,7 +95,7 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
     console.error("[daily-deals] Failed to load today's deals.", error.message);
     return { date, deals: [], isPreview: true, discountPercent };
   }
-  if (!data?.length) return { date, deals: [], isPreview: false, discountPercent };
+  if (!data?.length) return { date, deals: [], isPreview: Boolean(activationError), discountPercent };
 
   const deals = data.map((row: any) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
