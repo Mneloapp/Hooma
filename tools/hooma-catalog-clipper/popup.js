@@ -69,6 +69,10 @@ async function persistAssisted() {
     hoomaAssistedJob: assisted.job,
     hoomaAssistedItem: assisted.item,
   });
+  const verified = await chrome.storage.local.get("hoomaAssistedToken");
+  if (verified.hoomaAssistedToken !== assisted.token) {
+    throw new Error("Token Chrome-ის საცავში ვერ შეინახა.");
+  }
 }
 
 function renderAssistedState() {
@@ -384,7 +388,7 @@ elements.saveAgentToken.addEventListener("click", async () => {
   elements.agentToken.placeholder = "ტოკენი შენახულია";
   await persistAssisted();
   renderAssistedState();
-  show("Assisted Agent-ის ტოკენი ლოკალურად შეინახა ამ Chrome პროფილმა.", "ok");
+  show("Agent token ამ Chrome პროფილში მუდმივად შეინახა. Extension განაახლე Reload-ით და არა Remove-ით.", "ok");
 });
 
 elements.resetAssisted.addEventListener("click", async () => {

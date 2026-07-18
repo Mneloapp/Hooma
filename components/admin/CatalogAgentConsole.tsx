@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { Bot, CheckCircle2, Clock3, Copy, ExternalLink, KeyRound, ListTodo, OctagonX, Play, TriangleAlert } from "lucide-react";
+import { Bot, CheckCircle2, Clock3, Copy, ExternalLink, KeyRound, ListTodo, OctagonX, Play, RefreshCcw, TriangleAlert } from "lucide-react";
 import {
   cancelCatalogAgentJobAction,
   createCatalogAgentAction,
   createCatalogAgentJobAction,
+  rotateCatalogAgentTokenAction,
   toggleCatalogAgentAction,
 } from "@/app/admin/catalog-agent/actions";
 
@@ -74,6 +75,26 @@ const itemStatusLabel: Record<string, string> = {
   failed: "შეცდომა",
 };
 
+function AgentTokenRotation({ agent }: { agent: Agent }) {
+  const [state, rotateToken, pending] = useActionState(rotateCatalogAgentTokenAction, {});
+  return (
+    <div className="mt-4 border-t border-hooma-text/10 pt-4">
+      <form
+        action={rotateToken}
+        onSubmit={(event) => {
+          if (!window.confirm("ახალი token ძველს დაუყოვნებლივ გააუქმებს. გავაგრძელოთ?")) event.preventDefault();
+        }}
+      >
+        <input type="hidden" name="agent_id" value={agent.id} />
+        <button disabled={pending} className="inline-flex items-center gap-1.5 text-xs font-semibold text-hooma-accent disabled:opacity-50">
+          <RefreshCcw size={14} />{pending ? "იქმნება..." : "ახალი token-ის შექმნა"}
+        </button>
+      </form>
+      {state.message ? <div className={`mt-3 rounded-xl p-3 text-xs ${state.ok ? "bg-emerald-50 text-emerald-950" : "bg-red-50 text-red-900"}`}><p>{state.message}</p>{state.token ? <div className="mt-2 flex items-center gap-2 rounded-lg bg-hooma-text p-2.5 text-white"><code className="min-w-0 flex-1 break-all text-[10px]">{state.token}</code><button type="button" title="ახალი token-ის კოპირება" onClick={() => navigator.clipboard.writeText(state.token!)} className="shrink-0 rounded-full bg-white/10 p-2 hover:bg-white/20"><Copy size={14} /></button></div> : null}</div> : null}
+    </div>
+  );
+}
+
 export function CatalogAgentConsole({
   agents,
   categories,
@@ -121,7 +142,7 @@ export function CatalogAgentConsole({
 
       <section className="rounded-[1.75rem] bg-white/75 p-6 shadow-soft">
         <h2 className="text-xl font-semibold">რეგისტრირებული აგენტები</h2>
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">{agents.length ? agents.map((agent) => <article key={agent.id} className="rounded-2xl border border-hooma-text/10 bg-white p-4"><div className="flex items-start justify-between gap-4"><div><p className="font-semibold">{agent.name}</p><p className="mt-1 text-xs text-hooma-muted">Token · {agent.token_prefix}•••• · ბოლო კავშირი: {date(agent.last_seen_at)}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.is_active ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>{agent.is_active ? "აქტიურია" : "გათიშულია"}</span></div>{canManageAgents ? <form action={toggleCatalogAgentAction} className="mt-4"><input type="hidden" name="agent_id" value={agent.id} /><input type="hidden" name="is_active" value={String(!agent.is_active)} /><button className="text-xs font-semibold underline underline-offset-4">{agent.is_active ? "წვდომის გაუქმება" : "წვდომის აღდგენა"}</button></form> : null}</article>) : <p className="rounded-2xl bg-hooma-panel p-5 text-sm text-hooma-muted">Catalog Agent ჯერ არ არის რეგისტრირებული.</p>}</div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">{agents.length ? agents.map((agent) => <article key={agent.id} className="rounded-2xl border border-hooma-text/10 bg-white p-4"><div className="flex items-start justify-between gap-4"><div><p className="font-semibold">{agent.name}</p><p className="mt-1 text-xs text-hooma-muted">Token · {agent.token_prefix}•••• · ბოლო კავშირი: {date(agent.last_seen_at)}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${agent.is_active ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>{agent.is_active ? "აქტიურია" : "გათიშულია"}</span></div>{canManageAgents ? <><form action={toggleCatalogAgentAction} className="mt-4"><input type="hidden" name="agent_id" value={agent.id} /><input type="hidden" name="is_active" value={String(!agent.is_active)} /><button className="text-xs font-semibold underline underline-offset-4">{agent.is_active ? "წვდომის გაუქმება" : "წვდომის აღდგენა"}</button></form><AgentTokenRotation agent={agent} /></> : null}</article>) : <p className="rounded-2xl bg-hooma-panel p-5 text-sm text-hooma-muted">Catalog Agent ჯერ არ არის რეგისტრირებული.</p>}</div>
       </section>
 
       <section className="overflow-hidden rounded-[1.75rem] bg-white/75 shadow-soft">
