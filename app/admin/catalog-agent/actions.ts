@@ -11,6 +11,17 @@ export type CatalogAgentActionState = { ok?: boolean; message?: string; token?: 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const clean = (value: unknown, max = 500) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
+function issueCatalogAgentToken() {
+  const prefix = randomBytes(6).toString("hex");
+  const secret = randomBytes(36).toString("base64url");
+  const token = `hooma_ca_${prefix}_${secret}`;
+  return {
+    prefix,
+    token,
+    tokenHash: createHash("sha256").update(token, "utf8").digest("hex"),
+  };
+}
+
 export async function createCatalogAgentAction(
   _state: CatalogAgentActionState,
   formData: FormData,
@@ -22,10 +33,7 @@ export async function createCatalogAgentAction(
   const name = clean(formData.get("name"), 120);
   if (name.length < 2) return { message: "მიუთითე აგენტის სახელი." };
 
-  const prefix = randomBytes(6).toString("hex");
-  const secret = randomBytes(36).toString("base64url");
-  const token = `hooma_ca_${prefix}_${secret}`;
-  const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
+  const { prefix, token, tokenHash } = issueCatalogAgentToken();
   const { data, error } = await admin.from("catalog_agents").insert({
     name,
     token_prefix: prefix,
@@ -46,7 +54,53 @@ export async function createCatalogAgentAction(
   return {
     ok: true,
     token,
-    message: "აგენტი დარეგისტრირდა. ტოკენი მხოლოდ ახლა ჩანს — შეინახე Windows worker-ის .env ფაილში.",
+    message: "აგენტი დარეგისტრირდა. Token მხოლოდ ახლა ჩანს — შეინახე Hooma Clipper-ში ან Windows worker-ის .env ფაილში.",
+  };
+}
+
+export async function rotateCatalogAgentTokenAction(
+  _state: CatalogAgentActionState,
+  formData: FormData,
+): Promise<CatalogAgentActionState> {
+  const actor = await requirePermission("team.manage");
+  const admin = createAdminClient() as any;
+  if (!actor || !admin) return { message: "Catalog Agent-ის token-ის განახლება მხოლოდ Owner-ს შეუძლია." };
+
+  const agentId = clean(formData.get("agent_id"), 36);
+  if (!uuidPattern.test(agentId)) return { message: "Agent-ის ID არასწორია." };
+
+  const { data: agent } = await admin.from("catalog_agents")
+    .select("id,name,token_prefix,is_active")
+    .eq("id", agentId)
+    .maybeSingle();
+  if (!agent) return { message: "Catalog Agent ვერ მოიძებნა." };
+
+  const { prefix, token, tokenHash } = issueCatalogAgentToken();
+  const { error } = await admin.from("catalog_agents").update({
+    token_prefix: prefix,
+    token_hash: tokenHash,
+  }).eq("id", agent.id);
+  if (error) return { message: error.message || "ახალი token ვერ შეიქმნა." };
+
+  await admin.from("audit_log").insert({
+    actor_id: actor.id,
+    action: "catalog_agent_token_rotated",
+    entity_type: "catalog_agent",
+    entity_id: agent.id,
+    metadata: {
+      name: agent.name,
+      previous_token_prefix: agent.token_prefix,
+      token_prefix: prefix,
+      agent_active: agent.is_active,
+    },
+  });
+  revalidatePath("/admin/catalog-agent");
+  return {
+    ok: true,
+    token,
+    message: agent.is_active
+      ? "ახალი token შეიქმნა და ძველი გაუქმდა. დააკოპირე ახლა — შემდეგ გვერდის განახლებაზე აღარ გამოჩნდება."
+      : "ახალი token შეიქმნა, თუმცა Agent გათიშულია. დააკოპირე ახლა და შემდეგ გაააქტიურე Agent.",
   };
 }
 
@@ -136,4 +190,3 @@ export async function cancelCatalogAgentJobAction(formData: FormData) {
   });
   revalidatePath("/admin/catalog-agent");
 }
-

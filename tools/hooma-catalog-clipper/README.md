@@ -12,6 +12,8 @@ The extension has no Supabase credentials, does not read page cookies/passwords,
 4. Choose **Load unpacked**.
 5. Select the `tools/hooma-catalog-clipper` directory.
 
+The package has a stable extension identity and keeps its Agent token in this Chrome profile's local extension storage. For code updates use **Reload** on `chrome://extensions`; do not remove the extension. Removing it clears Chrome's local storage. If the token is ever lost, an Owner can open Hooma Admin → Catalog Agent → registered agent → **ახალი token-ის შექმნა**. The old token is invalidated immediately and the replacement is shown once for copying into the Clipper.
+
 ## Product flow
 
 1. Open a product page in Chrome/Edge and wait until its content is visible.

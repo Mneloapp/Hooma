@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Hooma Catalog Clipper",
-  "version": "2.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs5kz85OimSucbWWC4mvBEt27dckndzRo09do8PtA4sSDNXigf2afXroOU2bRay45ehChjBLtqTXQCtROi0apt8tqj/C9yUX1bBeO7rCBZUxF8U4W4YpPMgMVQ5aZfIdPpRW0S6A/Gaa31NZTtfiAGJUggE1UPFpKR+1+ZChnuQKIgHQlEqiua9Dyna9NyoGmeSyBSE+jWtBBoYMAtlGWcW6wkd03umQT1r2cex71Af4MYkSI3XxWREZK3+r8okFSIQzjg5W/9VsTvek61oH1ywtigW714eR4WggcOrMBWWU7A0sKcMxAGAscPjAOGiSKBDX14JqKqn2B7DqFqShhWwIDAQAB",
+  "version": "2.0.1",
   "description": "Creates reviewable Hooma product drafts manually or through a resumable, human-verified catalog queue.",
   "permissions": ["activeTab", "tabs", "scripting", "downloads", "storage", "alarms", "notifications"],
   "host_permissions": [
