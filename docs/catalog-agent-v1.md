@@ -15,7 +15,7 @@ Catalog Agent accepts a whole public catalog category, discovers its product pag
 
 For an Agent-created Draft whose external source has not previously been reviewed, the product page shows one Admin publication confirmation instead of a separate license form. An Admin/Owner must inspect the source reference, product data and media, explicitly confirm publication authority, and submit the form. The review is stored with the source snapshot and actor in `catalog_publication_reviews` plus `audit_log`; only then does the existing publication function run.
 
-MakerWorld also supports a human-assisted path in the ordinary Chrome Clipper. The operator completes any verification, explicitly captures only the visible category links, explicitly opens one claimed product, reviews its extracted fields and sends the Draft. It uses the same protected job API and server-side validation, but performs no automatic scrolling, unattended navigation, CAPTCHA solving, stealth/fingerprint changes, or access-control bypass. Use a separate agent identity/token for this mode so the background Windows worker cannot claim the same job.
+MakerWorld also supports **Clipper Auto Queue Mode V2** in an ordinary Chrome profile. After the operator completes the site's human verification and explicitly presses Start, a persistent Manifest V3 worker claims assigned jobs, discovers the category in one pinned tab, extracts one product at a time and creates private Drafts. It pauses without losing the item whenever verification reappears and resumes only after the operator completes it and presses Resume. It performs no automatic CAPTCHA solving, stealth/fingerprint changes, cookie export, or access-control bypass. The previous fully manual Clipper controls remain available. Use a separate agent identity/token so two workers cannot claim the same assigned job.
 
 ## Database
 
@@ -53,7 +53,7 @@ Production clients must call the canonical `https://www.hooma.ge` host directly.
 
 - **Credential theft:** tokens are shown once, stored hashed, scoped narrowly, and immediately revocable in Admin.
 - **Privilege escalation:** machine endpoints do not accept publication state, product category, pricing IDs, actor IDs, or arbitrary database operations from the worker. Server-owned job data and active database profiles are authoritative.
-- **Duplicate/replay:** job/source URLs are unique, item claims are atomic, existing `source_imports` and `product_sources` are checked, and repeated Draft submissions return the existing result.
+- **Duplicate/replay:** job/source URLs are unique and item claims are atomic. Discovery, claim and Draft submission all check existing `source_imports` and `product_sources` by stable platform + source model ID with canonical URL fallback. A local extension history avoids repeat capture in the same Chrome profile, while server checks cover other jobs and machines. Existing imports in review are treated as already extracted.
 - **SSRF/off-site discovery:** category and product URLs must be HTTPS, credential-free, use allowed catalog hosts, and remain on the assigned source host. The API stores media references but does not server-fetch worker-supplied URLs.
 - **Unbounded crawling:** every job has a server-side 1–10,000 product cap; discovery accepts at most 100 URLs per request.
 - **Concurrent workers/crashes:** `SKIP LOCKED`, status transitions, heartbeats, and stale item reclaim make processing resumable.
@@ -62,4 +62,4 @@ Production clients must call the canonical `https://www.hooma.ge` host directly.
 
 ## Windows worker
 
-See `tools/hooma-catalog-agent/README.md`. The worker uses a dedicated persistent Chrome profile and polls Hooma for assigned work. It can run interactively first, then be installed as a Windows startup task or service after the end-to-end test is accepted. See `tools/hooma-catalog-clipper/README.md` for the separate MakerWorld Assisted Mode.
+See `tools/hooma-catalog-agent/README.md` for the Playwright worker. For MakerWorld, prefer the ordinary-browser Auto Queue described in `tools/hooma-catalog-clipper/README.md`, because it preserves the user's verified Chrome session and pauses for any new human check.

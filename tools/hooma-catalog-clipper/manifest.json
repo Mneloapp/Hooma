@@ -1,10 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Hooma Catalog Clipper",
-  "version": "1.7.0",
-  "description": "Reads operator-opened product pages and can send reviewed MakerWorld results to a Hooma assisted job.",
-  "permissions": ["activeTab", "scripting", "downloads", "storage"],
-  "host_permissions": ["https://www.hooma.ge/*"],
+  "version": "2.0.0",
+  "description": "Creates reviewable Hooma product drafts manually or through a resumable, human-verified catalog queue.",
+  "permissions": ["activeTab", "tabs", "scripting", "downloads", "storage", "alarms", "notifications"],
+  "host_permissions": [
+    "https://www.hooma.ge/*",
+    "https://*.makerworld.com/*",
+    "https://*.printables.com/*",
+    "https://*.thingiverse.com/*",
+    "https://*.thangs.com/*",
+    "https://*.myminifactory.com/*",
+    "https://*.cults3d.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "Hooma Catalog Clipper",
     "default_popup": "popup.html"

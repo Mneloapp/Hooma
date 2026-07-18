@@ -9,17 +9,33 @@
   <body>
     <header>
       <div class="brand">H</div>
-      <div><h1>Hooma Catalog Clipper · v1.7.0</h1><p id="source">გახსნილი გვერდი ჯერ არ წაკითხულა.</p></div>
+      <div><h1>Hooma Catalog Clipper · v2.0.0</h1><p id="source">გახსნილი გვერდი ჯერ არ წაკითხულა.</p></div>
     </header>
 
     <section class="assisted-panel">
-      <div class="section-title"><strong>MakerWorld Assisted Mode</strong><span id="assisted-connection">არ არის დაყენებული</span></div>
-      <p class="hint">მუშაობს ჩვეულებრივ Chrome-ში: შენ გადიხარ verification-ს, Clipper კი მხოლოდ შენი მოქმედებით აგროვებს ბმულებს და აგზავნის Draft-ს.</p>
+      <div class="section-title"><strong>MakerWorld Queue</strong><span id="assisted-connection">არ არის დაყენებული</span></div>
+      <p class="hint">ჩვეულებრივ Chrome-ში ერთხელ გაიარე verification. Auto Queue შემდეგ რიგის დავალებებს თავად დაამუშავებს და მხოლოდ Draft-ებს შექმნის.</p>
       <label>Assisted Agent token<input id="agent-token" type="password" autocomplete="off" placeholder="hooma_ca_..." /></label>
       <div class="button-row">
         <button id="save-agent-token" type="button" class="secondary compact">ტოკენის შენახვა</button>
         <button id="reset-assisted" type="button" class="ghost compact">სესიის გასუფთავება</button>
       </div>
+
+      <section class="auto-queue-box">
+        <div class="section-title"><strong>Auto Queue Mode V2</strong><span id="auto-queue-badge" class="queue-badge">OFF</span></div>
+        <div id="auto-queue-state" class="job-state">Auto Queue მზადაა.</div>
+        <div id="auto-queue-stats" class="queue-stats">დამუშავებული 0 · Draft 0 · გადასახედი 0 · დუბლიკატი 0</div>
+        <div class="auto-queue-actions">
+          <button id="auto-queue-start" type="button" class="primary compact" disabled>Start</button>
+          <button id="auto-queue-pause" type="button" class="secondary compact" disabled>Pause</button>
+          <button id="auto-queue-resume" type="button" class="secondary compact" disabled>Resume</button>
+          <button id="auto-queue-stop" type="button" class="ghost compact" disabled>Stop</button>
+        </div>
+        <p class="hint">ვერიფიკაციისას რიგი არ იკარგება: Clipper ჩერდება, გახსნის იმავე ჩანართს და Resume-ის შემდეგ იქიდან აგრძელებს.</p>
+      </section>
+
+      <details class="manual-mode">
+        <summary>Manual Mode-ის კონტროლები</summary>
       <div id="agent-job" class="job-state">ჯერ აიღე Hooma Admin-ში შექმნილი assisted დავალება.</div>
       <div class="assisted-actions">
         <button id="claim-job" type="button" class="secondary" disabled>დავალების აღება</button>
@@ -27,6 +43,7 @@
         <button id="open-next" type="button" class="secondary" disabled>შემდეგი პროდუქტის გახსნა</button>
         <button id="complete-job" type="button" class="ghost" disabled>დავალების დასრულება</button>
       </div>
+      </details>
     </section>
 
     <button id="extract" class="primary">გახსნილი გვერდის წაკითხვა</button>
