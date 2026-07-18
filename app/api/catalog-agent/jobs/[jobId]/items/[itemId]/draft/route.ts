@@ -114,20 +114,35 @@ export async function POST(
     warnings,
   };
 
-  const [{ data: existingImport }, { data: existingSource }] = await Promise.all([
+  const [{ data: existingImportByUrl }, { data: existingSourceByUrl }, existingImportByModelResult, existingSourceByModelResult] = await Promise.all([
     context.admin.from("source_imports").select("id,product_id,status")
       .eq("platform", job.source_platform).eq("source_url", normalizedSource.toString()).maybeSingle(),
     context.admin.from("product_sources").select("product_id")
       .eq("platform", job.source_platform).eq("source_url", normalizedSource.toString()).maybeSingle(),
+    sourceId
+      ? context.admin.from("source_imports").select("id,product_id,status")
+        .eq("platform", job.source_platform).eq("source_model_id", sourceId).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
+    sourceId
+      ? context.admin.from("product_sources").select("product_id")
+        .eq("platform", job.source_platform).eq("source_model_id", sourceId).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const existingImport = existingImportByUrl ?? existingImportByModelResult.data;
+  const existingSource = existingSourceByUrl ?? existingSourceByModelResult.data;
   const existingProductId = existingImport?.product_id ?? existingSource?.product_id ?? null;
-  if (existingProductId) {
+  if (existingImport || existingSource) {
     await context.admin.from("catalog_agent_items").update({
       status: "duplicate", source_import_id: existingImport?.id ?? null, product_id: existingProductId,
       extracted_payload: payload, warnings, processed_at: new Date().toISOString(), error_message: null,
     }).eq("id", item.id);
     await updateCounters(context.admin, job.id);
-    return NextResponse.json({ ok: true, status: "duplicate", productId: existingProductId });
+    return NextResponse.json({
+      ok: true,
+      status: "duplicate",
+      productId: existingProductId,
+      sourceImportId: existingImport?.id ?? null,
+    });
   }
 
   const { data: sourceImport, error: sourceError } = await context.admin.from("source_imports").upsert({

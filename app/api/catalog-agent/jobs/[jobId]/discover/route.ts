@@ -36,21 +36,56 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
   }
   if (!normalized.size) return NextResponse.json({ ok: false, message: "No valid product URLs" }, { status: 400 });
 
+  const candidates = Array.from(normalized.values());
+  const candidateUrls = candidates.map((item) => item.source_url);
+  const candidateModelIds = Array.from(new Set(candidates.map((item) => item.source_model_id).filter((value): value is string => Boolean(value))));
+  const [{ data: priorImportsByUrl }, { data: priorSourcesByUrl }, priorImportsByModelResult, priorSourcesByModelResult] = await Promise.all([
+    context.admin.from("source_imports").select("source_url").eq("platform", job.source_platform).in("source_url", candidateUrls),
+    context.admin.from("product_sources").select("source_url").eq("platform", job.source_platform).in("source_url", candidateUrls),
+    candidateModelIds.length
+      ? context.admin.from("source_imports").select("source_model_id").eq("platform", job.source_platform).in("source_model_id", candidateModelIds)
+      : Promise.resolve({ data: [] }),
+    candidateModelIds.length
+      ? context.admin.from("product_sources").select("source_model_id").eq("platform", job.source_platform).in("source_model_id", candidateModelIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const globallyProcessedUrls = new Set<string>([
+    ...(priorImportsByUrl ?? []).map((item: any) => String(item.source_url)),
+    ...(priorSourcesByUrl ?? []).map((item: any) => String(item.source_url)),
+  ]);
+  const globallyProcessedModelIds = new Set<string>([
+    ...(priorImportsByModelResult.data ?? []).map((item: any) => String(item.source_model_id)),
+    ...(priorSourcesByModelResult.data ?? []).map((item: any) => String(item.source_model_id)),
+  ]);
+  const eligibleCandidates = candidates.filter((item) => (
+    !globallyProcessedUrls.has(item.source_url)
+    && (!item.source_model_id || !globallyProcessedModelIds.has(item.source_model_id))
+  ));
+
   const { count: existingCount } = await context.admin
     .from("catalog_agent_items")
     .select("id", { count: "exact", head: true })
     .eq("job_id", job.id);
   const remaining = Math.max(0, Number(job.max_products) - Number(existingCount ?? 0));
-  const rows = Array.from(normalized.values()).slice(0, remaining);
+  const rows = eligibleCandidates.slice(0, remaining);
+  let accepted = 0;
   if (rows.length) {
-    const { error } = await context.admin.from("catalog_agent_items")
-      .upsert(rows, { onConflict: "job_id,source_url", ignoreDuplicates: true });
+    const { data: inserted, error } = await context.admin.from("catalog_agent_items")
+      .upsert(rows, { onConflict: "job_id,source_url", ignoreDuplicates: true })
+      .select("id");
     if (error) return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    accepted = inserted?.length ?? 0;
   }
 
   const cursor = body?.cursor && typeof body.cursor === "object" ? body.cursor : {};
   await context.admin.from("catalog_agent_jobs").update({ cursor, heartbeat_at: new Date().toISOString() }).eq("id", job.id);
   const { data: counters } = await context.admin.rpc("refresh_catalog_agent_job_counters", { requested_job_id: job.id });
-  return NextResponse.json({ ok: true, accepted: rows.length, limitReached: rows.length < normalized.size || remaining === 0, counters });
+  return NextResponse.json({
+    ok: true,
+    accepted,
+    skippedDuplicates: candidates.length - eligibleCandidates.length,
+    alreadyInJob: rows.length - accepted,
+    limitReached: rows.length < eligibleCandidates.length || remaining === 0,
+    counters,
+  });
 }
-

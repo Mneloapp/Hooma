@@ -18,6 +18,13 @@ const elements = {
   saveAgentToken: document.querySelector("#save-agent-token"),
   resetAssisted: document.querySelector("#reset-assisted"),
   assistedConnection: document.querySelector("#assisted-connection"),
+  autoQueueBadge: document.querySelector("#auto-queue-badge"),
+  autoQueueState: document.querySelector("#auto-queue-state"),
+  autoQueueStats: document.querySelector("#auto-queue-stats"),
+  autoQueueStart: document.querySelector("#auto-queue-start"),
+  autoQueuePause: document.querySelector("#auto-queue-pause"),
+  autoQueueResume: document.querySelector("#auto-queue-resume"),
+  autoQueueStop: document.querySelector("#auto-queue-stop"),
   agentJob: document.querySelector("#agent-job"),
   claimJob: document.querySelector("#claim-job"),
   captureCategory: document.querySelector("#capture-category"),
@@ -47,6 +54,7 @@ const elements = {
 
 let draft = null;
 let assisted = { token: "", job: null, item: null };
+let autoQueue = { enabled: false, paused: false, phase: "idle" };
 const HOOMA_BASE_URL = "https://www.hooma.ge";
 const AGENT_TOKEN_PATTERN = /^hooma_ca_[a-f0-9]{12}_[A-Za-z0-9_-]{48}$/;
 
@@ -65,6 +73,7 @@ async function persistAssisted() {
 
 function renderAssistedState() {
   const configured = AGENT_TOKEN_PATTERN.test(assisted.token);
+  const autoActive = Boolean(autoQueue.enabled);
   elements.assistedConnection.textContent = configured ? `Token · ${assisted.token.split("_")[2]}••••` : "არ არის დაყენებული";
   if (assisted.job) {
     const itemLine = assisted.item ? `\nმიმდინარე პროდუქტი: ${assisted.item.source_title || assisted.item.source_url}` : "";
@@ -72,11 +81,30 @@ function renderAssistedState() {
   } else {
     elements.agentJob.textContent = "ჯერ აიღე Hooma Admin-ში შექმნილი assisted დავალება.";
   }
-  elements.claimJob.disabled = !configured || Boolean(assisted.job);
-  elements.captureCategory.disabled = !configured || !assisted.job;
-  elements.openNext.disabled = !configured || !assisted.job;
-  elements.completeJob.disabled = !configured || !assisted.job || Boolean(assisted.item);
-  elements.submitAssisted.disabled = !configured || !assisted.job || !assisted.item || !draft;
+  elements.saveAgentToken.disabled = autoActive;
+  elements.resetAssisted.disabled = autoActive;
+  elements.claimJob.disabled = autoActive || !configured || Boolean(assisted.job);
+  elements.captureCategory.disabled = autoActive || !configured || !assisted.job;
+  elements.openNext.disabled = autoActive || !configured || !assisted.job;
+  elements.completeJob.disabled = autoActive || !configured || !assisted.job || Boolean(assisted.item);
+  elements.submitAssisted.disabled = autoActive || !configured || !assisted.job || !assisted.item || !draft;
+  elements.extract.disabled = autoActive;
+  elements.autoQueueStart.disabled = !configured || autoActive;
+  elements.autoQueuePause.disabled = !autoActive || Boolean(autoQueue.paused);
+  elements.autoQueueResume.disabled = !autoActive || !autoQueue.paused;
+  elements.autoQueueStop.disabled = !autoActive;
+  elements.autoQueueBadge.textContent = autoActive ? (autoQueue.paused ? "PAUSED" : "RUNNING") : "OFF";
+  elements.autoQueueBadge.className = `queue-badge${autoActive ? autoQueue.paused ? " paused" : " running" : ""}`;
+  elements.autoQueueState.textContent = autoQueue.message || "Auto Queue მზადაა.";
+  elements.autoQueueStats.textContent = `დამუშავებული ${Number(autoQueue.processedCount ?? 0)} · Draft ${Number(autoQueue.draftCount ?? 0)} · გადასახედი ${Number(autoQueue.reviewCount ?? 0)} · დუბლიკატი ${Number(autoQueue.duplicateCount ?? 0) + Number(autoQueue.skippedDuplicates ?? 0)} · Failed ${Number(autoQueue.failedCount ?? 0)}`;
+}
+
+async function autoQueueCommand(type) {
+  const result = await chrome.runtime.sendMessage({ type });
+  if (!result?.ok) throw new Error(result?.message || "Auto Queue ბრძანება ვერ შესრულდა.");
+  autoQueue = result.state ?? autoQueue;
+  renderAssistedState();
+  return autoQueue;
 }
 
 async function agentApi(pathname, body = {}) {
@@ -125,6 +153,10 @@ async function loadAssistedState() {
     job: stored.hoomaAssistedJob && typeof stored.hoomaAssistedJob === "object" ? stored.hoomaAssistedJob : null,
     item: stored.hoomaAssistedItem && typeof stored.hoomaAssistedItem === "object" ? stored.hoomaAssistedItem : null,
   };
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "AUTO_QUEUE_GET_STATE" });
+    if (result?.ok && result.state) autoQueue = result.state;
+  } catch { /* Manual Mode remains available if the worker is restarting. */ }
   renderAssistedState();
 }
 const numeric = (element) => element.value === "" ? null : Number(element.value);
@@ -271,6 +303,49 @@ function render(data) {
 renderColorOptions();
 document.querySelectorAll('input[name="color-mode"]').forEach((input) => input.addEventListener("change", updateColorHint));
 
+elements.autoQueueStart.addEventListener("click", async () => {
+  elements.autoQueueStart.disabled = true;
+  show("Auto Queue იწყება…");
+  try {
+    await autoQueueCommand("AUTO_QUEUE_START");
+    show("Auto Queue ჩაირთო. შეგიძლია popup დახურო — რიგი ფონურად გაგრძელდება.", "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "Auto Queue ვერ დაიწყო.", "error");
+  } finally {
+    renderAssistedState();
+  }
+});
+
+elements.autoQueuePause.addEventListener("click", async () => {
+  show("Auto Queue ჩერდება…");
+  try {
+    await autoQueueCommand("AUTO_QUEUE_PAUSE");
+    show("Auto Queue შეჩერდა და მიმდინარე პოზიცია შეინახა.", "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "Auto Queue ვერ შეჩერდა.", "error");
+  }
+});
+
+elements.autoQueueResume.addEventListener("click", async () => {
+  show("Auto Queue გრძელდება…");
+  try {
+    await autoQueueCommand("AUTO_QUEUE_RESUME");
+    show("Auto Queue შენახული პოზიციიდან გაგრძელდა.", "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "Auto Queue ვერ გაგრძელდა.", "error");
+  }
+});
+
+elements.autoQueueStop.addEventListener("click", async () => {
+  show("Auto Queue ითიშება…");
+  try {
+    await autoQueueCommand("AUTO_QUEUE_STOP");
+    show("Auto Queue გამორთულია; მიმდინარე პოზიცია შენახულია.", "ok");
+  } catch (error) {
+    show(error instanceof Error ? error.message : "Auto Queue ვერ გაითიშა.", "error");
+  }
+});
+
 elements.extract.addEventListener("click", async () => {
   elements.extract.disabled = true;
   show("გვერდის საჯარო მონაცემები იკითხება...");
@@ -398,8 +473,9 @@ elements.captureCategory.addEventListener("click", async () => {
       items,
       cursor: { mode: "human_assisted", capturedAt: new Date().toISOString(), pageUrl: tab.url },
     });
+    const duplicateCount = Number(result.skippedDuplicates ?? 0) + Number(result.alreadyInJob ?? 0);
     const suffix = result.limitReached ? " დავალების ლიმიტიც შევსებულია." : " თუ ქვემოთ კიდევ პროდუქტებია, თავად ჩამოსქროლე და ღილაკს ხელახლა დააჭირე.";
-    show(`${result.accepted} ხილული პროდუქტი დაემატა რიგში.${suffix}`, "ok");
+    show(`${result.accepted} ახალი პროდუქტი დაემატა რიგში; ${duplicateCount} უკვე დამუშავებული/დამატებული პროდუქტი გამოტოვებულია.${suffix}`, "ok");
   } catch (error) {
     show(error instanceof Error ? error.message : "პროდუქტების ბმულები ვერ დაემატა.", "error");
   } finally {
@@ -413,7 +489,10 @@ elements.openNext.addEventListener("click", async () => {
   try {
     if (!assisted.job) throw new Error("ჯერ აიღე assisted დავალება.");
     if (!assisted.item) {
-      const result = await agentApi(`/api/catalog-agent/jobs/${assisted.job.id}/items/claim`);
+      let result;
+      do {
+        result = await agentApi(`/api/catalog-agent/jobs/${assisted.job.id}/items/claim`);
+      } while (!result.item && result.continueClaiming);
       if (!result.item) {
         show("რიგში დაუმუშავებელი პროდუქტი აღარ არის. საჭიროების შემთხვევაში დაამატე კიდევ ხილული ბმულები ან დაასრულე დავალება.", "ok");
         return;
@@ -535,4 +614,10 @@ loadAssistedState().catch(() => {
   assisted = { token: "", job: null, item: null };
   renderAssistedState();
   show("Assisted Mode-ის ლოკალური მდგომარეობა ვერ წავიკითხე. თავიდან შეინახე token.", "error");
+});
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== "AUTO_QUEUE_STATE_CHANGED" || !message.state) return;
+  autoQueue = message.state;
+  renderAssistedState();
 });

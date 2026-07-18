@@ -27,6 +27,15 @@ section { padding-top: 3px; }
 .assisted-panel { display: grid; gap: 9px; margin-bottom: 13px; border: 1px solid #1e29221a; border-radius: 14px; background: #fffdf8; padding: 12px; }
 .button-row, .assisted-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .job-state { border-radius: 10px; background: #f4f1ea; padding: 9px 10px; color: #536057; font-size: 11px; white-space: pre-wrap; }
+.auto-queue-box { display: grid; gap: 8px; border-radius: 12px; background: #edf3eb; padding: 10px; }
+.auto-queue-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.queue-badge { border-radius: 999px; background: #d9ded8; padding: 3px 7px; color: #536057 !important; font-size: 9px !important; font-weight: 800; }
+.queue-badge.running { background: #d8f0df; color: #17653a !important; }
+.queue-badge.paused { background: #ffdfd1; color: #9e3f16 !important; }
+.queue-stats { color: #536057; font-size: 10px; }
+.manual-mode { border-top: 1px solid #1e292214; padding-top: 8px; }
+.manual-mode summary { color: #536057; font-size: 11px; font-weight: 750; cursor: pointer; }
+.manual-mode[open] { display: grid; gap: 8px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; }
 .section-title span { color: #657168; font-size: 11px; }
 .hint { margin: 3px 0 9px; font-size: 11px; }
