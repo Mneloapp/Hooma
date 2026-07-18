@@ -4,9 +4,13 @@ const STATE_KEY = "hoomaAutoQueueState";
 const TOKEN_KEY = "hoomaAssistedToken";
 const HISTORY_KEY = "hoomaAutoProcessedSources";
 const WAKE_ALARM = "hooma-auto-queue-wake";
+const WATCHDOG_ALARM = "hooma-auto-queue-watchdog";
 const VERIFICATION_NOTIFICATION = "hooma-auto-queue-verification";
 const WORKER_NAME = "Hooma Clipper Auto Queue V2 · Chrome";
 const MAX_HISTORY = 25_000;
+const WATCHDOG_INTERVAL_MINUTES = 1;
+const STALLED_PAGE_RELOAD_MS = 4 * 60 * 1_000;
+const MINIMUM_RELOAD_GAP_MS = 2 * 60 * 1_000;
 
 const defaultState = () => ({
   enabled: false,
@@ -24,9 +28,13 @@ const defaultState = () => ({
   skippedDuplicates: 0,
   discoveryPass: 0,
   retryCount: 0,
+  pageRetryCount: 0,
+  automaticReloadCount: 0,
   message: "Auto Queue მზადაა.",
   lastError: null,
   startedAt: null,
+  lastProgressAt: null,
+  lastReloadAt: null,
   updatedAt: new Date().toISOString(),
 });
 
@@ -51,9 +59,28 @@ function broadcastState() {
 }
 
 async function saveState(patch = {}) {
-  state = { ...state, ...patch, updatedAt: new Date().toISOString() };
+  const previous = state;
+  const updatedAt = new Date().toISOString();
+  const progressKeys = [
+    "phase",
+    "job",
+    "item",
+    "processedCount",
+    "draftCount",
+    "reviewCount",
+    "duplicateCount",
+    "failedCount",
+  ];
+  const madeProgress = progressKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== previous[key]);
+  state = {
+    ...state,
+    ...patch,
+    lastProgressAt: patch.lastProgressAt ?? (madeProgress ? updatedAt : state.lastProgressAt),
+    updatedAt,
+  };
   await chrome.storage.local.set({ [STATE_KEY]: state });
   await updateActionBadge();
+  await syncPowerState();
   broadcastState();
   return state;
 }
@@ -83,6 +110,19 @@ async function updateActionBadge() {
     return;
   }
   await chrome.action.setBadgeText({ text: "" });
+}
+
+async function syncPowerState() {
+  if (!chrome.power) return;
+  try {
+    if (state.enabled && !state.paused) chrome.power.requestKeepAwake("system");
+    else chrome.power.releaseKeepAwake();
+  } catch { /* Queue recovery still works when the power API is unavailable. */ }
+}
+
+async function ensureWatchdogAlarm() {
+  const alarm = await chrome.alarms.get(WATCHDOG_ALARM);
+  if (!alarm) chrome.alarms.create(WATCHDOG_ALARM, { periodInMinutes: WATCHDOG_INTERVAL_MINUTES });
 }
 
 function schedule(delayMs = 1_000) {
@@ -219,6 +259,49 @@ async function pauseForVerification(resumePhase) {
       requireInteraction: true,
     });
   } catch { /* Badge and persisted state still expose the verification pause. */ }
+}
+
+async function reloadManagedPage(reason, force = false) {
+  if (!state.enabled || state.paused || !state.job) return false;
+  const tab = await managedTab();
+  try {
+    if (await verificationRequired(tab.id)) {
+      await pauseForVerification(state.item ? "navigate_item" : "navigate_category");
+      return false;
+    }
+  } catch { /* A half-loaded page may not be scriptable yet; reloading is the recovery path. */ }
+
+  const now = Date.now();
+  const lastReloadAt = Date.parse(state.lastReloadAt ?? "");
+  if (!force && Number.isFinite(lastReloadAt) && now - lastReloadAt < MINIMUM_RELOAD_GAP_MS) return false;
+
+  const nextPhase = state.item ? "navigate_item" : "navigate_category";
+  await saveState({
+    phase: nextPhase,
+    lastReloadAt: new Date(now).toISOString(),
+    lastProgressAt: new Date(now).toISOString(),
+    automaticReloadCount: state.automaticReloadCount + 1,
+    message: `${reason} გვერდი ავტომატურად ახლდება და რიგი იგივე პოზიციიდან გაგრძელდება…`,
+    lastError: null,
+  });
+  await chrome.tabs.reload(tab.id, { bypassCache: false });
+  schedule(5_000);
+  return true;
+}
+
+async function checkPageWatchdog() {
+  if (running) return;
+  await loadState();
+  if (!state.enabled || state.paused || !state.job) return;
+  if (!["navigate_category", "discover_category", "navigate_item", "extract_item"].includes(state.phase)) return;
+
+  const lastProgressAt = Date.parse(state.lastProgressAt ?? state.updatedAt ?? "");
+  if (!Number.isFinite(lastProgressAt)) {
+    await saveState({ lastProgressAt: new Date().toISOString() });
+    return;
+  }
+  if (Date.now() - lastProgressAt < STALLED_PAGE_RELOAD_MS) return;
+  await reloadManagedPage("Watchdog-მა 4 წუთის განმავლობაში პროგრესი ვერ დაინახა.");
 }
 
 async function discoverCategory(tabId, expectedHost, maximumProducts) {
@@ -368,12 +451,14 @@ async function processCategoryDiscovery() {
     : { accepted: 0, skippedDuplicates: 0, alreadyInJob: 0, limitReached: false };
   const discoveryPass = state.discoveryPass + 1;
   const discoveryFinished = Boolean(result.complete || submission.limitReached || discoveryPass >= 100);
+  const usefulProgress = submission.accepted > 0 || discoveryFinished;
   await saveState({
     phase: discoveryFinished ? "claim_item" : "discover_category",
     discoveryPass,
     skippedDuplicates: state.skippedDuplicates + submission.skippedDuplicates + submission.alreadyInJob,
     message: `${submission.accepted} ახალი პროდუქტი დაემატა რიგში; ${submission.skippedDuplicates + submission.alreadyInJob} დუბლიკატი გამოტოვებულია.${discoveryFinished ? " პროდუქტების რიგი მზადაა." : " კატეგორიის ქვედა ნაწილი იკითხება…"}`,
     retryCount: 0,
+    lastProgressAt: usefulProgress ? new Date().toISOString() : state.lastProgressAt,
   });
   schedule(discoveryFinished ? 1_000 : 1_500);
 }
@@ -422,6 +507,17 @@ async function processProductExtraction() {
   try {
     payload = await extractProduct(tab.id);
   } catch (error) {
+    const pageRetryCount = state.pageRetryCount + 1;
+    if (pageRetryCount <= 2) {
+      await saveState({
+        pageRetryCount,
+        message: `პროდუქტის გვერდი ვერ წაიკითხა. ავტომატური Reload ${pageRetryCount}/2…`,
+        lastError: error instanceof Error ? error.message : "Product extraction failed",
+      });
+      if (await reloadManagedPage("პროდუქტის წაკითხვა დროებით ვერ დასრულდა.", true)) return;
+      schedule(5_000);
+      return;
+    }
     await agentApi(`/api/catalog-agent/jobs/${state.job.id}/items/${state.item.id}/draft`, {
       error: error instanceof Error ? error.message : "Product extraction failed",
     });
@@ -432,6 +528,7 @@ async function processProductExtraction() {
       failedCount: state.failedCount + 1,
       message: "პროდუქტი ვერ წაიკითხა და Failed სტატუსით გამოტოვა. რიგი გრძელდება.",
       retryCount: 0,
+      pageRetryCount: 0,
     });
     schedule(5_000);
     return;
@@ -454,6 +551,7 @@ async function processProductExtraction() {
         ? "პროდუქტის მონაცემები გადასახედად შეინახა. რიგი გრძელდება."
         : "პროდუქტის Draft შეიქმნა. რიგი გრძელდება.",
     retryCount: 0,
+    pageRetryCount: 0,
     lastError: null,
   });
   schedule(6_000);
@@ -551,7 +649,9 @@ async function startAutoQueue() {
     lastError: null,
     retryCount: 0,
     startedAt: state.startedAt ?? new Date().toISOString(),
+    lastProgressAt: new Date().toISOString(),
   });
+  await ensureWatchdogAlarm();
   schedule(100);
 }
 
@@ -577,7 +677,9 @@ async function resumeAutoQueue() {
     message: "Auto Queue გრძელდება შენახული პოზიციიდან…",
     lastError: null,
     retryCount: 0,
+    lastProgressAt: new Date().toISOString(),
   });
+  await ensureWatchdogAlarm();
   schedule(100);
 }
 
@@ -594,6 +696,7 @@ async function stopAutoQueue() {
     message: "Auto Queue გამორთულია. მიმდინარე პოზიცია შენახულია და Start-ით გაგრძელდება.",
   });
   await chrome.alarms.clear(WAKE_ALARM);
+  await chrome.alarms.clear(WATCHDOG_ALARM);
   if (wakeTimer) clearTimeout(wakeTimer);
   wakeTimer = null;
 }
@@ -629,6 +732,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === WAKE_ALARM) runCycle();
+  if (alarm.name === WATCHDOG_ALARM) checkPageWatchdog();
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -650,18 +754,16 @@ chrome.notifications.onClicked.addListener((notificationId) => {
   }).catch(() => {});
 });
 
-chrome.runtime.onInstalled.addListener(() => {
-  loadState().then(updateActionBadge).then(() => {
-    if (state.enabled && !state.paused) schedule(1_000);
-  });
-});
+async function restoreQueueRuntime() {
+  await loadState();
+  await updateActionBadge();
+  await syncPowerState();
+  if (state.enabled && !state.paused) {
+    await ensureWatchdogAlarm();
+    schedule(1_000);
+  }
+}
 
-chrome.runtime.onStartup.addListener(() => {
-  loadState().then(updateActionBadge).then(() => {
-    if (state.enabled && !state.paused) schedule(1_000);
-  });
-});
-
-loadState().then(updateActionBadge).then(() => {
-  if (state.enabled && !state.paused) schedule(1_000);
-});
+chrome.runtime.onInstalled.addListener(restoreQueueRuntime);
+chrome.runtime.onStartup.addListener(restoreQueueRuntime);
+restoreQueueRuntime();

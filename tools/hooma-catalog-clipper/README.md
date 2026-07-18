@@ -38,6 +38,8 @@ Use a separate Catalog Agent identity for this mode. Do not reuse the token alre
 7. **Pause** preserves the exact queue position. **Stop** disables polling while preserving the current position; **Start** continues it later.
 8. Review every resulting Draft and Import Review record in Hooma Admin. The extension cannot publish; Admin/Owner review and publication confirmation remain required.
 
+While Auto Queue is running, v2.1 keeps Windows awake through Chrome and checks the managed page every minute. If the same page makes no progress for four minutes, the watchdog reloads it automatically and resumes the saved job/item. A product page that cannot be extracted is reloaded up to two times before the item is marked Failed. Human-verification pages are never reloaded in a loop: the queue pauses and waits for the operator instead. Chrome must remain open, and the Windows machine must remain powered on and connected to the internet.
+
 The extension prevents repeated extraction at two levels. Locally it remembers successfully processed source identities. Hooma also checks every discovered/claimed item against all existing `source_imports` and `product_sources` using the stable platform + model ID (with canonical URL fallback), so a model already extracted by another job or machine is skipped before its product page opens. A final idempotency check runs when the Draft is submitted.
 
 Auto Queue never solves CAPTCHA, changes browser fingerprints, exports cookies, or bypasses access controls. It only continues after a human completes verification in the normal Chrome tab. Revoke the Agent in Hooma Admin if the Windows machine or Chrome profile is no longer trusted.

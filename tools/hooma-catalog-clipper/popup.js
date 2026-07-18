@@ -100,7 +100,7 @@ function renderAssistedState() {
   elements.autoQueueBadge.textContent = autoActive ? (autoQueue.paused ? "PAUSED" : "RUNNING") : "OFF";
   elements.autoQueueBadge.className = `queue-badge${autoActive ? autoQueue.paused ? " paused" : " running" : ""}`;
   elements.autoQueueState.textContent = autoQueue.message || "Auto Queue მზადაა.";
-  elements.autoQueueStats.textContent = `დამუშავებული ${Number(autoQueue.processedCount ?? 0)} · Draft ${Number(autoQueue.draftCount ?? 0)} · გადასახედი ${Number(autoQueue.reviewCount ?? 0)} · დუბლიკატი ${Number(autoQueue.duplicateCount ?? 0) + Number(autoQueue.skippedDuplicates ?? 0)} · Failed ${Number(autoQueue.failedCount ?? 0)}`;
+  elements.autoQueueStats.textContent = `დამუშავებული ${Number(autoQueue.processedCount ?? 0)} · Draft ${Number(autoQueue.draftCount ?? 0)} · გადასახედი ${Number(autoQueue.reviewCount ?? 0)} · დუბლიკატი ${Number(autoQueue.duplicateCount ?? 0) + Number(autoQueue.skippedDuplicates ?? 0)} · Failed ${Number(autoQueue.failedCount ?? 0)} · Auto Reload ${Number(autoQueue.automaticReloadCount ?? 0)}`;
 }
 
 async function autoQueueCommand(type) {
