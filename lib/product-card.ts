@@ -26,6 +26,13 @@ export type ProductCardData = Pick<Product,
   discountPercent?: number | null;
 };
 
+export type ProductCardDeal = {
+  productId: string;
+  dealPrice: number | null;
+  originalPrice: number | null;
+  discountPercent: number;
+};
+
 export function toProductCardData(product: Product): ProductCardData {
   return {
     id: product.id,
@@ -47,5 +54,17 @@ export function toProductCardData(product: Product): ProductCardData {
     ratingCount: product.ratingCount,
     salesCount: product.salesCount,
     popularityScore: product.popularityScore,
+  };
+}
+
+export function toDiscountedProductCardData(product: Product, deal?: ProductCardDeal): ProductCardData {
+  const card = toProductCardData(product);
+  if (!deal || deal.productId !== product.id || deal.dealPrice === null || deal.originalPrice === null) return card;
+
+  return {
+    ...card,
+    price: deal.dealPrice,
+    originalPrice: deal.originalPrice,
+    discountPercent: deal.discountPercent,
   };
 }
