@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowRight, BadgePercent, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
+import { Fragment } from "react";
+import { ArrowRight, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
 import { catalogCategories } from "@/data/catalog";
 import type { ProductCardData } from "@/lib/product-card";
 import { Button } from "@/components/Button";
 import { ProductShelf } from "@/components/ProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
 
-export function HomeStorefrontClient({ catalogProducts, dailyDealDiscountPercent }: { catalogProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
+export function HomeStorefrontClient({ catalogProducts, dailyDealProducts, dailyDealDiscountPercent }: { catalogProducts: ProductCardData[]; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
   const georgian = language === "ka";
   const popularProducts = [...catalogProducts]
@@ -17,15 +18,6 @@ export function HomeStorefrontClient({ catalogProducts, dailyDealDiscountPercent
   return (
     <main className="bg-hooma-panel/60 pb-16">
       <div className="mx-auto max-w-[1480px] space-y-5 px-4 pt-5 sm:px-6 lg:px-8">
-        <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-hooma-text text-white md:grid-cols-[1fr_auto] md:items-center">
-          <div className="p-6 sm:p-8">
-            <div className="flex items-center gap-3 text-hooma-secondary"><BadgePercent size={22} /><p className="text-xs font-semibold uppercase tracking-[0.18em]">{georgian ? "Hooma-ს დღის შეთავაზებები" : "Hooma daily deals"}</p></div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{georgian ? `50 განსხვავებული პროდუქტი ყოველდღე −${dailyDealDiscountPercent}%-ად` : `50 different products at ${dailyDealDiscountPercent}% off every day`}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">{georgian ? "შეთავაზებები თბილისის დროით ყოველ დღე იცვლება. ფასდაკლება მოქმედებს მხოლოდ იმ დღის შერჩეულ პროდუქტებზე." : "Deals rotate every day on Tbilisi time and apply only to that day’s selected products."}</p>
-          </div>
-          <div className="border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8"><Button href="/deals" variant="secondary" className="border-white/15 bg-white text-hooma-text">{georgian ? "დღის შეთავაზებების ნახვა" : "See today’s deals"}<ArrowRight size={15} className="ml-2" /></Button></div>
-        </section>
-
         <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-gradient-to-r from-[#FFE0D6] via-[#FFF1C7] to-[#DDEBFF] sm:grid-cols-3">
           {[
             [Clock3, georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery", georgian ? "სტანდარტული კატალოგის შეკვეთებისთვის" : "For standard catalog orders"],
@@ -43,7 +35,15 @@ export function HomeStorefrontClient({ catalogProducts, dailyDealDiscountPercent
 
         <div className="space-y-5">
           {catalogCategories.map((category) => (
-            <ProductShelf key={category.slug} eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={catalogProducts.filter((item) => item.categorySlug === category.slug)} href={`/shop?category=${category.slug}`} />
+            <Fragment key={category.slug}>
+              <ProductShelf eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={catalogProducts.filter((item) => item.categorySlug === category.slug)} href={`/shop?category=${category.slug}`} />
+              {category.slug === "fashion" ? <ProductShelf
+                eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}
+                title={georgian ? "დღის შეთავაზებები" : "Daily deals"}
+                products={dailyDealProducts}
+                href="/deals"
+              /> : null}
+            </Fragment>
           ))}
         </div>
 

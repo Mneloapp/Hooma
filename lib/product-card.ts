@@ -20,7 +20,11 @@ export type ProductCardData = Pick<Product,
   | "ratingCount"
   | "salesCount"
   | "popularityScore"
->;
+> & {
+  href?: string;
+  originalPrice?: number | null;
+  discountPercent?: number | null;
+};
 
 export function toProductCardData(product: Product): ProductCardData {
   return {
