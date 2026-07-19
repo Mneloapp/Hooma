@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { requirePermission } from "@/lib/supabase/server";
 import {
+  approveMaterialReceiptAction,
   recordExpenseAction,
   recordMaterialPurchaseAction,
   recordProductionUsageAction,
@@ -30,6 +31,9 @@ type PurchaseRow = {
   quantity_kg: number | string;
   total_gel: number | string;
   payment_status: string;
+  received_at: string | null;
+  warehouse_location: string | null;
+  finance_review_status: string;
   erp_suppliers: { name: string } | null;
   material_cost_profiles: { code: string; name: string } | null;
 };
@@ -101,7 +105,7 @@ export default async function ErpPage({ searchParams }: { searchParams: Promise<
     admin.from("erp_settings").select("*").eq("id", 1).maybeSingle(),
     admin.from("material_cost_profiles").select("id,code,name").eq("is_active", true).order("code"),
     admin.from("erp_material_stock_summary").select("*").order("code"),
-    admin.from("erp_material_purchases").select("id,document_date,document_number,quantity_kg,total_gel,payment_status,erp_suppliers(name),material_cost_profiles(code,name)").order("document_date", { ascending: false }).limit(20),
+    admin.from("erp_material_purchases").select("id,document_date,document_number,quantity_kg,total_gel,payment_status,received_at,warehouse_location,finance_review_status,erp_suppliers(name),material_cost_profiles(code,name)").order("document_date", { ascending: false }).limit(40),
     admin.from("erp_expenses").select("id,expense_date,category,description,total_gel,recognized_expense_gel,payment_status,erp_suppliers(name)").order("expense_date", { ascending: false }).limit(20),
     admin.from("erp_sales_events").select("id,event_date,event_type,order_id,provider,provider_payment_id,gross_amount_gel,product_revenue_gel,delivery_revenue_gel,output_vat_gel,reconciliation_status").eq("is_test", false).order("event_date", { ascending: false }).limit(30),
     admin.from("erp_profit_loss_monthly").select("*").order("month", { ascending: false }).limit(24),
@@ -266,7 +270,7 @@ export default async function ErpPage({ searchParams }: { searchParams: Promise<
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
-        <div className="rounded-[1.5rem] border border-hooma-text/10 bg-white/80 p-5"><h2 className="text-xl font-semibold">ბოლო შესყიდვები</h2><div className="mt-4 space-y-3">{purchases.map((purchase) => <div key={purchase.id} className="flex flex-col justify-between gap-2 rounded-2xl bg-hooma-background p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{purchase.material_cost_profiles?.code || "მასალა"} · {number.format(numeric(purchase.quantity_kg))} კგ</p><p className="mt-1 text-xs text-hooma-muted">{purchase.erp_suppliers?.name || "—"} · {purchase.document_number} · {dateFormat.format(new Date(purchase.document_date))}</p></div><div className="text-right"><p className="font-semibold">{money.format(numeric(purchase.total_gel))}</p><p className="mt-1 text-xs text-hooma-muted">{purchase.payment_status}</p></div></div>)}</div></div>
+        <div className="rounded-[1.5rem] border border-hooma-text/10 bg-white/80 p-5"><div className="flex items-center justify-between gap-3"><h2 className="text-xl font-semibold">ბოლო შესყიდვები და მიღებები</h2>{purchases.some((purchase) => purchase.finance_review_status === "pending") ? <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">ფინანსური შემოწმება საჭიროა</span> : null}</div><div className="mt-4 space-y-3">{purchases.map((purchase) => <div key={purchase.id} className={`flex flex-col justify-between gap-3 rounded-2xl p-4 sm:flex-row sm:items-center ${purchase.finance_review_status === "pending" ? "border border-amber-200 bg-amber-50" : "bg-hooma-background"}`}><div><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{purchase.material_cost_profiles?.code || "მასალა"} · {number.format(numeric(purchase.quantity_kg))} კგ</p>{purchase.received_at ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${purchase.finance_review_status === "approved" ? "bg-emerald-100 text-emerald-900" : "bg-amber-200 text-amber-950"}`}>{purchase.finance_review_status === "approved" ? "მიღება შემოწმებულია" : "ოპერატორის მიღება"}</span> : null}</div><p className="mt-1 text-xs text-hooma-muted">{purchase.erp_suppliers?.name || "—"} · {purchase.document_number} · {dateFormat.format(new Date(purchase.document_date))}{purchase.warehouse_location ? ` · ${purchase.warehouse_location}` : ""}</p></div><div className="flex items-center gap-3 sm:text-right"><div><p className="font-semibold">{money.format(numeric(purchase.total_gel))}</p><p className="mt-1 text-xs text-hooma-muted">{purchase.payment_status}</p></div>{purchase.finance_review_status === "pending" ? <form action={approveMaterialReceiptAction}><input type="hidden" name="purchase_id" value={purchase.id} /><button className="min-h-9 rounded-full bg-amber-950 px-3 text-xs font-semibold text-white">გადამოწმებულია</button></form> : null}</div></div>)}</div></div>
         <div className="rounded-[1.5rem] border border-hooma-text/10 bg-white/80 p-5"><h2 className="text-xl font-semibold">ბოლო ხარჯები</h2><div className="mt-4 space-y-3">{expenses.map((expense) => <div key={expense.id} className="flex flex-col justify-between gap-2 rounded-2xl bg-hooma-background p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{categoryLabels[expense.category] || expense.category} · {expense.description}</p><p className="mt-1 text-xs text-hooma-muted">{expense.erp_suppliers?.name || "—"} · {dateFormat.format(new Date(expense.expense_date))}</p></div><div className="text-right"><p className="font-semibold">{money.format(numeric(expense.total_gel))}</p><p className="mt-1 text-xs text-hooma-muted">{expense.payment_status}</p></div></div>)}</div></div>
       </section>
 

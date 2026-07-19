@@ -25,7 +25,7 @@ import {
   setPrinterStatusAction,
   startPhysicalPrintAction,
 } from "./actions";
-import { printerStatusLabels, safeMakerWorldUrl } from "@/lib/production/manual-workflow";
+import { printerStatusLabels, safeMakerWorldUrl, uuidPattern } from "@/lib/production/manual-workflow";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { requirePermission } from "@/lib/supabase/server";
@@ -132,23 +132,23 @@ function AmsProductionProfile({ attributes }: { attributes?: Record<string, unkn
 export default async function ProductionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string; error?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string; order?: string }>;
 }) {
   const params = await searchParams;
   const profile = await requirePermission("production.manage");
   if (isSupabaseConfigured() && !profile) redirect("/login?next=/admin/production");
   const admin = createAdminClient() as any;
 
+  const selectedOrderId = params.order && uuidPattern.test(params.order) ? params.order : null;
+  const printerQuery = admin?.from("printers").select("id,name,model,serial_number_masked,status,is_active").eq("is_active", true).order("name");
+  let orderQuery = admin?.from("orders")
+    .select("id,tracking_code,fulfillment_status,payment_status,test_mode,promised_at,delivery_address,created_at")
+    .in("fulfillment_status", ["production_queued", "in_production", "quality_check", "ready_for_delivery", "out_for_delivery"])
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (selectedOrderId) orderQuery = orderQuery.eq("id", selectedOrderId);
   const [{ data: printerRows, error: printerError }, { data: orderRows, error: orderError }] = admin
-    ? await Promise.all([
-      admin.from("printers").select("id,name,model,serial_number_masked,status,is_active").eq("is_active", true).order("name"),
-      admin
-        .from("orders")
-        .select("id,tracking_code,fulfillment_status,payment_status,test_mode,promised_at,delivery_address,created_at")
-        .in("fulfillment_status", ["production_queued", "in_production", "quality_check", "ready_for_delivery", "out_for_delivery"])
-        .order("created_at", { ascending: true })
-        .limit(500),
-    ])
+    ? await Promise.all([printerQuery, orderQuery])
     : [{ data: [], error: null }, { data: [], error: null }];
 
   const printers = (printerRows ?? []) as PrinterRow[];
@@ -224,6 +224,7 @@ export default async function ProductionPage({
 
       {params.notice ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{params.notice}</p> : null}
       {params.error ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{params.error}</p> : null}
+      {selectedOrderId ? <div className="flex flex-col justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 sm:flex-row sm:items-center"><span><strong>კანბანიდან გახსნილი შეკვეთა:</strong> ნაჩვენებია მხოლოდ #{orders[0]?.tracking_code ?? selectedOrderId.slice(0, 8).toUpperCase()}-ის წარმოების სამუშაოები.</span><a href="/admin/production" className="font-semibold underline underline-offset-4">ყველა სამუშაოს ჩვენება</a></div> : null}
       {errorsPresent ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">წარმოების მონაცემების ნაწილი ვერ ჩაიტვირთა. დარწმუნდი, რომ ბოლო Supabase migration გამოყენებულია.</p> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

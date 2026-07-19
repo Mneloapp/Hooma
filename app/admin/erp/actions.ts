@@ -38,6 +38,7 @@ async function erpContext() {
 
 function refreshErp() {
   revalidatePath("/admin/erp");
+  revalidatePath("/admin/inventory");
   revalidatePath("/admin/settings");
 }
 
@@ -177,6 +178,23 @@ export async function syncVerifiedPaymentsAction() {
     if (error) throw error;
     refreshErp();
     erpRedirect("notice", `${Number(data ?? 0)} დადასტურებული საბანკო გადახდა შემოწმდა. სატესტო გადახდები გამოტოვებულია.`);
+  } catch (error) {
+    erpRedirect("error", erpErrorMessage(error));
+  }
+}
+
+export async function approveMaterialReceiptAction(formData: FormData) {
+  const { profile, admin } = await erpContext();
+  try {
+    const purchaseId = textField(formData, "purchase_id", 36);
+    if (!uuidPattern.test(purchaseId)) throw new Error("INVALID_RECEIPT_REFERENCE");
+    const { error } = await admin.rpc("erp_approve_material_receipt", {
+      requested_purchase_id: purchaseId,
+      actor_profile_id: profile.id,
+    });
+    if (error) throw error;
+    refreshErp();
+    erpRedirect("notice", "ოპერატორის მიღება ფინანსურად გადამოწმებულად მოინიშნა. აუდიტის ისტორია შენახულია.");
   } catch (error) {
     erpRedirect("error", erpErrorMessage(error));
   }
