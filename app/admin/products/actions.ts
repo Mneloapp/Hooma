@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 import { productColorNames } from "@/data/product-colors";
+import { revalidateStorefrontCatalog } from "@/lib/storefront-cache";
 
 export type DeleteProductState = { ok?: boolean; message?: string };
 export type BulkDeleteProductState = { ok?: boolean; message?: string; deletedCount?: number };
@@ -89,6 +90,7 @@ async function deleteCatalogProducts(productIds: string[]) {
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/admin/products");
   revalidatePath("/admin/imports");
+  revalidateStorefrontCatalog();
   const deletedCount = Number(data?.deleted_count ?? uniqueIds.length);
   const removedDailyDealCount = Number(data?.removed_daily_deal_count ?? 0);
   const dealMessage = removedDailyDealCount ? ` Daily Deals-ის ${removedDailyDealCount} კავშირი გასუფთავდა.` : "";
@@ -195,6 +197,7 @@ export async function bulkPublishCatalogProductsAction(
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
   for (const productId of draftIds) revalidatePath(`/admin/products/${productId}`);
+  revalidateStorefrontCatalog();
 
   const failureMessage = failures.length ? ` ${failures.length} პროდუქტს მონაცემების გასწორება სჭირდება.` : "";
   const skippedMessage = skippedCount ? ` ${skippedCount} უკვე გამოქვეყნებული/არასამუშაო სტატუსის პროდუქტი გამოტოვებულია.` : "";
@@ -250,6 +253,7 @@ function refreshCatalog(productId: string) {
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
+  revalidateStorefrontCatalog();
 }
 
 export async function updateProductDraftAction(
