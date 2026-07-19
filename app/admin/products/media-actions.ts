@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
+import { revalidateStorefrontCatalog } from "@/lib/storefront-cache";
 
 export type ProductMediaState = { ok: boolean; message: string };
 type MediaKind = "image" | "video";
@@ -70,6 +71,7 @@ function refreshProductMedia(productId: string) {
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
+  revalidateStorefrontCatalog();
 }
 
 export async function prepareProductMediaEditUploadAction(formData: FormData): Promise<{
