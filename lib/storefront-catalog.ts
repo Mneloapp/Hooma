@@ -1,9 +1,11 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import type { Product, ProductCategory, ProductVariant } from "@/data/products";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
+import { STOREFRONT_CATALOG_CACHE_TAG } from "@/lib/storefront-cache";
 
 type CategoryRow = { id: string; parent_id: string | null; slug: string; name_en: string; name_ka: string };
 
@@ -146,7 +148,7 @@ function variantColorProfile(value: unknown) {
   };
 }
 
-export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
+async function loadStorefrontCatalog(): Promise<Product[]> {
   const admin = createAdminClient() as any;
   if (!admin) {
     console.error("[storefront-catalog] Supabase admin client is not configured; returning an empty catalog.");
@@ -156,7 +158,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const [{ data: productRows, error: productError }, { data: categoryRows, error: categoryError }] = await Promise.all([
     loadPagedRows<any>((from, to) => admin
       .from("products")
-      .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes,product_variants(id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active),product_sources(id,product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed)")
+      .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,hero_image,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes,product_variants(id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active),product_sources(id,product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed)")
       .eq("status", "active")
       .eq("production_status", "approved")
       .order("created_at", { ascending: false })
@@ -223,7 +225,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
     const subcategory = selectedCategory?.parent_id ? selectedCategory : null;
     const placeholder = categoryPlaceholders[categorySlug] ?? "/catalog-placeholders/home.svg";
     const heroImage = safeCatalogImage(row.hero_image, placeholder);
-    const galleryImages: string[] = Array.from(new Set<string>((Array.isArray(row.gallery_images) ? row.gallery_images : []).map((image: unknown) => safeCatalogImage(image, heroImage))));
+    const galleryImages = [heroImage];
 
     const variants: ProductVariant[] = rawVariants.map((variant) => {
       const material = typeof variant.material === "string" && variant.material ? variant.material : "PLA+";
@@ -262,10 +264,9 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
       subcategorySlug: subcategory?.slug || categorySlug,
       shortDescription: row.short_description || "Made on demand by Hooma.",
       shortDescriptionKa: row.short_description_ka || row.short_description || "პროდუქტი მზადდება შეკვეთის შემდეგ.",
-      longDescription: row.long_description || row.short_description || "",
+      longDescription: row.short_description || "",
       heroImage,
-      galleryImages: galleryImages.length ? galleryImages : [heroImage],
-      videoUrl: safeCatalogVideo(row.video_url),
+      galleryImages,
       variants,
       availableMaterials,
       availableColors,
@@ -290,11 +291,39 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   });
 
   return catalog;
+}
+
+const getCachedStorefrontCatalog = unstable_cache(loadStorefrontCatalog, ["storefront-catalog-v2"], {
+  revalidate: 300,
+  tags: [STOREFRONT_CATALOG_CACHE_TAG],
 });
+
+export const getStorefrontCatalog = cache(getCachedStorefrontCatalog);
 
 export async function getStorefrontProductBySlug(slug: string) {
   const catalog = await getStorefrontCatalog();
-  return catalog.find((product) => product.slug === slug);
+  const product = catalog.find((item) => item.slug === slug);
+  if (!product) return undefined;
+
+  const admin = createAdminClient() as any;
+  if (!admin) return product;
+  const { data: details, error } = await admin
+    .from("products")
+    .select("long_description,gallery_images,video_url")
+    .eq("id", product.id)
+    .eq("status", "active")
+    .eq("production_status", "approved")
+    .maybeSingle();
+  if (error || !details) return product;
+
+  const galleryImages = Array.from(new Set<string>((Array.isArray(details.gallery_images) ? details.gallery_images : [])
+    .map((image: unknown) => safeCatalogImage(image, product.heroImage))));
+  return {
+    ...product,
+    longDescription: details.long_description || product.longDescription,
+    galleryImages: galleryImages.length ? galleryImages : [product.heroImage],
+    videoUrl: safeCatalogVideo(details.video_url),
+  };
 }
 
 export async function getAdminPreviewProductById(productId: string): Promise<Product | null> {
