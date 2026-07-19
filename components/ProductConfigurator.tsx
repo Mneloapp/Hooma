@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock3, Layers3, PackageCheck, ShieldCheck } from "lucide-react";
+import { BadgePercent, CheckCircle2, Clock3, Layers3, PackageCheck, ShieldCheck } from "lucide-react";
 import type { Product, ProductVariant } from "@/data/products";
 import { Button } from "./Button";
 import { SwatchSelector } from "./SwatchSelector";
@@ -11,16 +11,26 @@ import { useCart } from "./CartContext";
 import { fixedMulticolorLabel } from "@/data/product-colors";
 import { useLanguage } from "./LanguageProvider";
 
-export function ProductConfigurator({ product, compact = false }: { product: Product; compact?: boolean }) {
+type DailyDealPricing = {
+  variantId: string;
+  originalPrice: number;
+  dealPrice: number;
+  discountPercent: number;
+};
+
+export function ProductConfigurator({ product, compact = false, dailyDeal }: { product: Product; compact?: boolean; dailyDeal?: DailyDealPricing }) {
   const { language } = useLanguage();
   const georgian = language === "ka";
-  const [variant, setVariant] = useState<ProductVariant>(product.variants[0]);
-  const [material, setMaterial] = useState(product.availableMaterials[0] ?? "PLA+");
-  const [color, setColor] = useState(product.availableColors[0] ?? "Warm white");
+  const initialVariant = product.variants.find((item) => item.id === dailyDeal?.variantId) ?? product.variants[0];
+  const [variant, setVariant] = useState<ProductVariant>(initialVariant);
+  const [material, setMaterial] = useState(initialVariant.availableMaterials[0] ?? "PLA+");
+  const [color, setColor] = useState(initialVariant.availableColors[0] ?? "Warm white");
   const [quantity, setQuantity] = useState(1);
   const { addItem, openCart } = useCart();
   const orderable = product.isOrderable && product.sourcePlatform !== "other";
   const fixedMulticolor = variant.colorMode === "fixed_multicolor" && variant.amsRequired;
+  const activeDeal = dailyDeal?.variantId === variant.id ? dailyDeal : undefined;
+  const displayPrice = activeDeal?.dealPrice ?? variant.price;
 
   const selectVariant = (nextVariant: ProductVariant) => {
     setVariant(nextVariant);
@@ -52,7 +62,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
     material,
     color,
     quantity,
-    price: variant.price,
+    price: displayPrice,
     pricePlaceholder: variant.pricePlaceholder,
     price_placeholder: variant.pricePlaceholder,
     });
@@ -62,7 +72,15 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
     <div className={compact ? "rounded-2xl bg-white p-5" : "rounded-2xl border border-hooma-text/15 bg-white p-5 shadow-sm lg:sticky lg:top-32"}>
       {compact ? <div className="relative mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-hooma-panel"><Image src={variant.image} alt={product.nameKa} fill className="object-cover" sizes="(min-width: 1024px) 40vw, 100vw" /></div> : null}
       <div className="space-y-5">
-      {!compact ? <div className="border-b border-hooma-text/10 pb-4"><p className="text-xs text-hooma-muted">{georgian ? "ფასი" : "Price"}</p><p className="mt-1 text-2xl font-semibold">{variant.price === null ? (georgian ? variant.pricePlaceholder : "Price after review") : `₾${variant.price}`}</p><p className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 size={16} />{georgian ? "შეკვეთა ხელმისაწვდომია" : "Available to order"}</p></div> : null}
+      {!compact ? <div className="border-b border-hooma-text/10 pb-4">
+        {activeDeal ? <p className="mb-3 flex items-center gap-2 text-sm font-bold text-red-600"><BadgePercent size={17} />{georgian ? "დღის შეთავაზება" : "Daily deal"} · −{activeDeal.discountPercent}%</p> : null}
+        <p className="text-xs text-hooma-muted">{georgian ? "ფასი" : "Price"}</p>
+        <div className="mt-1 flex items-baseline gap-2">
+          <p className={`text-2xl font-semibold ${activeDeal ? "text-red-600" : ""}`}>{displayPrice === null ? (georgian ? variant.pricePlaceholder : "Price after review") : `₾${displayPrice.toFixed(2)}`}</p>
+          {activeDeal ? <span className="text-sm text-hooma-muted line-through">₾{activeDeal.originalPrice.toFixed(2)}</span> : null}
+        </div>
+        <p className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 size={16} />{georgian ? "შეკვეთა ხელმისაწვდომია" : "Available to order"}</p>
+      </div> : null}
         {product.variants.length > 1 ? <VariantSelector variants={product.variants} selectedId={variant.id} onChange={selectVariant} /> : null}
         <SwatchSelector label={georgian ? "მასალა" : "Material"} options={variant.availableMaterials} value={material} onChange={setMaterial} />
         {fixedMulticolor ? <div className="rounded-2xl border border-hooma-text/10 bg-hooma-panel/70 p-4"><div className="flex items-center gap-2"><Layers3 size={17} className="text-hooma-accent" /><p className="text-sm font-semibold">{georgian ? fixedMulticolorLabel : "Multicolor — as shown"}</p></div><p className="mt-3 text-xs leading-5 text-hooma-muted">{georgian ? "ეს არის ფიქსირებული AMS კომბინაცია. პროდუქტი დამზადდება ზუსტად ფოტოზე ნაჩვენები ფერებით და ცალკეული ფერის არჩევა საჭირო არ არის." : "This is a fixed AMS combination. The product is made in the colors shown in the photo, so no separate color selection is needed."}</p></div> : <SwatchSelector label={georgian ? "ფერი" : "Color"} options={variant.availableColors} value={color} onChange={setColor} />}
@@ -79,7 +97,7 @@ export function ProductConfigurator({ product, compact = false }: { product: Pro
           <p className="mt-3 text-xs leading-5 text-hooma-muted">{georgian ? "ეკრანზე ნაჩვენები ფერი შესაძლოა რეალური მასალისგან მცირედ განსხვავდებოდეს." : "The color shown on screen may differ slightly from the physical material."}</p>
         </div>
         {compact ? <div className="flex items-center justify-between rounded-2xl border border-hooma-text/10 bg-white p-4">
-          <div><p className="text-xs text-hooma-muted">{georgian ? "ფასი" : "Price"}</p><p className="mt-1 font-semibold">{variant.price === null ? (georgian ? variant.pricePlaceholder : "Price after review") : `₾${variant.price}`}</p></div>
+          <div><p className="text-xs text-hooma-muted">{georgian ? "ფასი" : "Price"}</p><p className="mt-1 font-semibold">{displayPrice === null ? (georgian ? variant.pricePlaceholder : "Price after review") : `₾${displayPrice.toFixed(2)}`}</p></div>
           <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-800">Catalog preview</span>
         </div> : null}
         <Button
