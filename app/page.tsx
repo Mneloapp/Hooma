@@ -2,7 +2,7 @@ import { HomeStorefrontClient } from "@/components/home/HomeStorefrontClient";
 import { catalogCategories } from "@/data/catalog";
 import { getDailyDeals } from "@/lib/daily-deals";
 import { getStorefrontCatalog } from "@/lib/storefront-catalog";
-import { toProductCardData } from "@/lib/product-card";
+import { toDiscountedProductCardData } from "@/lib/product-card";
 
 export const dynamic = "force-dynamic";
 
@@ -25,21 +25,15 @@ export default async function Home() {
   }
 
   const catalogById = new Map(catalogProducts.map((product) => [product.id, product]));
+  const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
   const dailyDealProducts = dailyDeals.deals.slice(0, 12).flatMap((deal) => {
     const product = catalogById.get(deal.productId);
     if (!product) return [];
-    return [{
-      ...toProductCardData(product),
-      href: `/deals/${deal.slug}`,
-      heroImage: deal.image || product.heroImage,
-      price: deal.dealPrice ?? product.price,
-      originalPrice: deal.originalPrice,
-      discountPercent: deal.discountPercent,
-    }];
+    return [toDiscountedProductCardData(product, deal)];
   });
 
   return <HomeStorefrontClient
-    catalogProducts={[...homeProducts.values()].map(toProductCardData)}
+    catalogProducts={[...homeProducts.values()].map((product) => toDiscountedProductCardData(product, dailyDealByProductId.get(product.id)))}
     dailyDealProducts={dailyDealProducts}
     dailyDealDiscountPercent={dailyDeals.discountPercent}
   />;
