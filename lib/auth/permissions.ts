@@ -11,6 +11,8 @@ export type Permission =
   | "customers.read"
   | "pricing.manage"
   | "finance.manage"
+  | "hr.self"
+  | "hr.manage"
   | "team.manage";
 
 export const staffRoles: StaffRole[] = ["owner", "admin", "catalog_manager", "production_operator", "support"];
@@ -32,11 +34,11 @@ export const roleLabels: Record<UserRole, string> = {
 };
 
 const rolePermissions: Record<UserRole, Permission[]> = {
-  owner: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "finance.manage", "team.manage"],
-  admin: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "finance.manage"],
-  catalog_manager: ["admin.access", "catalog.manage"],
-  production_operator: ["admin.access", "inventory.manage", "orders.manage", "production.manage"],
-  support: ["admin.access", "orders.manage", "quotes.manage", "customers.read"],
+  owner: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "finance.manage", "hr.self", "hr.manage", "team.manage"],
+  admin: ["admin.access", "catalog.manage", "inventory.manage", "orders.manage", "quotes.manage", "production.manage", "customers.read", "pricing.manage", "finance.manage", "hr.self", "hr.manage"],
+  catalog_manager: ["admin.access", "catalog.manage", "hr.self"],
+  production_operator: ["admin.access", "inventory.manage", "orders.manage", "production.manage", "hr.self"],
+  support: ["admin.access", "orders.manage", "quotes.manage", "customers.read", "hr.self"],
   customer: [],
 };
 
@@ -54,6 +56,7 @@ export function hasPermission(role: UserRole, permission: Permission) {
 
 const routePermissions: Array<[string, Permission]> = [
   ["/admin/team", "team.manage"],
+  ["/admin/hr", "hr.self"],
   ["/admin/erp", "finance.manage"],
   ["/admin/settings", "pricing.manage"],
   ["/admin/catalog-agent", "catalog.manage"],
@@ -73,9 +76,6 @@ export function canAccessAdminPath(role: UserRole, pathname: string) {
 }
 
 export function defaultAdminPath(role: UserRole) {
-  if (role === "owner" || role === "admin") return "/admin";
-  if (hasPermission(role, "catalog.manage")) return "/admin/products";
-  if (hasPermission(role, "production.manage")) return "/admin/production";
-  if (hasPermission(role, "orders.manage")) return "/admin/orders";
+  if (hasPermission(role, "hr.self")) return "/admin";
   return "/admin";
 }

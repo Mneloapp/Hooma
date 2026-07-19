@@ -4,6 +4,7 @@ import type { Profile } from "@/lib/supabase/types";
 
 export const adminNavItems: Array<[string, string, Permission]> = [
   ["/admin", "მთავარი", "admin.access"],
+  ["/admin/hr", "HR · დასწრება და KPI", "hr.self"],
   ["/admin/products", "პროდუქტები", "catalog.manage"],
   ["/admin/reviews", "შეფასებები", "catalog.manage"],
   ["/admin/catalog-agent", "Catalog Agent", "catalog.manage"],
