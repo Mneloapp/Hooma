@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 import { getTbilisiDate } from "@/lib/daily-deals";
+import { revalidateStorefrontCatalog } from "@/lib/storefront-cache";
 
 export type MaterialCostProfileResult = {
   id: string;
@@ -79,6 +80,7 @@ export async function saveMaterialCostAction(formData: FormData): Promise<Settin
     revalidatePath("/");
     revalidatePath("/shop");
     revalidatePath("/deals");
+    revalidateStorefrontCatalog();
     return { ok: true, message: `${saved.name} — ფასი შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
   } catch {
     return { ok: false, message: "შეამოწმე ფასი და დანაკარგის პროცენტი." };
@@ -134,6 +136,7 @@ export async function savePricingProfileAction(formData: FormData): Promise<Sett
     revalidatePath("/");
     revalidatePath("/shop");
     revalidatePath("/deals");
+    revalidateStorefrontCatalog();
     return { ok: true, message: `საერთო პარამეტრები შენახულია; ${affectedProducts} პროდუქტის გასაყიდი ფასი ავტომატურად გადაითვალა.`, data: saved };
   } catch {
     return { ok: false, message: "შეამოწმე წარმოებისა და ფასის ყველა მნიშვნელობა." };
