@@ -151,8 +151,7 @@ function variantColorProfile(value: unknown) {
 async function loadStorefrontCatalog(): Promise<Product[]> {
   const admin = createAdminClient() as any;
   if (!admin) {
-    console.error("[storefront-catalog] Supabase admin client is not configured; returning an empty catalog.");
-    return [];
+    throw new Error("Supabase admin client is not configured");
   }
 
   const [{ data: productRows, error: productError }, { data: categoryRows, error: categoryError }] = await Promise.all([
@@ -171,13 +170,9 @@ async function loadStorefrontCatalog(): Promise<Product[]> {
       .range(from, to)),
   ]);
   if (productError || categoryError) {
-    console.error("[storefront-catalog] Failed to load products or categories.", {
-      productError: productError?.message,
-      categoryError: categoryError?.message,
-    });
-    return [];
+    throw new Error(`Failed to load products or categories: ${productError?.message ?? categoryError?.message ?? "unknown error"}`);
   }
-  if (!productRows?.length) return [];
+  if (!productRows?.length) throw new Error("Storefront product query returned no active products");
 
   const productIdBatches = chunkValues(productRows.map((row: any) => row.id), RELATED_PRODUCT_BATCH_SIZE);
   const metricBatches = await mapWithConcurrency(productIdBatches, RELATED_BATCH_CONCURRENCY, (productIds) => {
@@ -290,15 +285,32 @@ async function loadStorefrontCatalog(): Promise<Product[]> {
     }];
   });
 
+  if (!catalog.length) throw new Error("Storefront catalog validation removed every active product");
   return catalog;
 }
 
-const getCachedStorefrontCatalog = unstable_cache(loadStorefrontCatalog, ["storefront-catalog-v2"], {
+const catalogCacheScope = process.env.VERCEL_ENV === "production"
+  ? "production"
+  : process.env.VERCEL_GIT_COMMIT_REF || "local";
+
+const getCachedStorefrontCatalog = unstable_cache(loadStorefrontCatalog, ["storefront-catalog-v3", catalogCacheScope], {
   revalidate: 300,
   tags: [STOREFRONT_CATALOG_CACHE_TAG],
 });
 
-export const getStorefrontCatalog = cache(getCachedStorefrontCatalog);
+export const getStorefrontCatalog = cache(async () => {
+  try {
+    return await getCachedStorefrontCatalog();
+  } catch (cacheError) {
+    console.error("[storefront-catalog] Cached catalog load failed; retrying without the shared cache.", cacheError);
+    try {
+      return await loadStorefrontCatalog();
+    } catch (directError) {
+      console.error("[storefront-catalog] Direct catalog retry failed.", directError);
+      return [];
+    }
+  }
+});
 
 export async function getStorefrontProductBySlug(slug: string) {
   const catalog = await getStorefrontCatalog();
