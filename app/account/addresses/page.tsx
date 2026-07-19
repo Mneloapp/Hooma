@@ -1,21 +1,16 @@
-"use client";
+import { AddressForm } from "@/components/account/AddressForm";
+import { createClient, getProfile } from "@/lib/supabase/server";
 
-import { useLanguage } from "@/components/LanguageProvider";
+type AddressRow = { full_name: string | null; phone: string | null; city: string | null; address_line_1: string | null; address_line_2: string | null; postal_code: string | null; latitude: number | null; longitude: number | null };
 
-export default function AccountAddressesPage() {
-  const { language } = useLanguage();
-  const georgian = language === "ka";
-  return (
-    <div className="space-y-6">
-      <div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">{georgian ? "მიწოდება" : "Delivery"}</p><h1 className="mt-3 text-4xl font-medium">{georgian ? "მისამართები" : "Addresses"}</h1></div>
-      <form className="grid gap-5 rounded-[2rem] bg-white/75 p-6 shadow-soft md:grid-cols-2">
-        <label className="block text-sm font-medium">{georgian ? "სახელი და გვარი" : "Full name"}<input className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3" /></label>
-        <label className="block text-sm font-medium">{georgian ? "ტელეფონი" : "Phone"}<input className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3" /></label>
-        <label className="block text-sm font-medium">{georgian ? "ქალაქი" : "City"}<input className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3" /></label>
-        <label className="block text-sm font-medium">{georgian ? "საფოსტო ინდექსი" : "Postal code"}<input className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3" /></label>
-        <label className="block text-sm font-medium md:col-span-2">{georgian ? "მისამართი" : "Address line"}<input className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3" /></label>
-        <button className="rounded-full bg-hooma-text px-5 py-3 text-sm font-medium text-white md:w-fit">{georgian ? "მისამართის შენახვა" : "Save address"}</button>
-      </form>
-    </div>
-  );
+export default async function AccountAddressesPage() {
+  const profile = await getProfile(); const supabase = (await createClient()) as any; let address: AddressRow | null = null;
+  if (supabase && profile) {
+    const { data: customer } = await supabase.from("customers").select("id").eq("profile_id", profile.id).limit(1).maybeSingle();
+    if (customer?.id) {
+      const { data } = await supabase.from("addresses").select("full_name,phone,city,address_line_1,address_line_2,postal_code,latitude,longitude").eq("customer_id", customer.id).eq("is_default", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      address = data as AddressRow | null;
+    }
+  }
+  return <AddressForm initialAddress={{ fullName: address?.full_name || profile?.full_name || "", phone: address?.phone || profile?.phone || "", city: address?.city || "", addressLine1: address?.address_line_1 || "", addressLine2: address?.address_line_2 || "", postalCode: address?.postal_code || "", latitude: typeof address?.latitude === "number" ? address.latitude : null, longitude: typeof address?.longitude === "number" ? address.longitude : null }} hasSavedAddress={Boolean(address)} mapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ""} />;
 }

@@ -24,11 +24,13 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 CRON_SECRET=
 GOOGLE_CLOUD_TRANSLATION_API_KEY=
 ```
 
 `SUPABASE_SECRET_KEY` is server-only. Never expose it through a `NEXT_PUBLIC_` variable.
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` enables the customer delivery-location picker. Restrict this browser key to the Maps JavaScript API and Hooma's HTTPS origins in Google Cloud Console.
 `CRON_SECRET` protects the daily-deal rotation endpoint. See `docs/daily-deals.md` for the 100-product, 50%-off rotation rules.
 `GOOGLE_CLOUD_TRANSLATION_API_KEY` is also server-only. It enables authenticated Catalog Clipper imports to translate product names and descriptions into Georgian through the [Cloud Translation API](https://cloud.google.com/translate); never add it to the extension or a `NEXT_PUBLIC_` variable. Hooma's admin import UI identifies automatic results as powered by Google Translate and requires operator review before publication.
 

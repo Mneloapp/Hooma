@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const sections = [
   {
     title: "რა მონაცემებს ვამუშავებთ",
-    copy: "ანგარიშის შექმნისა და შეკვეთის შესრულებისთვის შესაძლოა დავამუშავოთ სახელი, ელფოსტა, ტელეფონი, მიწოდების მისამართი, შეკვეთებისა და გადახდის სტატუსის ისტორია, ინდივიდუალური შეკვეთის ფაილები და პლატფორმის უსაფრთხოებისთვის საჭირო ტექნიკური ჩანაწერები. Hooma არ ინახავს საბანკო ბარათის სრულ მონაცემებს.",
+    copy: "ანგარიშის შექმნისა და შეკვეთის შესრულებისთვის შესაძლოა დავამუშავოთ სახელი, ელფოსტა, ტელეფონი, მიწოდების მისამართი, მომხმარებლის მიერ რუკაზე მონიშნული ზუსტი კოორდინატები, შეკვეთებისა და გადახდის სტატუსის ისტორია, ინდივიდუალური შეკვეთის ფაილები და პლატფორმის უსაფრთხოებისთვის საჭირო ტექნიკური ჩანაწერები. Hooma არ ინახავს საბანკო ბარათის სრულ მონაცემებს.",
   },
   {
     title: "რისთვის ვიყენებთ მონაცემებს",
@@ -43,7 +43,7 @@ const sections = [
 ];
 
 const sectionsEn = [
-  { title: "Data we process", copy: "To create an account and fulfill an order, we may process your name, email, phone number, delivery address, order and payment-status history, custom-order files, and technical records needed for platform security. Hooma does not store full payment-card details." },
+  { title: "Data we process", copy: "To create an account and fulfill an order, we may process your name, email, phone number, delivery address, exact coordinates you select on the map, order and payment-status history, custom-order files, and technical records needed for platform security. Hooma does not store full payment-card details." },
   { title: "How we use data", copy: "We use data to manage accounts, receive and produce orders, provide delivery and tracking, communicate with customers, prevent fraud, improve the service, and meet legal accounting and tax obligations." },
   { title: "Google sign-in", copy: "When you sign in with Google, Hooma requests only the basic information needed for authentication: account identifier, name, email, and profile image when available. Hooma does not request access to Gmail, Google Drive, or content from other Google services." },
   { title: "Who may process data", copy: "Our technical providers may process data to operate hosting, databases, authentication, and transactional email. Information required to fulfill an order may be shared with payment or courier partners, and legally required information with an accountant or competent authority. We do not sell personal data." },
@@ -58,7 +58,7 @@ export default function PrivacyPage() {
     <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-hooma-accent"><LocalizedText ka="Hooma-ს კონფიდენციალურობა" en="Hooma privacy" /></p>
       <h1 className="mt-4 text-4xl font-medium tracking-tight sm:text-5xl"><LocalizedText ka="კონფიდენციალურობის პოლიტიკა" en="Privacy policy" /></h1>
-      <p className="mt-4 text-sm text-hooma-muted"><LocalizedText ka="ბოლო განახლება: 16 ივლისი, 2026" en="Last updated: July 16, 2026" /></p>
+      <p className="mt-4 text-sm text-hooma-muted"><LocalizedText ka="ბოლო განახლება: 19 ივლისი, 2026" en="Last updated: July 19, 2026" /></p>
       <p className="mt-8 text-lg leading-8 text-hooma-muted">
         <LocalizedText ka="ეს პოლიტიკა განმარტავს, როგორ ამუშავებს Hooma მომხმარებლის პერსონალურ მონაცემებს ონლაინ მაღაზიისა და მასთან დაკავშირებული სერვისების მუშაობისას." en="This policy explains how Hooma processes personal data while operating its online store and related services." />
       </p>

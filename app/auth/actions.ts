@@ -12,6 +12,8 @@ type AuthState = {
   message?: string;
 };
 
+export type ProfileActionState = AuthState & { savedAt?: string };
+
 const getString = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isGeorgian = (value: unknown) => value === "ka";
@@ -95,23 +97,35 @@ export async function logoutAction() {
   redirect("/");
 }
 
-export async function updateProfileAction(formData: FormData) {
+export async function updateProfileAction(_state: ProfileActionState, formData: FormData): Promise<ProfileActionState> {
   const supabase = (await createClient()) as any;
-  if (!supabase) return;
+  const georgian = isGeorgian(getString(formData, "language"));
+  if (!supabase) return { ok: false, message: georgian ? "Supabase ჯერ არ არის დაკავშირებული." : "Supabase is not configured yet." };
 
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect("/login?next=/account");
 
-  await supabase
+  const fullName = getString(formData, "full_name");
+  const phone = getString(formData, "phone");
+  const updatedAt = new Date().toISOString();
+  const { error: profileError } = await supabase
     .from("profiles")
     .update({
-      full_name: getString(formData, "full_name"),
-      phone: getString(formData, "phone"),
-      updated_at: new Date().toISOString(),
+      full_name: fullName, phone, updated_at: updatedAt,
     })
     .eq("id", data.user.id);
 
-  revalidatePath("/account");
+  if (profileError) return { ok: false, message: georgian ? "პროფილის შენახვა ვერ მოხერხდა. სცადე თავიდან." : "The profile could not be saved. Try again." };
+  const admin = createAdminClient() as any;
+  if (admin) {
+    const { data: customer } = await admin.from("customers").select("id").eq("profile_id", data.user.id).limit(1).maybeSingle();
+    const customerPayload = { email: data.user.email ?? null, full_name: fullName, phone };
+    const { error: customerError } = customer?.id ? await admin.from("customers").update(customerPayload).eq("id", customer.id) : await admin.from("customers").insert({ profile_id: data.user.id, ...customerPayload });
+    if (customerError) return { ok: false, message: georgian ? "პროფილი შეინახა, მაგრამ შეკვეთების პროფილის სინქრონიზაცია ვერ დასრულდა." : "The profile was saved, but its order profile could not be synchronized." };
+  } else await supabase.from("customers").update({ full_name: fullName, phone }).eq("profile_id", data.user.id);
+  await supabase.auth.updateUser({ data: { full_name: fullName, phone } });
+  revalidatePath("/account"); revalidatePath("/admin/customers");
+  return { ok: true, message: georgian ? "მონაცემები წარმატებით შეინახა." : "Your profile was saved successfully.", savedAt: updatedAt };
 }
 
 export async function createOrderAction(formData: FormData) {
@@ -123,6 +137,10 @@ export async function createOrderAction(formData: FormData) {
     full_name?: string;
     city?: string;
     address_line_1?: string;
+    address_line_2?: string;
+    postal_code?: string;
+    latitude?: string;
+    longitude?: string;
     notes?: string;
     language?: "ka" | "en";
     items?: Array<{
@@ -142,6 +160,10 @@ export async function createOrderAction(formData: FormData) {
   }
 
   const georgian = isGeorgian(payload.language);
+  const deliveryLatitude = payload.latitude?.trim() ? Number(payload.latitude) : null;
+  const deliveryLongitude = payload.longitude?.trim() ? Number(payload.longitude) : null;
+  const deliveryCoordinates = deliveryLatitude !== null && deliveryLongitude !== null && Number.isFinite(deliveryLatitude) && Number.isFinite(deliveryLongitude) && deliveryLatitude >= -90 && deliveryLatitude <= 90 && deliveryLongitude >= -180 && deliveryLongitude <= 180 ? { latitude: deliveryLatitude, longitude: deliveryLongitude } : null;
+  const deliveryMapsUrl = deliveryCoordinates ? `https://www.google.com/maps/search/?api=1&query=${deliveryCoordinates.latitude.toFixed(7)}%2C${deliveryCoordinates.longitude.toFixed(7)}` : null;
 
   if (!payload.items?.length) return { ok: false, message: georgian ? "კალათა ცარიელია." : "Your cart is empty." };
   if (!payload.guest_phone?.trim() || !payload.full_name?.trim() || !payload.city?.trim() || !payload.address_line_1?.trim()) {
@@ -226,8 +248,15 @@ export async function createOrderAction(formData: FormData) {
     total: subtotal,
     delivery_address: {
       full_name: payload.full_name,
+      phone: payload.guest_phone,
+      email: user.email ?? payload.guest_email ?? null,
       city: payload.city,
       address_line_1: payload.address_line_1,
+      address_line_2: payload.address_line_2 || null,
+      postal_code: payload.postal_code || null,
+      latitude: deliveryCoordinates?.latitude ?? null,
+      longitude: deliveryCoordinates?.longitude ?? null,
+      google_maps_url: deliveryMapsUrl,
     },
     notes: payload.notes ?? null,
     fulfillment_status: "order_received",
