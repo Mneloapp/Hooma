@@ -113,34 +113,34 @@ export function Header() {
         <div className="mx-auto flex min-h-[68px] max-w-[1480px] items-center gap-3 px-4 py-2 sm:px-6 lg:gap-5 lg:px-8">
           <BrandLogo inverted className="w-[94px] shrink-0" imageClassName="max-h-12" />
           <button type="button" onClick={() => setLocationOpen(true)} className="hidden shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition hover:bg-white/10 xl:flex">
-            <MapPin size={18} className="text-[#c8d8bd]" />
+            <MapPin size={18} className="text-hooma-secondary" />
             <span><span className="block text-white/55">{georgian ? "მიწოდება" : "Deliver to"}</span><strong className="font-medium">{deliveryCityLabel}</strong></span>
           </button>
           <div className="hidden min-w-0 flex-1 md:flex"><SearchForm /></div>
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
             <div className="hidden lg:block"><LanguageToggle /></div>
             <Link href={accountHref} aria-label={accountLabel} title={account.signedIn ? account.name : undefined} className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 sm:flex">
-              <span className="relative"><UserRound size={25} />{account.signedIn ? <span className="absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-[#c8d8bd] px-1 text-[10px] font-bold text-hooma-text">{account.initial}</span> : null}</span><strong className="text-sm">{accountLabel}</strong>
+              <span className="relative"><UserRound size={25} />{account.signedIn ? <span className="absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-hooma-secondary px-1 text-[10px] font-bold text-hooma-text">{account.initial}</span> : null}</span><strong className="text-sm">{accountLabel}</strong>
             </Link>
             <Link href="/account/orders" aria-label={georgian ? "შეკვეთები" : "Orders"} className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 lg:flex">
               <Package size={25} /><strong className="text-sm">{georgian ? "შეკვეთები" : "Orders"}</strong>
             </Link>
             <button onClick={openCart} aria-label="Open cart" className="relative flex items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10">
               <ShoppingCart size={25} /><strong className="hidden text-sm sm:block">{georgian ? "კალათა" : "Cart"}</strong>
-              {count ? <span className="absolute left-7 top-0 grid min-h-5 min-w-5 place-items-center rounded-full bg-[#c8d8bd] px-1 text-[10px] font-bold text-hooma-text">{count}</span> : null}
+              {count ? <span className="absolute left-7 top-0 grid min-h-5 min-w-5 place-items-center rounded-full bg-hooma-secondary px-1 text-[10px] font-bold text-hooma-text">{count}</span> : null}
             </button>
           </div>
         </div>
         <div className="px-4 pb-3 md:hidden"><SearchForm mobile /></div>
       </div>
 
-      <div className="border-b border-black/10 bg-[#30382e] text-white">
+      <div className="border-b border-black/10 bg-[#34486B] text-white">
         <div className="mx-auto flex h-10 max-w-[1480px] items-center gap-1 overflow-x-auto px-2 text-[13px] hide-scrollbar sm:px-6 lg:px-8">
           <button aria-label="Open categories" onClick={() => setOpen(!open)} className="flex h-full shrink-0 items-center gap-2 px-2.5 font-semibold transition hover:bg-white/10">
             {open ? <X size={18} /> : <Menu size={18} />}{georgian ? "ყველა კატეგორია" : "All categories"}
           </button>
-          <button type="button" onClick={() => setLocationOpen(true)} className="flex h-full shrink-0 items-center gap-1.5 px-2.5 transition hover:bg-white/10 xl:hidden"><MapPin size={14} className="text-[#c8d8bd]" />{deliveryCityLabel}</button>
-          {utilityLinks.map(([label, href], index) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${index === 0 ? "font-semibold text-[#d7e7cd]" : ""}`}>{label}</Link>)}
+          <button type="button" onClick={() => setLocationOpen(true)} className="flex h-full shrink-0 items-center gap-1.5 px-2.5 transition hover:bg-white/10 xl:hidden"><MapPin size={14} className="text-hooma-secondary" />{deliveryCityLabel}</button>
+          {utilityLinks.map(([label, href], index) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${index === 0 ? "font-semibold text-hooma-secondary" : ""}`}>{label}</Link>)}
           <span className="ml-auto hidden shrink-0 text-xs text-white/65 xl:block">{georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery"}</span>
         </div>
       </div>
@@ -150,7 +150,7 @@ export function Header() {
           <button type="button" aria-label="Close categories" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
           <aside aria-label="ყველა კატეგორია" className="absolute inset-y-0 left-0 flex w-[min(92vw,400px)] flex-col bg-hooma-background text-hooma-text shadow-2xl">
             <div className="flex items-center justify-between bg-hooma-text px-5 py-4 text-white">
-              <Link href={accountHref} onClick={() => setOpen(false)} className="flex items-center gap-3 font-semibold"><span className="relative grid h-9 w-9 place-items-center rounded-full bg-white/10"><UserRound size={19} />{account.signedIn ? <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#c8d8bd] px-1 text-[10px] font-bold text-hooma-text">{account.initial}</span> : null}</span><span>{accountLabel}{account.signedIn ? <small className="mt-0.5 block max-w-52 truncate font-normal text-white/55">{account.name}</small> : null}</span></Link>
+              <Link href={accountHref} onClick={() => setOpen(false)} className="flex items-center gap-3 font-semibold"><span className="relative grid h-9 w-9 place-items-center rounded-full bg-white/10"><UserRound size={19} />{account.signedIn ? <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-hooma-secondary px-1 text-[10px] font-bold text-hooma-text">{account.initial}</span> : null}</span><span>{accountLabel}{account.signedIn ? <small className="mt-0.5 block max-w-52 truncate font-normal text-white/55">{account.name}</small> : null}</span></Link>
               <button type="button" aria-label="Close categories" onClick={() => setOpen(false)} className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-white/10"><X size={22} /></button>
             </div>
 

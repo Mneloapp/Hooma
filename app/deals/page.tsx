@@ -15,7 +15,7 @@ export default async function DailyDealsPage() {
     <main className="bg-hooma-panel/60 pb-16">
       <section className="bg-hooma-text text-white">
         <div className="mx-auto max-w-[1480px] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-          <div className="flex items-center gap-2 text-[#c8d8bd]"><BadgePercent size={20} /><p className="text-xs font-semibold uppercase tracking-[0.2em]"><LocalizedText ka="Hooma-ს დღის შეთავაზებები" en="Hooma daily deals" /></p></div>
+          <div className="flex items-center gap-2 text-hooma-secondary"><BadgePercent size={20} /><p className="text-xs font-semibold uppercase tracking-[0.2em]"><LocalizedText ka="Hooma-ს დღის შეთავაზებები" en="Hooma daily deals" /></p></div>
           <h1 className="mt-4 max-w-4xl text-4xl font-semibold tracking-tight sm:text-5xl"><LocalizedText ka={`დღის 50 განსხვავებული პროდუქტი −${discountPercent}%-ად`} en={`50 different products at ${discountPercent}% off today`} /></h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65"><LocalizedText ka="შერჩევა თბილისის დროით ყოველ დღე ახლდება. სისტემა პირველ რიგში აჩვენებს პროდუქტებს, რომლებიც მიმდინარე როტაციაში ჯერ არ ყოფილა." en="The selection refreshes daily on Tbilisi time. Products that have not appeared in the current rotation are prioritized." /></p>
           <div className="mt-7 flex flex-wrap gap-3 text-xs">

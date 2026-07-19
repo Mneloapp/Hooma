@@ -93,8 +93,8 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
         <Link href="/" className="hover:text-hooma-text"><LocalizedText ka="მთავარი" en="Home" /></Link><ChevronRight size={13} /><Link href="/shop" className="hover:text-hooma-text"><LocalizedText ka="კატალოგი" en="Catalog" /></Link>{selectedCategory ? <><ChevronRight size={13} /><span className="text-hooma-text"><LocalizedText ka={selectedCategory.nameKa} en={selectedCategory.name} /></span></> : null}
       </nav>
 
-      <section className="rounded-[1.5rem] bg-gradient-to-r from-hooma-text to-[#343c31] p-6 text-white sm:p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#c8d8bd]"><LocalizedText ka="Hooma-ს კატალოგი" en="Hooma catalog" /></p>
+      <section className="rounded-[1.5rem] bg-gradient-to-r from-hooma-text via-[#34486B] to-[#6A3F6F] p-6 text-white sm:p-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-hooma-secondary"><LocalizedText ka="Hooma-ს კატალოგი" en="Hooma catalog" /></p>
         <div className="mt-3 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl"><LocalizedText ka={q ? `ძიების შედეგები: “${q}”` : selectedCategory?.nameKa ?? "ყველა პროდუქტი"} en={q ? `Search results: “${q}”` : selectedCategory?.name ?? "All products"} /></h1><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60"><LocalizedText ka="კატალოგის ნივთები მზადდება შეკვეთის შემდეგ და გადის ოპერატორის ხარისხის კონტროლს." en="Catalog items are made after you order and pass operator quality control." /></p></div>
           <form action="/shop" className="flex w-full max-w-md overflow-hidden rounded-xl bg-white text-hooma-text">
