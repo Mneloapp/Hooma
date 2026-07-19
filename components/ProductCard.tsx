@@ -12,6 +12,12 @@ export function ProductCard({ product, compact = false }: { product: ProductCard
   const { language } = useLanguage();
   const category = getCategory(product.categorySlug);
   const subcategory = category?.subcategories.find((item) => item.slug === product.subcategorySlug);
+  const categoryLabel = language === "ka"
+    ? category?.nameKa ?? product.category
+    : category?.name ?? product.category;
+  const subcategoryLabel = language === "ka"
+    ? subcategory?.nameKa ?? product.subcategory
+    : subcategory?.name ?? product.subcategory;
   const href = product.href ?? (product.categorySlug === "custom-parts" ? "/account/custom-orders" : `/product/${product.slug}`);
   const showOriginalPrice = product.originalPrice !== null
     && product.originalPrice !== undefined
@@ -32,7 +38,7 @@ export function ProductCard({ product, compact = false }: { product: ProductCard
         </div>
         <div className={compact ? "p-4" : "p-5"}>
           <div className="mb-3 flex items-center justify-between gap-3 text-xs text-hooma-muted">
-            <span>{language === "ka" ? product.category : category?.name ?? product.category}</span>
+            <span>{categoryLabel}</span>
             <span className="flex items-center gap-1.5"><Clock3 size={13} />{product.leadTimeDays} {language === "ka" ? "დღე" : "days"}</span>
           </div>
           <h3 className={`${compact ? "line-clamp-2 min-h-12 text-base" : "text-xl"} font-semibold tracking-tight`}>{language === "ka" ? product.nameKa : product.hoomaName}</h3>
@@ -46,7 +52,7 @@ export function ProductCard({ product, compact = false }: { product: ProductCard
               </span>
               {showOriginalPrice ? <span className="shrink-0 text-xs text-hooma-muted line-through">₾{product.originalPrice!.toFixed(2)}</span> : null}
             </span>
-            <span className="text-hooma-accent">{language === "ka" ? product.subcategory : subcategory?.name ?? product.subcategory}</span>
+            <span className="text-hooma-accent">{subcategoryLabel}</span>
           </div>
         </div>
       </div>
