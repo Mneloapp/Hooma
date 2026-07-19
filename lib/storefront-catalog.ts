@@ -7,6 +7,56 @@ import { requirePermission } from "@/lib/supabase/server";
 
 type CategoryRow = { id: string; parent_id: string | null; slug: string; name_en: string; name_ka: string };
 
+type CatalogQueryError = { code?: string; message: string };
+
+type PagedRows<T> = {
+  data: T[];
+  error: CatalogQueryError | null;
+};
+
+const CATALOG_PAGE_SIZE = 250;
+const RELATED_PRODUCT_BATCH_SIZE = 100;
+const RELATED_BATCH_CONCURRENCY = 4;
+
+async function loadPagedRows<T>(
+  createQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: CatalogQueryError | null }>,
+  pageSize = CATALOG_PAGE_SIZE,
+): Promise<PagedRows<T>> {
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await createQuery(from, from + pageSize - 1);
+    if (error) return { data: rows, error };
+
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) return { data: rows, error: null };
+  }
+}
+
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
+  return chunks;
+}
+
+async function mapWithConcurrency<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>) {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(values[index]);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, values.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 const categoryNames: Record<string, ProductCategory> = {
   "3d-printer": "3D Printer",
   art: "Art",
@@ -104,13 +154,19 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   }
 
   const [{ data: productRows, error: productError }, { data: categoryRows, error: categoryError }] = await Promise.all([
-    admin
+    loadPagedRows<any>((from, to) => admin
       .from("products")
       .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes")
       .eq("status", "active")
       .eq("production_status", "approved")
-      .order("created_at", { ascending: false }),
-    admin.from("categories").select("id,parent_id,slug,name_en,name_ka"),
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to)),
+    loadPagedRows<CategoryRow>((from, to) => admin
+      .from("categories")
+      .select("id,parent_id,slug,name_en,name_ka")
+      .order("id", { ascending: true })
+      .range(from, to)),
   ]);
   if (productError || categoryError) {
     console.error("[storefront-catalog] Failed to load products or categories.", {
@@ -121,35 +177,45 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   }
   if (!productRows?.length) return [];
 
-  const productIds = productRows.map((row: any) => row.id);
-  const [
-    { data: variantRows, error: variantError },
-    { data: sourceRows, error: sourceError },
-    { data: metricRows },
-  ] = await Promise.all([
-    admin
-      .from("product_variants")
-      .select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active")
-      .in("product_id", productIds)
-      .eq("is_active", true),
-    admin
-      .from("product_sources")
-      .select("product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed")
-      .in("product_id", productIds)
-      .in("license_status", ["verified", "not_required"])
-      .eq("commercial_use_allowed", true)
-      .eq("media_use_allowed", true),
-    admin
-      .from("product_public_metrics")
-      .select("product_id,average_rating,rating_count,review_count,sold_quantity,popularity_score")
-      .in("product_id", productIds),
-  ]);
-  if (variantError || sourceError) {
-    console.error("[storefront-catalog] Failed to load product variants or sources.", {
-      variantError: variantError?.message,
-      sourceError: sourceError?.message,
+  const productIdBatches = chunkValues(productRows.map((row: any) => row.id), RELATED_PRODUCT_BATCH_SIZE);
+  const relatedBatches = await mapWithConcurrency(productIdBatches, RELATED_BATCH_CONCURRENCY, async (productIds) => {
+    const [variants, sources, metrics] = await Promise.all([
+      loadPagedRows<any>((from, to) => admin
+        .from("product_variants")
+        .select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active")
+        .in("product_id", productIds)
+        .eq("is_active", true)
+        .order("product_id", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)),
+      loadPagedRows<any>((from, to) => admin
+        .from("product_sources")
+        .select("id,product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed")
+        .in("product_id", productIds)
+        .in("license_status", ["verified", "not_required"])
+        .eq("commercial_use_allowed", true)
+        .eq("media_use_allowed", true)
+        .order("product_id", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)),
+      loadPagedRows<any>((from, to) => admin
+        .from("product_public_metrics")
+        .select("product_id,average_rating,rating_count,review_count,sold_quantity,popularity_score")
+        .in("product_id", productIds)
+        .order("product_id", { ascending: true })
+        .range(from, to)),
+    ]);
+    return { variants, sources, metrics };
+  });
+
+  const variantRows = relatedBatches.flatMap((batch) => batch.variants.data);
+  const sourceRows = relatedBatches.flatMap((batch) => batch.sources.data);
+  const metricRows = relatedBatches.flatMap((batch) => batch.metrics.data);
+  const relatedErrors = relatedBatches.flatMap((batch) => [batch.variants.error, batch.sources.error, batch.metrics.error].filter(Boolean));
+  if (relatedErrors.length) {
+    console.error("[storefront-catalog] Some catalog relation batches failed; returning the available products.", {
+      errors: relatedErrors.map((error) => error?.message),
     });
-    return [];
   }
 
   const categories = new Map(((categoryRows ?? []) as CategoryRow[]).map((row) => [row.id, row]));
