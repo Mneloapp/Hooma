@@ -1,15 +1,15 @@
 import { HomeStorefrontClient } from "@/components/home/HomeStorefrontClient";
 import { catalogCategories } from "@/data/catalog";
-import { getDailyDealDiscountPercent } from "@/lib/daily-deals";
+import { getDailyDeals } from "@/lib/daily-deals";
 import { getStorefrontCatalog } from "@/lib/storefront-catalog";
 import { toProductCardData } from "@/lib/product-card";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [catalogProducts, dailyDealDiscountPercent] = await Promise.all([
+  const [catalogProducts, dailyDeals] = await Promise.all([
     getStorefrontCatalog(),
-    getDailyDealDiscountPercent(),
+    getDailyDeals(),
   ]);
   const homeProducts = new Map(
     [...catalogProducts]
@@ -24,5 +24,23 @@ export default async function Home() {
       .forEach((product) => homeProducts.set(product.id, product));
   }
 
-  return <HomeStorefrontClient catalogProducts={[...homeProducts.values()].map(toProductCardData)} dailyDealDiscountPercent={dailyDealDiscountPercent} />;
+  const catalogById = new Map(catalogProducts.map((product) => [product.id, product]));
+  const dailyDealProducts = dailyDeals.deals.slice(0, 12).flatMap((deal) => {
+    const product = catalogById.get(deal.productId);
+    if (!product) return [];
+    return [{
+      ...toProductCardData(product),
+      href: `/deals/${deal.slug}`,
+      heroImage: deal.image || product.heroImage,
+      price: deal.dealPrice ?? product.price,
+      originalPrice: deal.originalPrice,
+      discountPercent: deal.discountPercent,
+    }];
+  });
+
+  return <HomeStorefrontClient
+    catalogProducts={[...homeProducts.values()].map(toProductCardData)}
+    dailyDealProducts={dailyDealProducts}
+    dailyDealDiscountPercent={dailyDeals.discountPercent}
+  />;
 }
