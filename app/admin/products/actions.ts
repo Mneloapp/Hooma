@@ -8,6 +8,15 @@ import { productColorNames } from "@/data/product-colors";
 
 export type DeleteProductState = { ok?: boolean; message?: string };
 export type BulkDeleteProductState = { ok?: boolean; message?: string; deletedCount?: number };
+export type BulkPublicationFailure = { productId: string; name: string; message: string };
+export type BulkPublicationState = {
+  ok?: boolean;
+  completed?: boolean;
+  message?: string;
+  publishedCount?: number;
+  skippedCount?: number;
+  failures?: BulkPublicationFailure[];
+};
 export type PublicationState = {
   ok?: boolean;
   message?: string;
@@ -36,6 +45,17 @@ function deleteError(message: string) {
 }
 
 const deletionRoles = ["owner", "admin", "catalog_manager"];
+const publicationRoles = ["owner", "admin"];
+
+function publicationError(message: string) {
+  if (message.includes("Product source was not found")) return "პროდუქტს წყაროს რეფერენსი არ აქვს.";
+  if (message.includes("rejected")) return "პროდუქტის წყარო უარყოფილ სტატუსშია.";
+  if (message.includes("priced technical variant") || message.includes("priced variant")) return "ფასი ან ტექნიკური მონაცემები შესავსებია.";
+  if (message.includes("explicit confirmation")) return "გამოქვეყნების დადასტურება აკლია.";
+  if (message.includes("Product was not found")) return "პროდუქტი ვერ მოიძებნა.";
+  if (message.includes("Only Draft")) return "მხოლოდ Draft პროდუქტის ჯგუფურად გამოქვეყნება შეიძლება.";
+  return "გამოქვეყნება ვერ დასრულდა.";
+}
 
 async function deleteCatalogProducts(productIds: string[]) {
   const profile = await requirePermission("catalog.manage");
@@ -83,6 +103,109 @@ async function deleteCatalogProducts(productIds: string[]) {
 
 export async function deleteCatalogProductsAction(_state: BulkDeleteProductState, formData: FormData): Promise<BulkDeleteProductState> {
   return deleteCatalogProducts(formData.getAll("product_ids").map(String));
+}
+
+async function publishProductsIndividually(admin: any, productIds: string[], actorProfileId: string) {
+  const failures: Array<{ product_id: string; error: string }> = [];
+  let publishedCount = 0;
+  for (let offset = 0; offset < productIds.length; offset += 8) {
+    const batch = productIds.slice(offset, offset + 8);
+    const results = await Promise.all(batch.map(async (productId) => {
+      const { error } = await admin.rpc("confirm_and_publish_catalog_product", {
+        requested_product_id: productId,
+        actor_profile_id: actorProfileId,
+        confirmed_publication_authority: true,
+      });
+      return { productId, error };
+    }));
+    for (const result of results) {
+      if (result.error) failures.push({ product_id: result.productId, error: result.error.message });
+      else publishedCount += 1;
+    }
+  }
+  return { published_count: publishedCount, failures };
+}
+
+export async function bulkPublishCatalogProductsAction(
+  _state: BulkPublicationState,
+  formData: FormData,
+): Promise<BulkPublicationState> {
+  const profile = await requirePermission("catalog.manage");
+  const admin = createAdminClient() as any;
+  if (!profile || !admin || !publicationRoles.includes(profile.role)) {
+    return { ok: false, completed: true, message: "პროდუქტების გამოქვეყნება მხოლოდ Owner-ს ან Admin-ს შეუძლია." };
+  }
+  if (formData.get("confirm_bulk_publication") !== "true") {
+    return { ok: false, completed: true, message: "ჯგუფური გამოქვეყნება დაადასტურე და სცადე თავიდან." };
+  }
+
+  const requestedIds = Array.from(new Set(formData.getAll("product_ids").map(String)));
+  if (!requestedIds.length || requestedIds.length > 1_000 || requestedIds.some((id) => !uuidPattern.test(id))) {
+    return { ok: false, completed: true, message: "ერთ ოპერაციაში მონიშნე 1-დან 1000-მდე პროდუქტი." };
+  }
+
+  const products: Array<{ id: string; status: string; name_ka: string | null; hooma_name: string | null }> = [];
+  for (let offset = 0; offset < requestedIds.length; offset += 100) {
+    const { data: rows, error: readError } = await admin
+      .from("products")
+      .select("id,status,name_ka,hooma_name")
+      .in("id", requestedIds.slice(offset, offset + 100));
+    if (readError) return { ok: false, completed: true, message: "მონიშნული პროდუქტების წაკითხვა ვერ მოხერხდა." };
+    products.push(...((rows ?? []) as typeof products));
+  }
+  const names = new Map(products.map((product) => [product.id, product.name_ka || product.hooma_name || product.id]));
+  const draftIds = products.filter((product) => product.status === "draft").map((product) => product.id);
+  const skippedCount = requestedIds.length - draftIds.length;
+  if (!draftIds.length) {
+    return {
+      ok: true,
+      completed: true,
+      publishedCount: 0,
+      skippedCount,
+      failures: [],
+      message: "მონიშნულ პროდუქტებში გამოსაქვეყნებელი Draft არ არის.",
+    };
+  }
+
+  let result: any;
+  const { data, error } = await admin.rpc("bulk_confirm_and_publish_catalog_products", {
+    requested_product_ids: draftIds,
+    actor_profile_id: profile.id,
+    confirmed_publication_authority: true,
+  });
+  if (error && (error.code === "PGRST202" || error.message.includes("schema cache") || error.message.includes("bulk_confirm_and_publish_catalog_products"))) {
+    result = await publishProductsIndividually(admin, draftIds, profile.id);
+  } else if (error) {
+    return { ok: false, completed: true, message: "ჯგუფური გამოქვეყნება ვერ დასრულდა." };
+  } else {
+    result = data ?? {};
+  }
+
+  const failures: BulkPublicationFailure[] = (Array.isArray(result.failures) ? result.failures : []).map((failure: any) => ({
+    productId: String(failure.product_id ?? ""),
+    name: names.get(String(failure.product_id ?? "")) ?? "უცნობი პროდუქტი",
+    message: publicationError(String(failure.error ?? "")),
+  }));
+  const publishedCount = Number(result.published_count ?? Math.max(0, draftIds.length - failures.length));
+
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/deals");
+  revalidatePath("/product/[slug]", "page");
+  revalidatePath("/products/[slug]", "page");
+  revalidatePath("/admin/products");
+  for (const productId of draftIds) revalidatePath(`/admin/products/${productId}`);
+
+  const failureMessage = failures.length ? ` ${failures.length} პროდუქტს მონაცემების გასწორება სჭირდება.` : "";
+  const skippedMessage = skippedCount ? ` ${skippedCount} უკვე გამოქვეყნებული/არასამუშაო სტატუსის პროდუქტი გამოტოვებულია.` : "";
+  return {
+    ok: publishedCount > 0 || failures.length === 0,
+    completed: true,
+    publishedCount,
+    skippedCount,
+    failures,
+    message: `${publishedCount} პროდუქტი გამოქვეყნდა.${failureMessage}${skippedMessage}`,
+  };
 }
 
 function productMediaPath(value: unknown) {
