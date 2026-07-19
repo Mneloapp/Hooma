@@ -220,7 +220,7 @@ export function CostSettingsEditor({
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3 rounded-2xl border border-hooma-text/10 bg-hooma-text p-5 text-white">
-        <LockKeyhole size={20} className="mt-0.5 shrink-0 text-[#c8d8bd]" />
+        <LockKeyhole size={20} className="mt-0.5 shrink-0 text-hooma-secondary" />
         <div>
           <h2 className="font-semibold">Admin-only financial data</h2>
           <p className="mt-1 text-sm leading-6 text-white/60">
