@@ -46,6 +46,11 @@ function addressText(address: Record<string, unknown> | null) {
   return [address.city, address.address_line_1].filter((value): value is string => typeof value === "string" && Boolean(value)).join(", ") || "მისამართი არ არის მითითებული";
 }
 
+function addressMapUrl(address: Record<string, unknown> | null) {
+  if (!address) return null;
+  return typeof address.google_maps_url === "string" && address.google_maps_url.startsWith("https://www.google.com/maps/") ? address.google_maps_url : null;
+}
+
 export default async function AdminOrdersPage({
   searchParams,
 }: {
@@ -133,7 +138,7 @@ export default async function AdminOrdersPage({
 
               <div className="mt-5 grid gap-3 rounded-2xl bg-hooma-background p-4 text-sm md:grid-cols-3">
                 <p className="flex gap-2"><UserRound size={17} className="mt-0.5 shrink-0 text-hooma-accent" /><span><strong className="block">{customer?.full_name || String(order.delivery_address?.full_name ?? "მომხმარებელი")}</strong><span className="text-xs text-hooma-muted">{customer?.phone || order.guest_phone || customer?.email || order.guest_email || "კონტაქტი არ არის"}</span></span></p>
-                <p className="flex gap-2"><MapPin size={17} className="mt-0.5 shrink-0 text-hooma-accent" /><span><strong className="block">მიწოდება</strong><span className="text-xs text-hooma-muted">{addressText(order.delivery_address)}</span></span></p>
+                <p className="flex gap-2"><MapPin size={17} className="mt-0.5 shrink-0 text-hooma-accent" /><span><strong className="block">მიწოდება</strong><span className="text-xs text-hooma-muted">{addressText(order.delivery_address)}</span>{addressMapUrl(order.delivery_address) ? <a href={addressMapUrl(order.delivery_address)!} target="_blank" rel="noreferrer" className="mt-1 block text-xs font-semibold text-hooma-accent underline underline-offset-2">ზუსტი ლოკაცია Google Maps-ზე</a> : null}</span></p>
                 <p className="flex gap-2"><CalendarClock size={17} className="mt-0.5 shrink-0 text-hooma-accent" /><span><strong className="block">დაპირებული თარიღი</strong><span className="text-xs text-hooma-muted">{order.promised_at ? dateFormat.format(new Date(order.promised_at)) : "3 სამუშაო დღე"}</span></span></p>
               </div>
 

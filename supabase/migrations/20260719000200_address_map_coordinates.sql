@@ -1,0 +1,10 @@
+alter table public.addresses add column if not exists latitude double precision, add column if not exists longitude double precision, add column if not exists google_maps_url text;
+alter table public.addresses drop constraint if exists addresses_latitude_check;
+alter table public.addresses add constraint addresses_latitude_check check (latitude is null or latitude between -90 and 90);
+alter table public.addresses drop constraint if exists addresses_longitude_check;
+alter table public.addresses add constraint addresses_longitude_check check (longitude is null or longitude between -180 and 180);
+alter table public.addresses drop constraint if exists addresses_map_coordinates_pair_check;
+alter table public.addresses add constraint addresses_map_coordinates_pair_check check ((latitude is null) = (longitude is null));
+comment on column public.addresses.latitude is 'Customer-selected courier destination latitude.';
+comment on column public.addresses.longitude is 'Customer-selected courier destination longitude.';
+comment on column public.addresses.google_maps_url is 'Shareable Google Maps URL generated from the selected coordinates.';
