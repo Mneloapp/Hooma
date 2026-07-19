@@ -3,12 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Clock3 } from "lucide-react";
-import type { Product } from "@/data/products";
+import type { ProductCardData } from "@/lib/product-card";
 import { useLanguage } from "./LanguageProvider";
 import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
 import { getCategory } from "@/data/catalog";
 
-export function ProductCard({ product, compact = false }: { product: Product; compact?: boolean }) {
+export function ProductCard({ product, compact = false }: { product: ProductCardData; compact?: boolean }) {
   const { language } = useLanguage();
   const category = getCategory(product.categorySlug);
   const subcategory = category?.subcategories.find((item) => item.slug === product.subcategorySlug);
