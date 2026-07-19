@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ChevronRight, Filter, Search, SlidersHorizontal, X } from "lucide-react";
 import { catalogCategories, getCategory } from "@/data/catalog";
 import { ProductGrid } from "@/components/ProductGrid";
+import { getDailyDeals } from "@/lib/daily-deals";
+import { toDiscountedProductCardData } from "@/lib/product-card";
 import { getStorefrontCatalog } from "@/lib/storefront-catalog";
 import { cn } from "@/lib/utils";
 import { LocalizedText } from "@/components/LocalizedText";
@@ -18,7 +20,8 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
   const { category, subcategory, q = "", material, sort = "featured" } = params;
   const selectedCategory = category ? getCategory(category) : undefined;
   const query = q.trim().toLocaleLowerCase("ka-GE");
-  const products = await getStorefrontCatalog();
+  const [products, dailyDeals] = await Promise.all([getStorefrontCatalog(), getDailyDeals()]);
+  const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
 
   const buildHref = (changes: Partial<ShopParams>, clear: Array<keyof ShopParams> = []) => {
     const next = new URLSearchParams();
@@ -56,6 +59,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
   const totalPages = Math.max(1, Math.ceil(filtered.length / PRODUCTS_PER_PAGE));
   const currentPage = Math.min(Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1, totalPages);
   const pagedProducts = filtered.slice((currentPage - 1) * PRODUCTS_PER_PAGE, currentPage * PRODUCTS_PER_PAGE);
+  const pagedProductCards = pagedProducts.map((product) => toDiscountedProductCardData(product, dailyDealByProductId.get(product.id)));
   const activeFilters = [
     q ? { ka: `ძიება: ${q}`, en: `Search: ${q}` } : null,
     selectedCategory ? { ka: selectedCategory.nameKa, en: selectedCategory.name } : null,
@@ -145,7 +149,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
           </div>
 
           <div className="mt-6">
-            {filtered.length ? <ProductGrid products={pagedProducts} /> : <div className="rounded-[1.5rem] border border-dashed border-hooma-text/20 bg-white/45 px-6 py-20 text-center"><p className="text-2xl font-semibold"><LocalizedText ka="შესაბამისი პროდუქტი ვერ მოიძებნა." en="No matching products found." /></p><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="შეცვალე ძიების სიტყვა ან გაასუფთავე არჩეული ფილტრები." en="Change your search or clear the selected filters." /></p><Link href="/shop" className="mt-6 inline-flex rounded-full bg-hooma-text px-5 py-2.5 text-sm font-medium text-white"><LocalizedText ka="ყველა პროდუქტი" en="All products" /></Link></div>}
+            {filtered.length ? <ProductGrid products={pagedProductCards} /> : <div className="rounded-[1.5rem] border border-dashed border-hooma-text/20 bg-white/45 px-6 py-20 text-center"><p className="text-2xl font-semibold"><LocalizedText ka="შესაბამისი პროდუქტი ვერ მოიძებნა." en="No matching products found." /></p><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="შეცვალე ძიების სიტყვა ან გაასუფთავე არჩეული ფილტრები." en="Change your search or clear the selected filters." /></p><Link href="/shop" className="mt-6 inline-flex rounded-full bg-hooma-text px-5 py-2.5 text-sm font-medium text-white"><LocalizedText ka="ყველა პროდუქტი" en="All products" /></Link></div>}
           </div>
 
           {totalPages > 1 ? <nav aria-label="Catalog pages" className="mt-8 flex items-center justify-center gap-3 border-t border-hooma-text/10 pt-6">
