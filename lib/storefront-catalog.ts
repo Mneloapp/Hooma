@@ -14,7 +14,7 @@ type PagedRows<T> = {
   error: CatalogQueryError | null;
 };
 
-const CATALOG_PAGE_SIZE = 100;
+const CATALOG_PAGE_SIZE = 250;
 const RELATED_PRODUCT_BATCH_SIZE = 100;
 const RELATED_BATCH_CONCURRENCY = 4;
 
