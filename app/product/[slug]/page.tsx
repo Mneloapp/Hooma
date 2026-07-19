@@ -4,7 +4,8 @@ import { Check, ChevronRight, Clock3, Factory, FlaskConical, ShieldCheck, Truck 
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductShelf } from "@/components/ProductShelf";
-import { toProductCardData } from "@/lib/product-card";
+import { getDailyDeals } from "@/lib/daily-deals";
+import { toDiscountedProductCardData } from "@/lib/product-card";
 import { getAdminPreviewProductById, getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
 import { getProductReviewData } from "@/lib/product-reviews";
 import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
@@ -17,14 +18,17 @@ export const dynamic = "force-dynamic";
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }) {
   const { slug } = await params;
   const { preview: previewId } = await searchParams;
-  const [previewProduct, products] = await Promise.all([
+  const [previewProduct, products, dailyDeals] = await Promise.all([
     previewId ? getAdminPreviewProductById(previewId) : Promise.resolve(null),
     getStorefrontCatalog(),
+    previewId ? Promise.resolve({ deals: [] }) : getDailyDeals(),
   ]);
   if (previewId && (!previewProduct || previewProduct.slug !== slug)) notFound();
   const product = previewProduct ?? await getStorefrontProductBySlug(slug);
   if (!product) notFound();
   const reviewData = await getProductReviewData(product.id);
+  const activeDeal = dailyDeals.deals.find((deal) => deal.productId === product.id && deal.dealPrice !== null && deal.originalPrice !== null);
+  const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
   const defaultVariant = product.variants[0];
   const fixedMulticolor = defaultVariant.colorMode === "fixed_multicolor" && defaultVariant.amsRequired;
   const localizedCategory = getCategory(product.categorySlug);
@@ -80,12 +84,17 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           <div className="mt-8 rounded-2xl bg-hooma-panel p-5"><div className="flex items-center gap-2"><ShieldCheck size={18} className="text-hooma-accent" /><h2 className="font-semibold"><LocalizedText ka="უსაფრთხოება და მოვლა" en="Safety and care" /></h2></div><p className="mt-3 text-sm leading-6 text-hooma-muted"><LocalizedText ka="არ მოათავსოთ მაღალი ტემპერატურის ან ღია ცეცხლის სიახლოვეს. საბავშვო და საკვებთან დაკავშირებული პროდუქტები გამოქვეყნდება მხოლოდ შესაბამისი გამოყენების შემოწმების შემდეგ." en="Keep away from high temperatures and open flames. Children’s and food-related products are published only after their intended use has been reviewed." /></p></div>
         </div>
 
-        <ProductConfigurator product={product} />
+        <ProductConfigurator product={product} dailyDeal={activeDeal ? {
+          variantId: activeDeal.variantId,
+          originalPrice: activeDeal.originalPrice!,
+          dealPrice: activeDeal.dealPrice!,
+          discountPercent: activeDeal.discountPercent,
+        } : undefined} />
       </section>
 
       <ProductReviewsSection productId={product.id} slug={product.slug} productName={product.nameKa} productNameEn={product.hoomaName} average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} reviews={reviewData.reviews} context={reviewData.context} allowReview={!previewProduct && product.isOrderable} />
 
-      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" titleEn="Similar products" products={recommendations.map(toProductCardData)} href={`/shop?category=${product.categorySlug}`} /></div>
+      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" titleEn="Similar products" products={recommendations.map((item) => toDiscountedProductCardData(item, dailyDealByProductId.get(item.id)))} href={`/shop?category=${product.categorySlug}`} /></div>
     </main>
   );
 }
