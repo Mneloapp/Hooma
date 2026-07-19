@@ -11,12 +11,13 @@ html {
 }
 
 body {
-  background: #F7F4EF;
-  color: #171717;
+  background: #FFF8F2;
+  color: #24324A;
 }
 
 ::selection {
-  background: #D8C7AD;
+  background: #FFC857;
+  color: #24324A;
 }
 
 .reveal-motion {
