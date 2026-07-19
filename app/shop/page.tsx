@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 type ShopParams = { category?: string; subcategory?: string; q?: string; material?: string; sort?: string; page?: string };
 
-const PRODUCTS_PER_PAGE = 48;
+const PRODUCTS_PER_PAGE = 36;
 
 export default async function Shop({ searchParams }: { searchParams: Promise<ShopParams> }) {
   const params = await searchParams;
@@ -72,13 +72,15 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
         return (
           <div key={item.slug} className="border-t border-hooma-text/10 pt-2 first:border-0">
             <Link href={buildHref({ category: item.slug }, ["subcategory"])} className={cn("flex items-center gap-2 rounded-lg px-2 py-2 font-semibold transition", selected ? "bg-hooma-panel text-hooma-accent" : "text-hooma-text hover:bg-hooma-panel/70")}>
-              <CategoryIcon size={16} className="shrink-0" /><LocalizedText ka={item.nameKa} en={item.name} />
+              <CategoryIcon size={16} className="shrink-0" />
+              <span className="min-w-0 flex-1"><LocalizedText ka={item.nameKa} en={item.name} /></span>
+              <ChevronRight size={14} className={cn("shrink-0 transition-transform", selected && "rotate-90")} />
             </Link>
-            <div className="mb-2 ml-6 grid border-l border-hooma-text/10 pl-3">
+            {selected ? <div className="mb-2 ml-6 grid border-l border-hooma-text/10 pl-3">
               {item.subcategories.map((child) => (
                 <Link key={child.slug} href={buildHref({ category: item.slug, subcategory: child.slug })} className={cn("rounded-md px-2 py-1.5 text-[13px] leading-5 transition", selected && subcategory === child.slug ? "bg-hooma-accent/10 font-semibold text-hooma-accent" : "text-hooma-muted hover:bg-hooma-panel/70 hover:text-hooma-text")}><LocalizedText ka={child.nameKa} en={child.name} /></Link>
               ))}
-            </div>
+            </div> : null}
           </div>
         );
       })}
