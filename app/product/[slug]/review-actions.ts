@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/storefront-cache";
 import { createClient } from "@/lib/supabase/server";
 
 export type ProductReviewActionResult = { ok: boolean; message: string };
@@ -13,6 +14,7 @@ function refreshReviewPages(slug: string) {
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/");
   revalidatePath("/shop");
+  revalidateStorefrontCatalog();
 }
 
 export async function submitProductReviewAction(formData: FormData): Promise<ProductReviewActionResult> {

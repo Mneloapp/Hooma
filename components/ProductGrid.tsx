@@ -6,9 +6,9 @@ export function ProductGrid({ products }: { products: Product[] }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {products.map((product, index) => (
-        <Reveal key={product.id} delay={(index % 6) * 55}>
-          <ProductCard product={product} />
-        </Reveal>
+        index < 6
+          ? <ProductCard key={product.id} product={product} />
+          : <Reveal key={product.id} delay={(index % 6) * 55}><ProductCard product={product} /></Reveal>
       ))}
     </div>
   );

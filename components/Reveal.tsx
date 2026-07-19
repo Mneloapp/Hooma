@@ -18,6 +18,10 @@ export function Reveal({
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true);
+      return;
+    }
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -26,7 +30,7 @@ export function Reveal({
           observer.disconnect();
         }
       },
-      { rootMargin: "-8% 0px -8% 0px", threshold: 0.14 },
+      { rootMargin: "240px 0px", threshold: 0.01 },
     );
 
     observer.observe(node);
