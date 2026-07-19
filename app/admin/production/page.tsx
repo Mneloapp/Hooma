@@ -1,4 +1,4 @@
-Y��x-���jם��i��+��j[h��ܢ���}v�:-jZ.����)޳�6import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   Box,
   CheckCircle2,
@@ -248,7 +248,67 @@ export default async function ProductionPage({
             const order = item ? ordersById.get(item.order_id) : undefined;
             const sourceUrl = safeMakerWorldUrl(job.source_url);
             const operatorReference = item?.product_id ? operatorReferencesByProduct.get(item.product_id) : undefined;
-            const colorProfile = item?.variant_id#}v��$z{-���jםd border-hooma-text/15 bg-white/55 p-8 text-center text-sm text-hooma-muted xl:col-span-2">დაჯავშნილი და ჯერ გაუშვებელი სამუშაო არ არის.</p> : null}
+            const colorProfile = item?.variant_id ? productionVariantAttributes.get(item.variant_id) : undefined;
+            return (
+              <article key={job.id} className="rounded-[1.5rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div><p className="text-xs font-semibold text-hooma-accent">{orderLabel(order)} · ერთეული {job.unit_number} · plate {job.plate_number}{job.attempt_number > 1 ? ` · retry ${job.attempt_number}` : ""}</p><h3 className="mt-2 text-xl font-semibold">{job.product_name_snapshot || item?.product_name || "ინდივიდუალური პროდუქტი"}</h3><p className="mt-1 text-xs text-hooma-muted">{job.sku_snapshot || item?.sku || "Custom"}{job.variant_snapshot || item?.size_label ? ` · ${job.variant_snapshot || item?.size_label}` : ""}</p></div>
+                  <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900">დადასტურებას ელოდება</span>
+                </div>
+
+                <div className="mt-4 grid gap-2 rounded-2xl bg-hooma-background p-4 text-sm sm:grid-cols-3">
+                  <p><span className="block text-xs text-hooma-muted">ფერი</span><strong>{job.color || item?.color || "—"}</strong></p>
+                  <p><span className="block text-xs text-hooma-muted">მასალა</span><strong>{job.material || item?.material || "—"}</strong></p>
+                  <p><span className="block text-xs text-hooma-muted">სავარაუდო დრო</span><strong>{job.estimated_minutes ? `${job.estimated_minutes} წთ` : "შეამოწმე Studio-ში"}</strong></p>
+                </div>
+
+                <OperatorReference value={operatorReference} />
+                <AmsProductionProfile attributes={colorProfile} />
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full border border-hooma-text/15 bg-white px-4 py-2 font-semibold hover:border-hooma-accent"><ExternalLink size={15} />ძველი წყაროს გახსნა</a> : null}
+                  <span className="text-xs text-hooma-muted">3MF profile: {job.print_profile_path ? "დამაგრებულია" : "ოპერატორის რეფერენსიდან"}</span>
+                </div>
+
+                <form action={assignPrintJobAction} className="mt-5 flex flex-col gap-3 rounded-2xl border border-hooma-text/10 bg-hooma-panel/60 p-4 sm:flex-row sm:items-end">
+                  <input type="hidden" name="job_id" value={job.id} />
+                  <input type="hidden" name="lock_version" value={job.lock_version} />
+                  <input type="hidden" name="operation_key" value={randomUUID()} />
+                  <label className="flex-1 text-sm font-semibold">Hooma-ში დასაჯავშნი პრინტერი<select name="printer_id" required defaultValue="" className="mt-2 w-full rounded-xl border border-hooma-text/10 bg-white px-3 py-2.5 font-normal outline-none focus:border-hooma-accent"><option value="" disabled>აირჩიე თავისუფალი პრინტერი</option>{idlePrinters.map((printer) => <option key={printer.id} value={printer.id}>{printer.name} · {printer.model}</option>)}</select></label>
+                  <button disabled={!idlePrinters.length} className="min-h-11 rounded-full bg-hooma-text px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">1. პრინტერის დაჯავშნა</button>
+                </form>
+              </article>
+            );
+          })}
+          {!waitingJobs.length ? <div className="rounded-[1.5rem] border border-dashed border-hooma-text/15 bg-white/55 px-6 py-12 text-center xl:col-span-2"><Box className="mx-auto text-hooma-muted" /><p className="mt-4 font-semibold">გასაშვები სამუშაო არ არის</p><p className="mt-2 text-sm text-hooma-muted">Orders გვერდზე ოპერატორის მიერ დადასტურებული შეკვეთა აქ გამოჩნდება.</p></div> : null}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div><p className="text-xs uppercase tracking-[0.24em] text-hooma-muted">2. პრინტერი დაჯავშნილია</p><h2 className="mt-2 text-2xl font-semibold">Bambu Studio-ში გასაშვები</h2></div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {preparingJobs.map((job) => {
+            const item = itemsById.get(job.order_item_id);
+            const order = item ? ordersById.get(item.order_id) : undefined;
+            const printer = job.printer_id ? printersById.get(job.printer_id) : undefined;
+            const sourceUrl = safeMakerWorldUrl(job.source_url);
+            const operatorReference = item?.product_id ? operatorReferencesByProduct.get(item.product_id) : undefined;
+            const colorProfile = item?.variant_id ? productionVariantAttributes.get(item.variant_id) : undefined;
+            return (
+              <article key={job.id} className="rounded-[1.5rem] border border-violet-200 bg-violet-50 p-5">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><p className="text-xs font-semibold text-violet-900">{orderLabel(order)} · ერთეული {job.unit_number} · plate {job.plate_number}{job.attempt_number > 1 ? ` · retry ${job.attempt_number}` : ""}</p><h3 className="mt-2 text-xl font-semibold">{job.product_name_snapshot || item?.product_name || "პროდუქტი"}</h3><p className="mt-2 text-sm text-violet-900/75">{job.color || item?.color || "ფერი —"} · {job.material || item?.material || "მასალა —"}</p><p className="mt-2 text-xs text-violet-900/65">მიანიჭა: {job.assigned_operator_id ? operatorsById.get(job.assigned_operator_id) || "ოპერატორი" : "—"}</p></div><div className="rounded-2xl bg-white/75 px-4 py-3 text-sm"><span className="block text-xs text-hooma-muted">დაჯავშნილი პრინტერი</span><strong>{printer?.name || "მინიჭებულია"}</strong><span className="ml-1 text-xs text-hooma-muted">{printer?.model}</span></div></div>
+                <OperatorReference value={operatorReference} /><AmsProductionProfile attributes={colorProfile} /><div className="mt-4 flex flex-wrap items-center gap-3">{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold"><ExternalLink size={15} />ძველი წყაროს გახსნა</a> : null}<span className="text-xs text-violet-900/70">ჯერ გაუშვი ამ დაჯავშნილ პრინტერზე Bambu Studio-დან.</span></div>
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <form action={startPhysicalPrintAction}>
+                    <input type="hidden" name="job_id" value={job.id} /><input type="hidden" name="lock_version" value={job.lock_version} /><input type="hidden" name="operation_key" value={randomUUID()} />
+                    <button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-violet-950 px-5 text-sm font-semibold text-white"><Printer size={17} />2. ფიზიკური ბეჭდვა დაიწყო</button>
+                  </form>
+                  <details className="rounded-2xl border border-violet-200 bg-white/70 p-3 text-sm"><summary className="cursor-pointer font-semibold">ჯავშნის მოხსნა</summary><form action={releasePrintAssignmentAction} className="mt-3 grid gap-2"><input type="hidden" name="job_id" value={job.id} /><input type="hidden" name="lock_version" value={job.lock_version} /><input type="hidden" name="operation_key" value={randomUUID()} /><select name="release_reason" required defaultValue="" className="rounded-xl border border-violet-200 bg-white px-3 py-2"><option value="" disabled>მიზეზი</option><option value="Printer unavailable during preflight">პრინტერი მიუწვდომელია</option><option value="Material or color unavailable">ფერი / მასალა არ არის</option><option value="Profile requires correction">პროფილი შესასწორებელია</option><option value="Assignment made by mistake">შეცდომით მიენიჭა</option></select><button className="rounded-full border border-violet-300 px-4 py-2 text-xs font-semibold">დააბრუნე რიგში</button></form></details>
+                </div>
+              </article>
+            );
+          })}
+          {!preparingJobs.length ? <p className="rounded-[1.5rem] border border-dashed border-hooma-text/15 bg-white/55 p-8 text-center text-sm text-hooma-muted xl:col-span-2">დაჯავშნილი და ჯერ გაუშვებელი სამუშაო არ არის.</p> : null}
         </div>
       </section>
 
