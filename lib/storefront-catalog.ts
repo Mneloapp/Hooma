@@ -14,7 +14,7 @@ type PagedRows<T> = {
   error: CatalogQueryError | null;
 };
 
-const CATALOG_PAGE_SIZE = 250;
+const CATALOG_PAGE_SIZE = 100;
 const RELATED_PRODUCT_BATCH_SIZE = 100;
 const RELATED_BATCH_CONCURRENCY = 4;
 
@@ -156,7 +156,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const [{ data: productRows, error: productError }, { data: categoryRows, error: categoryError }] = await Promise.all([
     loadPagedRows<any>((from, to) => admin
       .from("products")
-      .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes")
+      .select("id,slug,hooma_name,name_ka,category_id,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,delivery_estimate,lead_time_business_days,estimated_print_minutes,product_variants(id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active),product_sources(id,product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed)")
       .eq("status", "active")
       .eq("production_status", "approved")
       .order("created_at", { ascending: false })
@@ -178,43 +178,25 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   if (!productRows?.length) return [];
 
   const productIdBatches = chunkValues(productRows.map((row: any) => row.id), RELATED_PRODUCT_BATCH_SIZE);
-  const relatedBatches = await mapWithConcurrency(productIdBatches, RELATED_BATCH_CONCURRENCY, async (productIds) => {
-    const [variants, sources, metrics] = await Promise.all([
-      loadPagedRows<any>((from, to) => admin
-        .from("product_variants")
-        .select("id,product_id,sku,size_label,layout_label,product_dimensions_cm,packing_dimensions_cm,gross_weight_kg,image,price,price_placeholder,available_colors,material,attributes,is_active")
-        .in("product_id", productIds)
-        .eq("is_active", true)
-        .order("product_id", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to)),
-      loadPagedRows<any>((from, to) => admin
-        .from("product_sources")
-        .select("id,product_id,platform,source_url,creator_name,license_status,commercial_use_allowed,media_use_allowed")
-        .in("product_id", productIds)
-        .in("license_status", ["verified", "not_required"])
-        .eq("commercial_use_allowed", true)
-        .eq("media_use_allowed", true)
-        .order("product_id", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to)),
-      loadPagedRows<any>((from, to) => admin
-        .from("product_public_metrics")
-        .select("product_id,average_rating,rating_count,review_count,sold_quantity,popularity_score")
-        .in("product_id", productIds)
-        .order("product_id", { ascending: true })
-        .range(from, to)),
-    ]);
-    return { variants, sources, metrics };
+  const metricBatches = await mapWithConcurrency(productIdBatches, RELATED_BATCH_CONCURRENCY, (productIds) => {
+    return loadPagedRows<any>((from, to) => admin
+      .from("product_public_metrics")
+      .select("product_id,average_rating,rating_count,review_count,sold_quantity,popularity_score")
+      .in("product_id", productIds)
+      .order("product_id", { ascending: true })
+      .range(from, to));
   });
 
-  const variantRows = relatedBatches.flatMap((batch) => batch.variants.data);
-  const sourceRows = relatedBatches.flatMap((batch) => batch.sources.data);
-  const metricRows = relatedBatches.flatMap((batch) => batch.metrics.data);
-  const relatedErrors = relatedBatches.flatMap((batch) => [batch.variants.error, batch.sources.error, batch.metrics.error].filter(Boolean));
-  if (relatedErrors.length) {
-    console.error("[storefront-catalog] Some catalog relation batches failed; returning the available products.", {
-      errors: relatedErrors.map((error) => error?.message),
+  const variantRows = productRows.flatMap((row: any) => Array.isArray(row.product_variants) ? row.product_variants : []);
+  const sourceRows = productRows.flatMap((row: any) => Array.isArray(row.product_sources) ? row.product_sources : [])
+    .filter((source: any) => ["verified", "not_required"].includes(source.license_status)
+      && source.commercial_use_allowed === true
+      && source.media_use_allowed === true);
+  const metricRows = metricBatches.flatMap((batch) => batch.data);
+  const metricErrors = metricBatches.map((batch) => batch.error).filter(Boolean);
+  if (metricErrors.length) {
+    console.error("[storefront-catalog] Some catalog metric batches failed; continuing without those metrics.", {
+      errors: metricErrors.map((error) => error?.message),
     });
   }
 
@@ -231,7 +213,7 @@ export const getStorefrontCatalog = cache(async (): Promise<Product[]> => {
   const catalog = productRows.flatMap((row: any): Product[] => {
     const source = sourceByProduct.get(row.id);
     if (!source) return [];
-    const rawVariants = (variantsByProduct.get(row.id) ?? []).filter((variant) => Number(variant.price ?? row.base_price) > 0);
+    const rawVariants = (variantsByProduct.get(row.id) ?? []).filter((variant) => variant.is_active === true && Number(variant.price ?? row.base_price) > 0);
     if (!rawVariants.length) return [];
 
     const selectedCategory = row.category_id ? categories.get(row.category_id) : null;
