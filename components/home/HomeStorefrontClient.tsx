@@ -2,12 +2,12 @@
 
 import { ArrowRight, BadgePercent, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
 import { catalogCategories } from "@/data/catalog";
-import type { Product } from "@/data/products";
+import type { ProductCardData } from "@/lib/product-card";
 import { Button } from "@/components/Button";
 import { ProductShelf } from "@/components/ProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
 
-export function HomeStorefrontClient({ catalogProducts, dailyDealDiscountPercent }: { catalogProducts: Product[]; dailyDealDiscountPercent: number }) {
+export function HomeStorefrontClient({ catalogProducts, dailyDealDiscountPercent }: { catalogProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
   const georgian = language === "ka";
   const popularProducts = [...catalogProducts]

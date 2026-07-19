@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import type { Product } from "@/data/products";
+import type { ProductCardData } from "@/lib/product-card";
 import { ProductCard } from "./ProductCard";
 import { useLanguage } from "./LanguageProvider";
 
-export function ProductShelf({ title, titleEn, products, href = "/shop", eyebrow, eyebrowEn }: { title: string; titleEn?: string; products: Product[]; href?: string; eyebrow?: string; eyebrowEn?: string }) {
+export function ProductShelf({ title, titleEn, products, href = "/shop", eyebrow, eyebrowEn }: { title: string; titleEn?: string; products: ProductCardData[]; href?: string; eyebrow?: string; eyebrowEn?: string }) {
   const { language } = useLanguage();
   return (
     <section className="rounded-[1.5rem] border border-hooma-text/10 bg-white/75 p-4 shadow-sm sm:p-6">

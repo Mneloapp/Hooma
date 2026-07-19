@@ -1,0 +1,47 @@
+import type { Product } from "@/data/products";
+
+export type ProductCardData = Pick<Product,
+  | "id"
+  | "slug"
+  | "hoomaName"
+  | "nameKa"
+  | "category"
+  | "categorySlug"
+  | "subcategory"
+  | "subcategorySlug"
+  | "shortDescription"
+  | "shortDescriptionKa"
+  | "heroImage"
+  | "price"
+  | "pricePlaceholder"
+  | "leadTimeDays"
+  | "isOrderable"
+  | "ratingAverage"
+  | "ratingCount"
+  | "salesCount"
+  | "popularityScore"
+>;
+
+export function toProductCardData(product: Product): ProductCardData {
+  return {
+    id: product.id,
+    slug: product.slug,
+    hoomaName: product.hoomaName,
+    nameKa: product.nameKa,
+    category: product.category,
+    categorySlug: product.categorySlug,
+    subcategory: product.subcategory,
+    subcategorySlug: product.subcategorySlug,
+    shortDescription: product.shortDescription,
+    shortDescriptionKa: product.shortDescriptionKa,
+    heroImage: product.heroImage,
+    price: product.price,
+    pricePlaceholder: product.pricePlaceholder,
+    leadTimeDays: product.leadTimeDays,
+    isOrderable: product.isOrderable,
+    ratingAverage: product.ratingAverage,
+    ratingCount: product.ratingCount,
+    salesCount: product.salesCount,
+    popularityScore: product.popularityScore,
+  };
+}

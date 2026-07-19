@@ -2,6 +2,7 @@ import { HomeStorefrontClient } from "@/components/home/HomeStorefrontClient";
 import { catalogCategories } from "@/data/catalog";
 import { getDailyDealDiscountPercent } from "@/lib/daily-deals";
 import { getStorefrontCatalog } from "@/lib/storefront-catalog";
+import { toProductCardData } from "@/lib/product-card";
 
 export const dynamic = "force-dynamic";
 
@@ -23,5 +24,5 @@ export default async function Home() {
       .forEach((product) => homeProducts.set(product.id, product));
   }
 
-  return <HomeStorefrontClient catalogProducts={[...homeProducts.values()]} dailyDealDiscountPercent={dailyDealDiscountPercent} />;
+  return <HomeStorefrontClient catalogProducts={[...homeProducts.values()].map(toProductCardData)} dailyDealDiscountPercent={dailyDealDiscountPercent} />;
 }

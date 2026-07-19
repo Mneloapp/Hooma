@@ -4,6 +4,7 @@ import { Check, ChevronRight, Clock3, Factory, FlaskConical, ShieldCheck, Truck 
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductShelf } from "@/components/ProductShelf";
+import { toProductCardData } from "@/lib/product-card";
 import { getAdminPreviewProductById, getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
 import { getProductReviewData } from "@/lib/product-reviews";
 import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
@@ -84,7 +85,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
       <ProductReviewsSection productId={product.id} slug={product.slug} productName={product.nameKa} productNameEn={product.hoomaName} average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} reviews={reviewData.reviews} context={reviewData.context} allowReview={!previewProduct && product.isOrderable} />
 
-      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" titleEn="Similar products" products={recommendations} href={`/shop?category=${product.categorySlug}`} /></div>
+      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" titleEn="Similar products" products={recommendations.map(toProductCardData)} href={`/shop?category=${product.categorySlug}`} /></div>
     </main>
   );
 }

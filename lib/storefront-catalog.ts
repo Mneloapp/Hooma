@@ -1,5 +1,6 @@
 import "server-only";
 
+import { gunzipSync, gzipSync } from "node:zlib";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import type { Product, ProductCategory, ProductVariant } from "@/data/products";
@@ -293,14 +294,20 @@ const catalogCacheScope = process.env.VERCEL_ENV === "production"
   ? "production"
   : process.env.VERCEL_GIT_COMMIT_REF || "local";
 
-const getCachedStorefrontCatalog = unstable_cache(loadStorefrontCatalog, ["storefront-catalog-v3", catalogCacheScope], {
-  revalidate: 300,
+async function loadCompressedStorefrontCatalog() {
+  const catalog = await loadStorefrontCatalog();
+  return gzipSync(JSON.stringify(catalog)).toString("base64");
+}
+
+const getCachedStorefrontCatalog = unstable_cache(loadCompressedStorefrontCatalog, ["storefront-catalog-v4", catalogCacheScope], {
+  revalidate: 3600,
   tags: [STOREFRONT_CATALOG_CACHE_TAG],
 });
 
 export const getStorefrontCatalog = cache(async () => {
   try {
-    return await getCachedStorefrontCatalog();
+    const compressed = await getCachedStorefrontCatalog();
+    return JSON.parse(gunzipSync(Buffer.from(compressed, "base64")).toString("utf8")) as Product[];
   } catch (cacheError) {
     console.error("[storefront-catalog] Cached catalog load failed; retrying without the shared cache.", cacheError);
     try {
