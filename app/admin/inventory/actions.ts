@@ -59,7 +59,7 @@ export async function receiveMaterialStockAction(formData: FormData) {
     const totalSource = Math.round((quantityKg * unitCost + vat) * 100) / 100;
     const paidSource = numberField(formData, "paid_amount_source", 0, totalSource, 0);
 
-    const { error } = await admin.rpc("erp_receive_material_stock", {
+    const { error } = await admin.rpc("erp_receive_material_stock_v2", {
       requested_supplier_name: textField(formData, "supplier_name", 240),
       requested_supplier_tax_id: textField(formData, "supplier_tax_id", 80),
       requested_material_profile_id: materialProfileId,
