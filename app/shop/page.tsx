@@ -3,8 +3,8 @@ import { ChevronRight, Filter, Search, SlidersHorizontal, X } from "lucide-react
 import { catalogCategories, getCategory } from "@/data/catalog";
 import { ProductGrid } from "@/components/ProductGrid";
 import { getDailyDeals } from "@/lib/daily-deals";
-import { toDiscountedProductCardData } from "@/lib/product-card";
-import { getStorefrontCatalog } from "@/lib/storefront-catalog";
+import { applyProductCardDeal } from "@/lib/product-card";
+import { getStorefrontCatalogPage } from "@/lib/storefront-catalog";
 import { cn } from "@/lib/utils";
 import { LocalizedText } from "@/components/LocalizedText";
 import { ShopSearchInput, ShopSortSelect } from "@/components/ShopSortSelect";
@@ -19,8 +19,12 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
   const params = await searchParams;
   const { category, subcategory, q = "", material, sort = "featured" } = params;
   const selectedCategory = category ? getCategory(category) : undefined;
-  const query = q.trim().toLocaleLowerCase("ka-GE");
-  const [products, dailyDeals] = await Promise.all([getStorefrontCatalog(), getDailyDeals()]);
+  const requestedPage = Number.parseInt(params.page ?? "1", 10);
+  const safeRequestedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  let [catalogPage, dailyDeals] = await Promise.all([
+    getStorefrontCatalogPage({ category, subcategory, query: q, material, sort, page: safeRequestedPage, pageSize: PRODUCTS_PER_PAGE }),
+    getDailyDeals(),
+  ]);
   const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
 
   const buildHref = (changes: Partial<ShopParams>, clear: Array<keyof ShopParams> = []) => {
@@ -34,32 +38,13 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
     return value ? `/shop?${value}` : "/shop";
   };
 
-  const catalogProducts = products.filter((product) => product.categorySlug !== "custom-parts");
-  const filtered = catalogProducts
-    .filter((product) => {
-      if (category && product.categorySlug !== category) return false;
-      if (subcategory && product.subcategorySlug !== subcategory) return false;
-      if (material && !product.availableMaterials.includes(material)) return false;
-      if (query) {
-        const haystack = [product.nameKa, product.hoomaName, product.shortDescriptionKa, product.category, product.subcategory, ...product.tags].join(" ").toLocaleLowerCase("ka-GE");
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sort === "name") return a.nameKa.localeCompare(b.nameKa, "ka");
-      if (sort === "fastest") return a.leadTimeDays - b.leadTimeDays;
-      if (sort === "rating") return b.ratingAverage - a.ratingAverage || b.ratingCount - a.ratingCount;
-      if (sort === "sales") return b.salesCount - a.salesCount || b.popularityScore - a.popularityScore;
-      return b.popularityScore - a.popularityScore || Number(b.isFeatured) - Number(a.isFeatured);
-    });
-
   const selectedSubcategory = subcategory ? selectedCategory?.subcategories.find((item) => item.slug === subcategory) : undefined;
-  const requestedPage = Number.parseInt(params.page ?? "1", 10);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PRODUCTS_PER_PAGE));
-  const currentPage = Math.min(Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1, totalPages);
-  const pagedProducts = filtered.slice((currentPage - 1) * PRODUCTS_PER_PAGE, currentPage * PRODUCTS_PER_PAGE);
-  const pagedProductCards = pagedProducts.map((product) => toDiscountedProductCardData(product, dailyDealByProductId.get(product.id)));
+  const totalPages = Math.max(1, Math.ceil(catalogPage.totalCount / PRODUCTS_PER_PAGE));
+  const currentPage = Math.min(safeRequestedPage, totalPages);
+  if (currentPage !== safeRequestedPage) {
+    catalogPage = await getStorefrontCatalogPage({ category, subcategory, query: q, material, sort, page: currentPage, pageSize: PRODUCTS_PER_PAGE });
+  }
+  const pagedProductCards = catalogPage.products.map((product) => applyProductCardDeal(product, dailyDealByProductId.get(product.id)));
   const activeFilters = [
     q ? { ka: `ძიება: ${q}`, en: `Search: ${q}` } : null,
     selectedCategory ? { ka: selectedCategory.nameKa, en: selectedCategory.name } : null,
@@ -130,7 +115,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
 
         <div className="min-w-0">
           <div className="flex flex-col gap-3 border-b border-hooma-text/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-sm"><strong>{filtered.length}</strong> <LocalizedText ka="შედეგი" en={filtered.length === 1 ? "result" : "results"} /></p>{activeFilters.length ? <div className="mt-2 flex flex-wrap gap-2">{activeFilters.map((item) => <span key={item.ka} className="rounded-full bg-hooma-panel px-2.5 py-1 text-xs text-hooma-muted"><LocalizedText ka={item.ka} en={item.en} /></span>)}<Link href="/shop" className="flex items-center gap-1 text-xs text-hooma-accent"><X size={12} /><LocalizedText ka="გასუფთავება" en="Clear" /></Link></div> : null}</div>
+            <div><p className="text-sm"><strong>{catalogPage.totalCount}</strong> <LocalizedText ka="შედეგი" en={catalogPage.totalCount === 1 ? "result" : "results"} /></p>{activeFilters.length ? <div className="mt-2 flex flex-wrap gap-2">{activeFilters.map((item) => <span key={item.ka} className="rounded-full bg-hooma-panel px-2.5 py-1 text-xs text-hooma-muted"><LocalizedText ka={item.ka} en={item.en} /></span>)}<Link href="/shop" className="flex items-center gap-1 text-xs text-hooma-accent"><X size={12} /><LocalizedText ka="გასუფთავება" en="Clear" /></Link></div> : null}</div>
             <div className="flex items-center gap-2">
               <details className="relative lg:hidden">
                 <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-hooma-text/10 bg-white px-3 py-2 text-sm"><SlidersHorizontal size={15} /><LocalizedText ka="ფილტრები" en="Filters" /></summary>
@@ -149,7 +134,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
           </div>
 
           <div className="mt-6">
-            {filtered.length ? <ProductGrid products={pagedProductCards} /> : <div className="rounded-[1.5rem] border border-dashed border-hooma-text/20 bg-white/45 px-6 py-20 text-center"><p className="text-2xl font-semibold"><LocalizedText ka="შესაბამისი პროდუქტი ვერ მოიძებნა." en="No matching products found." /></p><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="შეცვალე ძიების სიტყვა ან გაასუფთავე არჩეული ფილტრები." en="Change your search or clear the selected filters." /></p><Link href="/shop" className="mt-6 inline-flex rounded-full bg-hooma-text px-5 py-2.5 text-sm font-medium text-white"><LocalizedText ka="ყველა პროდუქტი" en="All products" /></Link></div>}
+            {catalogPage.totalCount ? <ProductGrid products={pagedProductCards} /> : <div className="rounded-[1.5rem] border border-dashed border-hooma-text/20 bg-white/45 px-6 py-20 text-center"><p className="text-2xl font-semibold"><LocalizedText ka="შესაბამისი პროდუქტი ვერ მოიძებნა." en="No matching products found." /></p><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="შეცვალე ძიების სიტყვა ან გაასუფთავე არჩეული ფილტრები." en="Change your search or clear the selected filters." /></p><Link href="/shop" className="mt-6 inline-flex rounded-full bg-hooma-text px-5 py-2.5 text-sm font-medium text-white"><LocalizedText ka="ყველა პროდუქტი" en="All products" /></Link></div>}
           </div>
 
           {totalPages > 1 ? <nav aria-label="Catalog pages" className="mt-8 flex items-center justify-center gap-3 border-t border-hooma-text/10 pt-6">

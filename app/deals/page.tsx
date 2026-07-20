@@ -1,22 +1,17 @@
 import { BadgePercent, CalendarDays, Clock3, ShieldCheck } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
 import { getDailyDeals } from "@/lib/daily-deals";
-import { toDiscountedProductCardData } from "@/lib/product-card";
-import { getStorefrontCatalog } from "@/lib/storefront-catalog";
+import { applyProductCardDeal } from "@/lib/product-card";
+import { getStorefrontProductCardsByIds } from "@/lib/storefront-catalog";
 import { LocalizedText } from "@/components/LocalizedText";
 
 export const dynamic = "force-dynamic";
 
 export default async function DailyDealsPage() {
-  const [{ date, deals, isPreview, discountPercent }, catalogProducts] = await Promise.all([
-    getDailyDeals(),
-    getStorefrontCatalog(),
-  ]);
-  const catalogById = new Map(catalogProducts.map((product) => [product.id, product]));
-  const dealProducts = deals.flatMap((deal) => {
-    const product = catalogById.get(deal.productId);
-    return product ? [toDiscountedProductCardData(product, deal)] : [];
-  });
+  const { date, deals, isPreview, discountPercent } = await getDailyDeals();
+  const dealByProductId = new Map(deals.map((deal) => [deal.productId, deal]));
+  const dealCards = await getStorefrontProductCardsByIds(deals.map((deal) => deal.productId));
+  const dealProducts = dealCards.map((product) => applyProductCardDeal(product, dealByProductId.get(product.id)));
 
   return (
     <main className="bg-hooma-panel/60 pb-16">

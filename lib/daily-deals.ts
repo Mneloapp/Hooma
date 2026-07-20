@@ -34,8 +34,6 @@ export type DailyDeal = {
   slug: string;
   name: string;
   nameEn: string;
-  description: string;
-  descriptionEn: string;
   image: string;
   sku: string;
   sizeLabel: string;
@@ -60,12 +58,7 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
   const admin = createAdminClient() as any;
   if (!admin) return { date, deals: [], isPreview: true, discountPercent };
 
-  const { error: activationError } = await admin.rpc("activate_daily_deals", { target_date: date });
-  if (activationError) {
-    console.error("[daily-deals] Failed to activate today's deals.", activationError.message);
-  }
-
-  const { data, error } = await admin
+  const loadToday = () => admin
     .from("daily_deal_items")
     .select(`
       deal_date,
@@ -78,8 +71,6 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
         slug,
         hooma_name,
         name_ka,
-        short_description,
-        short_description_ka,
         hero_image
       ),
       product_variants!daily_deal_items_variant_id_fkey (
@@ -90,6 +81,18 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
     `)
     .eq("deal_date", date)
     .order("position", { ascending: true });
+
+  let { data, error } = await loadToday();
+  let activationError: { message: string } | null = null;
+  if (!error && (data?.length ?? 0) === 0) {
+    const activation = await admin.rpc("activate_daily_deals", { target_date: date });
+    activationError = activation.error;
+    if (activationError) {
+      console.error("[daily-deals] Failed to activate today's deals.", activationError.message);
+    } else {
+      ({ data, error } = await loadToday());
+    }
+  }
 
   if (error) {
     console.error("[daily-deals] Failed to load today's deals.", error.message);
@@ -107,8 +110,6 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
       slug: product.slug,
       name: product.name_ka || product.hooma_name,
       nameEn: product.hooma_name || product.name_ka,
-      description: product.short_description_ka || product.short_description || "",
-      descriptionEn: product.short_description || product.short_description_ka || "",
       image: variant.image || product.hero_image || "/catalog-placeholders/home.svg",
       sku: variant.sku,
       sizeLabel: variant.size_label || "Standard",
