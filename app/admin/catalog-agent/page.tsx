@@ -10,14 +10,15 @@ export default async function CatalogAgentPage() {
   const actor = await requirePermission("catalog.manage");
   if (!actor) redirect("/login?next=/admin/catalog-agent");
   const admin = createAdminClient() as any;
-  const [agentResult, categoryResult, jobResult, itemResult, auditJobResult, auditItemResult] = admin ? await Promise.all([
+  const [agentResult, categoryResult, jobResult, itemResult, auditJobResult, readyAuditItemResult, failedAuditItemResult] = admin ? await Promise.all([
     admin.from("catalog_agents").select("id,name,token_prefix,is_active,last_seen_at,created_at").order("created_at", { ascending: false }),
     admin.from("categories").select("id,parent_id,slug,name_en,name_ka,sort_order").eq("is_active", true).order("sort_order"),
     admin.from("catalog_agent_jobs").select("*").order("created_at", { ascending: false }).limit(50),
     admin.from("catalog_agent_items").select("id,job_id,source_url,source_title,status,product_id,source_import_id,error_message,processed_at").order("updated_at", { ascending: false }).limit(50),
     admin.from("catalog_product_audit_jobs").select("*").order("created_at", { ascending: false }).limit(20),
-    admin.from("catalog_product_audit_items").select("id,job_id,product_id,status,current_snapshot,suggestion,confidence,warnings,model_name,error_message,processed_at").order("updated_at", { ascending: false }).limit(100),
-  ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
+    admin.from("catalog_product_audit_items").select("id,job_id,product_id,status,current_snapshot,suggestion,confidence,warnings,model_name,error_message,processed_at").eq("review_visible", true).eq("status", "ready").order("updated_at", { ascending: false }).limit(100),
+    admin.from("catalog_product_audit_items").select("id,job_id,product_id,status,current_snapshot,suggestion,confidence,warnings,model_name,error_message,processed_at").eq("review_visible", true).eq("status", "failed").order("updated_at", { ascending: false }).limit(20),
+  ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const categories = buildCategoryOptions((categoryResult.data ?? []) as CategoryRow[]).map(({ id, name }) => ({ id, name }));
 
   return (
@@ -34,8 +35,8 @@ export default async function CatalogAgentPage() {
       <CatalogProductAuditConsole
         agents={(agentResult.data ?? []) as any}
         jobs={(auditJobResult.data ?? []) as any}
-        items={(auditItemResult.data ?? []) as any}
-        migrationReady={!auditJobResult.error && !auditItemResult.error}
+        items={[...(readyAuditItemResult.data ?? []), ...(failedAuditItemResult.data ?? [])] as any}
+        migrationReady={!auditJobResult.error && !readyAuditItemResult.error && !failedAuditItemResult.error}
       />
     </div>
   );

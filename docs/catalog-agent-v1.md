@@ -19,6 +19,8 @@ For an Agent-created Draft whose external source has not previously been reviewe
 
 MakerWorld also supports **Clipper Auto Queue Mode V2** in an ordinary Chrome profile. After the operator completes the site's human verification and explicitly presses Start, a persistent Manifest V3 worker claims assigned jobs, discovers the category in one pinned tab, extracts one product at a time and creates private Drafts. It pauses without losing the item whenever verification reappears and resumes only after the operator completes it and presses Resume. It performs no automatic CAPTCHA solving, stealth/fingerprint changes, cookie export, or access-control bypass. The previous fully manual Clipper controls remain available. Use a separate agent identity/token so two workers cannot claim the same assigned job.
 
+The existing-product audit worker proposes corrected Georgian/English product names, concise descriptions, approximate dimensions, and gallery relevance decisions. Human reviewers can override the kept-photo set before approval or invoke the protected full-product deletion flow. Approval is atomic, records the human media override separately from the agent suggestion, and permanently excludes the product from later audit jobs while retaining database and Audit-log evidence outside the active review queue.
+
 ## Database
 
 Migration `20260716000200_catalog_agent_v1.sql` adds:
