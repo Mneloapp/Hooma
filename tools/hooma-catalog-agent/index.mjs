@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import process from "node:process";
-import { chromium } from "playwright";
+import { createProductAuditorFromEnv } from "./product-auditor.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const extractorPath = path.resolve(here, "../hooma-catalog-clipper/extractor.js");
@@ -14,9 +14,16 @@ const profilePath = path.resolve(here, process.env.HOOMA_BROWSER_PROFILE || ".ho
 const pollSeconds = Math.max(5, Number(process.env.HOOMA_POLL_SECONDS ?? 15) || 15);
 const headless = String(process.env.HOOMA_HEADLESS ?? "false").toLowerCase() === "true";
 const channel = String(process.env.HOOMA_BROWSER_CHANNEL ?? "chrome").trim();
+const workerMode = String(process.env.HOOMA_WORKER_MODE ?? "all").trim().toLowerCase();
+const auditConcurrency = Math.min(8, Math.max(1, Number(process.env.HOOMA_AUDIT_CONCURRENCY ?? 2) || 2));
+const auditDelayMs = Math.min(60_000, Math.max(0, Number(process.env.HOOMA_AUDIT_DELAY_MS ?? 500) || 0));
+const auditConfigured = String(process.env.OPENAI_API_KEY ?? "").trim().startsWith("sk-");
+const auditProduct = createProductAuditorFromEnv();
 
 if (!/^https:\/\//i.test(baseUrl)) throw new Error("HOOMA_BASE_URL must be an HTTPS URL.");
 if (!/^hooma_ca_[a-f0-9]{12}_[A-Za-z0-9_-]{40,100}$/.test(token)) throw new Error("HOOMA_AGENT_TOKEN is missing or invalid.");
+if (!["all", "import", "audit"].includes(workerMode)) throw new Error("HOOMA_WORKER_MODE must be all, import, or audit.");
+if (workerMode === "audit" && !auditConfigured) throw new Error("OPENAI_API_KEY is required when HOOMA_WORKER_MODE=audit.");
 
 const log = (message, details) => {
   const suffix = details === undefined ? "" : ` ${typeof details === "string" ? details : JSON.stringify(details)}`;
@@ -155,6 +162,57 @@ async function processJob(context, job) {
   log("Category job completed", completion.counters);
 }
 
+async function claimAuditItem(jobId) {
+  let skipped = 0;
+  while (true) {
+    const claim = await api(`/api/catalog-agent/audits/${jobId}/items/claim`);
+    if (claim.item || !claim.continueClaiming) return claim.item ?? null;
+    skipped += 1;
+    if (skipped % 100 === 0) log("Skipped products without auditable media or active variants", { job: jobId, skipped });
+  }
+}
+
+async function processAuditItem(job, item) {
+  try {
+    const analysis = await auditProduct(item.product);
+    const result = await api(`/api/catalog-agent/audits/${job.id}/items/${item.id}/review`, { analysis });
+    log("Audited catalog product", {
+      productId: item.productId,
+      status: result.status,
+      confidence: analysis.dimensionConfidence,
+      keptImages: analysis.imageDecisions.filter((decision) => decision.keep).length,
+      removedImages: analysis.imageDecisions.filter((decision) => !decision.keep).length,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await api(`/api/catalog-agent/audits/${job.id}/items/${item.id}/review`, { error: message }).catch(() => {});
+    log("Catalog product audit failed", { productId: item.productId, error: message });
+    if (error?.catalogAuditFatal === true) throw error;
+  }
+}
+
+async function processAuditJob(job) {
+  log("Started catalog product audit", {
+    id: job.id,
+    products: job.total_count,
+    statuses: job.product_statuses,
+    concurrency: auditConcurrency,
+  });
+  while (true) {
+    const items = [];
+    for (let slot = 0; slot < auditConcurrency; slot += 1) {
+      const item = await claimAuditItem(job.id);
+      if (!item) break;
+      items.push(item);
+    }
+    if (!items.length) break;
+    await Promise.all(items.map((item) => processAuditItem(job, item)));
+    if (auditDelayMs) await wait(auditDelayMs);
+  }
+  const completion = await api(`/api/catalog-agent/audits/${job.id}/complete`, { status: "completed" });
+  log("Catalog product audit completed", completion.counters);
+}
+
 const launchOptions = {
   headless,
   locale: "ka-GE",
@@ -162,24 +220,50 @@ const launchOptions = {
   acceptDownloads: false,
   ...(channel ? { channel } : {}),
 };
-const context = await chromium.launchPersistentContext(profilePath, launchOptions);
+let context = null;
+if (workerMode !== "audit") {
+  const { chromium } = await import("playwright");
+  context = await chromium.launchPersistentContext(profilePath, launchOptions);
+}
 let stopping = false;
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => { stopping = true; });
 
-log("Hooma Catalog Agent is online", { baseUrl, workerName, headless, channel: channel || "chromium" });
+log("Hooma Catalog Agent is online", {
+  baseUrl,
+  workerName,
+  mode: workerMode,
+  browser: context ? { headless, channel: channel || "chromium" } : "disabled",
+  auditConfigured,
+  auditConcurrency,
+});
+if (!auditConfigured && workerMode === "all") log("Product audits are disabled until OPENAI_API_KEY is added to .env");
 while (!stopping) {
-  let job = null;
+  let activeJob = null;
+  let activeJobKind = null;
   try {
-    const claim = await api("/api/catalog-agent/jobs/claim", { workerName });
-    job = claim.job;
-    if (job) await processJob(context, job);
+    if (workerMode !== "audit") {
+      const claim = await api("/api/catalog-agent/jobs/claim", { workerName });
+      activeJob = claim.job;
+      activeJobKind = activeJob ? "import" : null;
+      if (activeJob) await processJob(context, activeJob);
+    }
+    if (!activeJob && workerMode !== "import" && auditConfigured) {
+      const claim = await api("/api/catalog-agent/audits/claim", { workerName });
+      activeJob = claim.job;
+      activeJobKind = activeJob ? "audit" : null;
+      if (activeJob) await processAuditJob(activeJob);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log("Worker cycle failed", message);
-    if (job?.id) await api(`/api/catalog-agent/jobs/${job.id}/complete`, { status: "failed", error: message }).catch(() => {});
+    if (activeJob?.id && activeJobKind === "import") {
+      await api(`/api/catalog-agent/jobs/${activeJob.id}/complete`, { status: "failed", error: message }).catch(() => {});
+    }
+    if (activeJob?.id && activeJobKind === "audit") {
+      await api(`/api/catalog-agent/audits/${activeJob.id}/complete`, { status: "failed", error: message }).catch(() => {});
+    }
   }
   if (!stopping) await wait(pollSeconds * 1_000);
 }
-await context.close();
+if (context) await context.close();
 log("Hooma Catalog Agent stopped");
-
