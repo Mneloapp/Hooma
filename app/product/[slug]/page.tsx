@@ -5,8 +5,8 @@ import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { ProductShelf } from "@/components/ProductShelf";
 import { getDailyDeals } from "@/lib/daily-deals";
-import { toDiscountedProductCardData } from "@/lib/product-card";
-import { getAdminPreviewProductById, getStorefrontCatalog, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
+import { applyProductCardDeal } from "@/lib/product-card";
+import { getAdminPreviewProductById, getStorefrontCatalogPage, getStorefrontProductBySlug } from "@/lib/storefront-catalog";
 import { getProductReviewData } from "@/lib/product-reviews";
 import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
 import { ProductReviewsSection } from "@/components/reviews/ProductReviewsSection";
@@ -18,9 +18,8 @@ export const dynamic = "force-dynamic";
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }) {
   const { slug } = await params;
   const { preview: previewId } = await searchParams;
-  const [previewProduct, products, dailyDeals] = await Promise.all([
+  const [previewProduct, dailyDeals] = await Promise.all([
     previewId ? getAdminPreviewProductById(previewId) : Promise.resolve(null),
-    getStorefrontCatalog(),
     previewId ? Promise.resolve({ deals: [] }) : getDailyDeals(),
   ]);
   if (previewId && (!previewProduct || previewProduct.slug !== slug)) notFound();
@@ -32,18 +31,13 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const defaultVariant = product.variants[0];
   const fixedMulticolor = defaultVariant.colorMode === "fixed_multicolor" && defaultVariant.amsRequired;
   const localizedCategory = getCategory(product.categorySlug);
-  const recommendations = products
-    .filter((item) => item.id !== product.id)
-    .map((item) => ({
-      item,
-      score: (item.categorySlug === product.categorySlug ? 6 : 0)
-        + (item.subcategorySlug === product.subcategorySlug ? 4 : 0)
-        + item.tags.filter((tag) => product.tags.includes(tag)).length * 2
-        + item.popularityScore,
-    }))
-    .sort((left, right) => right.score - left.score)
-    .map(({ item }) => item)
-    .slice(0, 8);
+  const recommendationPage = await getStorefrontCatalogPage({
+    category: product.categorySlug,
+    subcategory: product.subcategorySlug,
+    sort: "featured",
+    pageSize: 12,
+  });
+  const recommendations = recommendationPage.products.filter((item) => item.id !== product.id).slice(0, 8);
 
   return (
     <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
@@ -94,7 +88,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
       <ProductReviewsSection productId={product.id} slug={product.slug} productName={product.nameKa} productNameEn={product.hoomaName} average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} reviews={reviewData.reviews} context={reviewData.context} allowReview={!previewProduct && product.isOrderable} />
 
-      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" titleEn="Similar products" products={recommendations.map((item) => toDiscountedProductCardData(item, dailyDealByProductId.get(item.id)))} href={`/shop?category=${product.categorySlug}`} /></div>
+      <div className="mt-14"><ProductShelf title="მსგავსი პროდუქტები" titleEn="Similar products" products={recommendations.map((item) => applyProductCardDeal(item, dailyDealByProductId.get(item.id)))} href={`/shop?category=${product.categorySlug}`} /></div>
     </main>
   );
 }

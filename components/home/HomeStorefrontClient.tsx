@@ -8,12 +8,9 @@ import { Button } from "@/components/Button";
 import { ProductShelf } from "@/components/ProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
 
-export function HomeStorefrontClient({ catalogProducts, dailyDealProducts, dailyDealDiscountPercent }: { catalogProducts: ProductCardData[]; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
+export function HomeStorefrontClient({ popularProducts, categoryProducts, dailyDealProducts, dailyDealDiscountPercent }: { popularProducts: ProductCardData[]; categoryProducts: Record<string, ProductCardData[]>; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
   const georgian = language === "ka";
-  const popularProducts = [...catalogProducts]
-    .sort((left, right) => right.popularityScore - left.popularityScore || right.salesCount - left.salesCount || right.ratingAverage - left.ratingAverage)
-    .slice(0, 12);
 
   return (
     <main className="bg-hooma-panel/60 pb-16">
@@ -36,7 +33,7 @@ export function HomeStorefrontClient({ catalogProducts, dailyDealProducts, daily
         <div className="space-y-5">
           {catalogCategories.map((category) => (
             <Fragment key={category.slug}>
-              <ProductShelf eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={catalogProducts.filter((item) => item.categorySlug === category.slug)} href={`/shop?category=${category.slug}`} />
+              <ProductShelf eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
               {category.slug === "fashion" ? <ProductShelf
                 eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}
                 title={georgian ? "დღის შეთავაზებები" : "Daily deals"}

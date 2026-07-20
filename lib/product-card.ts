@@ -9,8 +9,6 @@ export type ProductCardData = Pick<Product,
   | "categorySlug"
   | "subcategory"
   | "subcategorySlug"
-  | "shortDescription"
-  | "shortDescriptionKa"
   | "heroImage"
   | "price"
   | "pricePlaceholder"
@@ -43,8 +41,6 @@ export function toProductCardData(product: Product): ProductCardData {
     categorySlug: product.categorySlug,
     subcategory: product.subcategory,
     subcategorySlug: product.subcategorySlug,
-    shortDescription: product.shortDescription,
-    shortDescriptionKa: product.shortDescriptionKa,
     heroImage: product.heroImage,
     price: product.price,
     pricePlaceholder: product.pricePlaceholder,
@@ -59,7 +55,11 @@ export function toProductCardData(product: Product): ProductCardData {
 
 export function toDiscountedProductCardData(product: Product, deal?: ProductCardDeal): ProductCardData {
   const card = toProductCardData(product);
-  if (!deal || deal.productId !== product.id || deal.dealPrice === null || deal.originalPrice === null) return card;
+  return applyProductCardDeal(card, deal);
+}
+
+export function applyProductCardDeal(card: ProductCardData, deal?: ProductCardDeal): ProductCardData {
+  if (!deal || deal.productId !== card.id || deal.dealPrice === null || deal.originalPrice === null) return card;
 
   return {
     ...card,
