@@ -2,6 +2,8 @@
 
 Catalog Agent accepts a whole public catalog category, discovers its product pages, extracts each rendered page with the same engine as Hooma Catalog Clipper, and creates private product Drafts for human review.
 
+The same least-privilege worker can also run existing-product quality audits. It proposes concise Georgian/English copy, approximate dimensions, and gallery cleanup, but only a human catalog manager can apply those changes.
+
 ## Architecture
 
 1. Owner registers a machine identity in Admin → Catalog Agent.
@@ -27,6 +29,14 @@ Migration `20260716000200_catalog_agent_v1.sql` adds:
 - Atomic service-role-only job/item claim functions using `FOR UPDATE SKIP LOCKED`.
 - A counter refresh function for consistent dashboard progress.
 
+Migration `20260721000100_catalog_product_auditor.sql` adds:
+
+- `catalog_product_audit_jobs`: a snapshot-bounded, keyset-paginated queue that remains bounded at 100,000+ products.
+- `catalog_product_audit_items`: immutable before snapshots, structured proposals, confidence, warnings, review state, and model trace IDs.
+- Service-role-only claim/counter functions and an audited apply function with optimistic concurrency checks.
+- A product cursor index on `(status, created_at, id)` and a ready-result index for bounded review batches.
+- The `audits:process` machine scope, which can submit proposals but cannot apply them.
+
 Apply it from the Hooma repository after linking Supabase:
 
 ```bash
@@ -44,6 +54,10 @@ All routes require `Authorization: Bearer hooma_ca_...` and run in the Node.js r
 - `POST /api/catalog-agent/jobs/:jobId/items/claim`
 - `POST /api/catalog-agent/jobs/:jobId/items/:itemId/draft`
 - `POST /api/catalog-agent/jobs/:jobId/complete`
+- `POST /api/catalog-agent/audits/claim`
+- `POST /api/catalog-agent/audits/:jobId/items/claim`
+- `POST /api/catalog-agent/audits/:jobId/items/:itemId/review`
+- `POST /api/catalog-agent/audits/:jobId/complete`
 
 The token is never accepted by browser admin routes and is never a Supabase session or service-role credential.
 
@@ -59,6 +73,10 @@ Production clients must call the canonical `https://www.hooma.ge` host directly.
 - **Concurrent workers/crashes:** `SKIP LOCKED`, status transitions, heartbeats, and stale item reclaim make processing resumable.
 - **Source blocking:** the worker detects CAPTCHA/human-verification pages and stops. It does not bypass access controls.
 - **Unsafe publication:** imported products remain Draft/test-required and keep source-rights review pending until the existing human publication workflow is satisfied.
+- **Prompt injection and untrusted media:** product text, URLs, and image text are explicitly treated as untrusted data; the model receives no tools or database credentials and returns a strict JSON schema.
+- **Unsafe mass edits:** the worker cannot call the apply function. Every proposal is reviewed in Admin; bulk approval is capped at 100 warning-free items with at least 85% confidence and requires typing `APPLY`.
+- **Lost manual changes:** apply compares product and variant revision timestamps with the audited snapshot and rejects stale proposals.
+- **Destructive media cleanup:** approval removes unrelated media from the public gallery but retains storage objects and the previous URL list in `audit_log` for rollback.
 
 ## Windows worker
 

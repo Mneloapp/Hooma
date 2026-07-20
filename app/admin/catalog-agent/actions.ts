@@ -38,7 +38,7 @@ export async function createCatalogAgentAction(
     name,
     token_prefix: prefix,
     token_hash: tokenHash,
-    scopes: ["jobs:claim", "drafts:create"],
+    scopes: ["jobs:claim", "drafts:create", "audits:process"],
     created_by: actor.id,
   }).select("id").single();
   if (error || !data) return { message: error?.message ?? "Catalog Agent ვერ დარეგისტრირდა." };
@@ -48,7 +48,7 @@ export async function createCatalogAgentAction(
     action: "catalog_agent_registered",
     entity_type: "catalog_agent",
     entity_id: data.id,
-    metadata: { name, token_prefix: prefix, scopes: ["jobs:claim", "drafts:create"] },
+    metadata: { name, token_prefix: prefix, scopes: ["jobs:claim", "drafts:create", "audits:process"] },
   });
   revalidatePath("/admin/catalog-agent");
   return {

@@ -104,6 +104,82 @@ export type CatalogAgentClipperPayload = {
   warnings?: string[];
 };
 
+export type CatalogProductAuditAnalysis = {
+  descriptionKa: string;
+  descriptionEn: string;
+  dimensionsMm: { x: number; y: number; z: number };
+  dimensionConfidence: number;
+  imageDecisions: Array<{ url: string; keep: boolean; reason: string }>;
+  heroImageUrl: string;
+  summary: string;
+  warnings: string[];
+  model: string;
+  responseId?: string | null;
+  processingMs?: number | null;
+};
+
+const auditText = (value: unknown, maximum: number) => typeof value === "string"
+  ? value.replace(/\s+/g, " ").trim().slice(0, maximum)
+  : "";
+
+function auditNumber(value: unknown, minimum: number, maximum: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= minimum && number <= maximum ? number : null;
+}
+
+export function asCatalogProductAuditAnalysis(value: unknown): CatalogProductAuditAnalysis | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  const dimensions = candidate.dimensionsMm;
+  if (!dimensions || typeof dimensions !== "object" || Array.isArray(dimensions)) return null;
+  const dimensionValues = dimensions as Record<string, unknown>;
+  const x = auditNumber(dimensionValues.x, 1, 5_000);
+  const y = auditNumber(dimensionValues.y, 1, 5_000);
+  const z = auditNumber(dimensionValues.z, 1, 5_000);
+  const dimensionConfidence = auditNumber(candidate.dimensionConfidence, 0, 1);
+  if (x === null || y === null || z === null || dimensionConfidence === null) return null;
+
+  const descriptionKa = auditText(candidate.descriptionKa, 800);
+  const descriptionEn = auditText(candidate.descriptionEn, 800);
+  const heroImageUrl = auditText(candidate.heroImageUrl, 2_000);
+  const summary = auditText(candidate.summary, 500);
+  const model = auditText(candidate.model, 120);
+  if (descriptionKa.length < 10 || descriptionEn.length < 10 || !heroImageUrl || !summary || !model) return null;
+
+  if (!Array.isArray(candidate.imageDecisions) || candidate.imageDecisions.length < 1 || candidate.imageDecisions.length > 12) return null;
+  const imageDecisions = candidate.imageDecisions.flatMap((decision) => {
+    if (!decision || typeof decision !== "object" || Array.isArray(decision)) return [];
+    const row = decision as Record<string, unknown>;
+    const url = auditText(row.url, 2_000);
+    const reason = auditText(row.reason, 300);
+    return url && typeof row.keep === "boolean" && reason ? [{ url, keep: row.keep, reason }] : [];
+  });
+  if (imageDecisions.length !== candidate.imageDecisions.length) return null;
+
+  const warnings = Array.isArray(candidate.warnings)
+    ? candidate.warnings.map((warning) => auditText(warning, 300)).filter(Boolean).slice(0, 20)
+    : [];
+  const responseId = auditText(candidate.responseId, 200) || null;
+  const processingMs = candidate.processingMs === null || candidate.processingMs === undefined
+    ? null
+    : auditNumber(candidate.processingMs, 0, 3_600_000);
+  if (candidate.processingMs !== null && candidate.processingMs !== undefined && processingMs === null) return null;
+
+  return {
+    descriptionKa,
+    descriptionEn,
+    dimensionsMm: { x, y, z },
+    dimensionConfidence,
+    imageDecisions,
+    heroImageUrl,
+    summary,
+    warnings,
+    model,
+    responseId,
+    processingMs,
+  };
+}
+
 export function asClipperPayload(value: unknown): CatalogAgentClipperPayload | null {
   if (!value || typeof value !== "object") return null;
   const payload = value as Partial<CatalogAgentClipperPayload>;
@@ -111,4 +187,3 @@ export function asClipperPayload(value: unknown): CatalogAgentClipperPayload | n
   if (!payload.product.media || !payload.product.technical) return null;
   return payload as CatalogAgentClipperPayload;
 }
-

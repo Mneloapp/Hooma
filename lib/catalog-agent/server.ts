@@ -9,6 +9,10 @@ export function hashCatalogAgentToken(token: string) {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
+export function catalogAgentHasScope(agent: { scopes?: unknown }, scope: string) {
+  return Array.isArray(agent.scopes) && agent.scopes.includes(scope);
+}
+
 export async function authenticateCatalogAgent(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
@@ -39,3 +43,12 @@ export async function catalogAgentJob(admin: any, agentId: string, jobId: string
   return data ?? null;
 }
 
+export async function catalogProductAuditJob(admin: any, agentId: string, jobId: string) {
+  const { data } = await admin
+    .from("catalog_product_audit_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .eq("agent_id", agentId)
+    .maybeSingle();
+  return data ?? null;
+}
