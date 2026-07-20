@@ -25,9 +25,9 @@ This worker has two resumable modes:
 7. For product audits, add an OpenAI Platform API key as `OPENAI_API_KEY`. The key stays on this Windows worker and is sent only to `api.openai.com`.
 8. Run `powershell -ExecutionPolicy Bypass -File .\run.ps1`.
 
-`HOOMA_WORKER_MODE` can be `all`, `import`, or `audit`. For a large existing catalog, register a dedicated worker and set it to `audit` so long category imports cannot delay the quality audit. The default audit concurrency is 2 and can be raised carefully with `HOOMA_AUDIT_CONCURRENCY` according to the API project's rate limits.
+`HOOMA_WORKER_MODE` can be `all`, `import`, or `audit`. For a large existing catalog, set the worker to `audit` so category imports cannot delay the quality audit. Audit-only mode does not launch Chrome; it runs as a lightweight API worker. The default audit concurrency is 2 and can be raised carefully with `HOOMA_AUDIT_CONCURRENCY` according to the API project's rate limits.
 
-Chrome opens with a dedicated profile in `.hooma-browser-profile`. Keep this window available to the worker. If the source asks for a normal consent, login, or verification step, complete it in that browser and restart the job. A failed job can be recreated from the Hooma admin page.
+In `import` or `all` mode, Chrome opens with a dedicated profile in `.hooma-browser-profile`. Keep this window available to the worker. If the source asks for a normal consent, login, or verification step, complete it in that browser and restart the job. A failed job can be recreated from the Hooma admin page.
 
 MakerWorld may repeatedly request bot verification from an automated Playwright window. In that case, keep this background worker for sources such as Printables and use the ordinary-Chrome **MakerWorld Assisted Mode** documented in `../hooma-catalog-clipper/README.md`. Register a separate agent/token for Assisted Mode so it cannot race this worker for jobs.
 

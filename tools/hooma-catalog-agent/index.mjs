@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import process from "node:process";
-import { chromium } from "playwright";
 import { createProductAuditorFromEnv } from "./product-auditor.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -221,7 +220,11 @@ const launchOptions = {
   acceptDownloads: false,
   ...(channel ? { channel } : {}),
 };
-const context = await chromium.launchPersistentContext(profilePath, launchOptions);
+let context = null;
+if (workerMode !== "audit") {
+  const { chromium } = await import("playwright");
+  context = await chromium.launchPersistentContext(profilePath, launchOptions);
+}
 let stopping = false;
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => { stopping = true; });
 
@@ -229,8 +232,7 @@ log("Hooma Catalog Agent is online", {
   baseUrl,
   workerName,
   mode: workerMode,
-  headless,
-  channel: channel || "chromium",
+  browser: context ? { headless, channel: channel || "chromium" } : "disabled",
   auditConfigured,
   auditConcurrency,
 });
@@ -263,5 +265,5 @@ while (!stopping) {
   }
   if (!stopping) await wait(pollSeconds * 1_000);
 }
-await context.close();
+if (context) await context.close();
 log("Hooma Catalog Agent stopped");
