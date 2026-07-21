@@ -9,7 +9,9 @@ export default function NotificationBell({ georgian }: { georgian: boolean }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    const supabase = createClient() as any;
+    const client = createClient();
+    if (!client) return;
+    const supabase = client as any;
     let active = true;
 
     async function refresh() {
