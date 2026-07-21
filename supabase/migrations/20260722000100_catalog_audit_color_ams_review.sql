@@ -15,7 +15,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $$
+as $catalog_audit_v4$
 declare
   audit_item public.catalog_product_audit_items%rowtype;
   variant_id uuid;
@@ -28,18 +28,21 @@ declare
   effective_overrides jsonb;
   applied_log_id bigint;
 begin
-  if requested_color_mode not in ('customer_choice', 'fixed_multicolor') then
+  if not (requested_color_mode = any(array['customer_choice', 'fixed_multicolor']::text[])) then
     raise exception 'Catalog audit color mode is invalid';
   end if;
   if requested_available_colors is null
     or cardinality(requested_available_colors) < case when requested_color_mode = 'fixed_multicolor' then 2 else 1 end
     or cardinality(requested_available_colors) > cardinality(allowed_colors)
     or exists (
-      select 1 from unnest(requested_available_colors) color
-      where color is null or not (color = any(allowed_colors))
+      select 1
+      from unnest(requested_available_colors) as selected(color_name)
+      where selected.color_name is null
+        or not (selected.color_name = any(allowed_colors))
     )
     or cardinality(requested_available_colors) <> (
-      select count(distinct color)::integer from unnest(requested_available_colors) color
+      select count(distinct selected.color_name)::integer
+      from unnest(requested_available_colors) as selected(color_name)
     ) then
     raise exception 'Catalog audit colors are invalid';
   end if;
@@ -117,7 +120,7 @@ begin
     'available_colors', to_jsonb(requested_available_colors)
   );
 end;
-$$;
+$catalog_audit_v4$;
 
 revoke all on function public.apply_catalog_product_audit_item_v4(
   uuid, uuid, text[], text, text, text, text, text[], text
