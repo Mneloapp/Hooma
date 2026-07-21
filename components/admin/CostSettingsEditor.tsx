@@ -53,7 +53,7 @@ const pricingFields: Array<{
   { name: "packaging_cost", label: "შეფუთვა, ₾" },
   { name: "overhead_percent", label: "ზედნადები ხარჯი, %", max: 100 },
   { name: "failure_reserve_percent", label: "წარუმატებელი ბეჭდვის რეზერვი, %", max: 100 },
-  { name: "default_margin_percent", label: "საბაზო მოგების მარჟა, %", max: 99.99 },
+  { name: "default_margin_percent", label: "გლობალური მოგების მარჟა, %", max: 99.99 },
   { name: "vat_percent", label: "დღგ, %", max: 100 },
   { name: "rounding_step", label: "ფასის დამრგვალება, ₾", min: 0.01 },
 ];
