@@ -14,6 +14,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+tools/hooma-catalog-agent/.audit-result-spool/
 
 # Coverage and instrumented output
 lib-cov

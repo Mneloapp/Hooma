@@ -10,6 +10,20 @@ export type CatalogAuditActionState = { ok?: boolean; message?: string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const clean = (value: unknown, max = 100) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+const normalizedName = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizedDescription = (value: unknown) => String(value ?? "")
+  .replace(/\r\n?/g, "\n")
+  .replace(/[\t ]+/g, " ")
+  .replace(/\n{3,}/g, "\n\n")
+  .trim();
+
+function auditApplyError(message: string) {
+  if (message.includes("Product changed after audit")) return "პროდუქტი აუდიტის შემდეგ შეიცვალა. შენ მიერ შეტანილი ცვლილებები დაცულია და ძველი აუდიტი ვერ გადაეწერება.";
+  if (message.includes("Concurrent audit claim")) return "ამ პროდუქტზე პარალელური აუდიტი დასრულდა. რამდენიმე წამში თავიდან სცადე.";
+  if (message.includes("Only ready") || message.includes("already approved")) return "აუდიტის ეს შედეგი უკვე დამუშავებულია. განაახლე გვერდი.";
+  if (message.includes("function") || message.includes("schema cache")) return "ჯერ გაუშვი ბოლო Supabase migration და შემდეგ სცადე.";
+  return message;
+}
 
 async function auditContext() {
   const actor = await requirePermission("catalog.manage");
@@ -56,23 +70,49 @@ export async function createCatalogProductAuditJobAction(
   return { ok: true, message: `აუდიტის რიგში დაემატა ${Number(data.total_count ?? 0).toLocaleString("ka-GE")} პროდუქტი.` };
 }
 
-export async function applyCatalogProductAuditItemAction(formData: FormData) {
+export async function applyCatalogProductAuditItemAction(
+  _state: CatalogAuditActionState,
+  formData: FormData,
+): Promise<CatalogAuditActionState> {
   const context = await auditContext();
-  if (!context) return;
+  if (!context) return { message: "აუდიტის დამტკიცების უფლება არ გაქვს." };
   const itemId = clean(formData.get("item_id"), 36);
-  if (!uuidPattern.test(itemId)) return;
-  const keptImageUrls = formData.getAll("kept_image_urls").map((value) => clean(value, 2_000));
-  const { data, error } = await context.admin.rpc("apply_catalog_product_audit_item_v2", {
+  if (!uuidPattern.test(itemId)) return { message: "აუდიტის ჩანაწერი არასწორია." };
+
+  const nameKa = normalizedName(formData.get("name_ka"));
+  const nameEn = normalizedName(formData.get("name_en"));
+  const descriptionKa = normalizedDescription(formData.get("description_ka"));
+  const descriptionEn = normalizedDescription(formData.get("description_en"));
+  if (nameKa.length < 2 || nameKa.length > 160 || nameEn.length < 2 || nameEn.length > 160) {
+    return { message: "ქართული და ინგლისური სახელები უნდა შეიცავდეს 2-დან 160 სიმბოლომდე." };
+  }
+  if (descriptionKa.length < 10 || descriptionKa.length > 800 || descriptionEn.length < 10 || descriptionEn.length > 800) {
+    return { message: "ქართული და ინგლისური აღწერები უნდა შეიცავდეს 10-დან 800 სიმბოლომდე." };
+  }
+
+  const submittedUrls = formData.getAll("kept_image_urls").map((value) => String(value ?? "").trim());
+  const keptImageUrls = Array.from(new Set(submittedUrls));
+  if (
+    keptImageUrls.length < 1
+    || keptImageUrls.length > 12
+    || keptImageUrls.some((url) => url.length > 2_000 || !/^https:\/\//i.test(url))
+  ) return { message: "დატოვე 1-დან 12-მდე სწორი HTTPS ფოტო." };
+
+  const { data, error } = await context.admin.rpc("apply_catalog_product_audit_item_v3", {
     actor_profile_id: context.actor.id,
     requested_item_id: itemId,
     requested_kept_image_urls: keptImageUrls,
+    requested_name_ka: nameKa,
+    requested_name_en: nameEn,
+    requested_description_ka: descriptionKa,
+    requested_description_en: descriptionEn,
   });
   if (error) {
-    await context.admin.from("catalog_product_audit_items").update({ error_message: clean(error.message, 500) }).eq("id", itemId);
     refreshAudit();
-    return;
+    return { message: auditApplyError(clean(error.message, 500)) };
   }
   refreshAudit(data?.product_id ? [data.product_id] : []);
+  return { ok: true, message: "პროდუქტის შესწორებები დამტკიცდა." };
 }
 
 export async function deleteCatalogProductFromAuditAction(
@@ -178,16 +218,10 @@ export async function cancelCatalogProductAuditJobAction(formData: FormData) {
   if (!context) return;
   const jobId = clean(formData.get("job_id"), 36);
   if (!uuidPattern.test(jobId)) return;
-  await context.admin.from("catalog_product_audit_jobs").update({
-    status: "cancelled",
-    completed_at: new Date().toISOString(),
-  }).eq("id", jobId).in("status", ["queued", "running"]);
-  await context.admin.from("audit_log").insert({
-    actor_id: context.actor.id,
-    action: "catalog_product_audit_job_cancelled",
-    entity_type: "catalog_product_audit_job",
-    entity_id: jobId,
-    metadata: {},
+  const { error } = await context.admin.rpc("cancel_catalog_product_audit_job_v1", {
+    actor_profile_id: context.actor.id,
+    requested_job_id: jobId,
   });
+  if (error) return;
   refreshAudit();
 }

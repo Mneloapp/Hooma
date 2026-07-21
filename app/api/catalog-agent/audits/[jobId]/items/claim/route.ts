@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
-import { authenticateCatalogAgent, catalogAgentHasScope, catalogProductAuditJob } from "@/lib/catalog-agent/server";
+import {
+  authenticateCatalogAgent,
+  catalogAgentHasScope,
+  catalogProductAuditJob,
+  supportsCatalogAuditWorkerProtocol,
+} from "@/lib/catalog-agent/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+let auditSchemaReady = false;
 
 const safeImages = (hero: unknown, gallery: unknown) => Array.from(new Set<string>([
   ...(typeof hero === "string" && hero.startsWith("https://") ? [hero] : []),
@@ -13,9 +20,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
   const context = await authenticateCatalogAgent(request);
   if (!context) return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   if (!catalogAgentHasScope(context.agent, "audits:process")) return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
+  if (!supportsCatalogAuditWorkerProtocol(request)) {
+    return NextResponse.json({
+      ok: false,
+      message: "Catalog audit worker update required before claiming another product",
+    }, { status: 426 });
+  }
   const { jobId } = await params;
   const job = await catalogProductAuditJob(context.admin, context.agent.id, jobId);
   if (!job || job.status !== "running") return NextResponse.json({ ok: false, message: "Audit job not available" }, { status: 404 });
+
+  // The worker protocol and database migration must advance together. Check a
+  // migration-003-only column before the first claim in each warm API process,
+  // so an API-before-database rollout cannot strand an unsealed item.
+  if (!auditSchemaReady) {
+    const { error: schemaError } = await context.admin
+      .from("products")
+      .select("catalog_audit_attempted_at")
+      .limit(1);
+    if (schemaError) {
+      return NextResponse.json({
+        ok: false,
+        message: "Catalog audit database migration is not ready",
+      }, { status: 503 });
+    }
+    auditSchemaReady = true;
+  }
 
   const { data: item, error } = await context.admin.rpc("claim_catalog_product_audit_item", {
     requested_agent_id: context.agent.id,
@@ -23,8 +53,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
   });
   if (error) return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
   if (!item) return NextResponse.json({ ok: true, item: null });
+  if (item.status !== "processing") {
+    return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
+  }
 
-  const [{ data: product }, { data: variants }, { data: category }] = await Promise.all([
+  const [productResult, variantsResult, categoryResult] = await Promise.all([
     context.admin.from("products")
       .select("id,slug,hooma_name,name_ka,short_description,short_description_ka,long_description,long_description_ka,hero_image,gallery_images,status,category_id,updated_at")
       .eq("id", item.product_id)
@@ -40,30 +73,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
       .eq("id", item.product_id)
       .maybeSingle(),
   ]);
+  const finishUnsealedItem = async (message: string) => context.admin.rpc("finalize_catalog_product_audit_item_v1", {
+    requested_agent_id: context.agent.id,
+    requested_job_id: job.id,
+    requested_item_id: item.id,
+    requested_terminal_status: "skipped",
+    requested_error_message: message,
+  });
+
+  if (productResult.error || variantsResult.error || categoryResult.error) {
+    const queryError = productResult.error ?? variantsResult.error ?? categoryResult.error;
+    const { error: terminalError } = await finishUnsealedItem("Catalog data could not be read while preparing the audit");
+    return NextResponse.json({
+      ok: false,
+      message: terminalError?.message ?? queryError?.message ?? "Catalog data could not be read",
+    }, { status: 500 });
+  }
+
+  const product = productResult.data;
+  const variants = variantsResult.data;
+  const category = categoryResult.data;
   const variant = variants?.[0] ?? null;
   if (!product || !variant) {
-    await context.admin.from("catalog_product_audit_items").update({
-      status: "skipped",
-      error_message: "Product or active variant is missing",
-      processed_at: new Date().toISOString(),
-    }).eq("id", item.id).eq("job_id", job.id);
-    await context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: job.id });
+    const { data: terminal, error: terminalError } = await finishUnsealedItem("Product or active variant is missing");
+    if (terminalError) return NextResponse.json({ ok: false, message: terminalError.message }, { status: 500 });
+    if (terminal?.status === "processing") {
+      return NextResponse.json({ ok: false, message: "Catalog audit attempt was already sealed" }, { status: 409 });
+    }
     return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
   }
 
   const images = safeImages(product.hero_image, product.gallery_images);
   if (!images.length) {
-    await context.admin.from("catalog_product_audit_items").update({
-      status: "skipped",
-      current_snapshot: {
-        product_updated_at: product.updated_at,
-        variant_id: variant.id,
-        variant_updated_at: variant.updated_at,
-      },
-      error_message: "Product has no auditable HTTPS images",
-      processed_at: new Date().toISOString(),
-    }).eq("id", item.id).eq("job_id", job.id);
-    await context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: job.id });
+    const { data: terminal, error: terminalError } = await finishUnsealedItem("Product has no auditable HTTPS images");
+    if (terminalError) return NextResponse.json({ ok: false, message: terminalError.message }, { status: 500 });
+    if (terminal?.status === "processing") {
+      return NextResponse.json({ ok: false, message: "Catalog audit attempt was already sealed" }, { status: 409 });
+    }
     return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
   }
 
@@ -81,16 +127,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     size_label: variant.size_label,
     product_dimensions: variant.product_dimensions_cm,
   };
-  const { data: snapshottedItem, error: snapshotError } = await context.admin.from("catalog_product_audit_items")
-    .update({ current_snapshot: snapshot })
-    .eq("id", item.id)
-    .eq("job_id", job.id)
-    .eq("status", "processing")
-    .select("id")
-    .maybeSingle();
-  if (snapshotError) return NextResponse.json({ ok: false, message: snapshotError.message }, { status: 500 });
-  if (!snapshottedItem) {
+  const { data: attempt, error: attemptError } = await context.admin.rpc("begin_catalog_product_audit_attempt_v1", {
+    requested_agent_id: context.agent.id,
+    requested_job_id: job.id,
+    requested_item_id: item.id,
+    requested_snapshot: snapshot,
+  });
+  if (attemptError) return NextResponse.json({ ok: false, message: attemptError.message }, { status: 500 });
+  if (
+    !attempt
+    || attempt.status !== "processing"
+    || attempt.sealed !== true
+    || attempt.idempotent !== false
+  ) {
     return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
+  }
+  const sealedSnapshot = attempt.current_snapshot;
+  if (!sealedSnapshot || typeof sealedSnapshot !== "object" || Array.isArray(sealedSnapshot)) {
+    return NextResponse.json({ ok: false, message: "Catalog audit attempt returned an invalid snapshot" }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -113,7 +167,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
           dimensions: variant.product_dimensions_cm ?? null,
         },
       },
-      snapshot,
+      snapshot: sealedSnapshot,
     },
   });
 }

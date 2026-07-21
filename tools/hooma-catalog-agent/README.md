@@ -44,10 +44,18 @@ MakerWorld may repeatedly request bot verification from an automated Playwright 
 ## Existing-product audit flow
 
 1. Admin → Catalog Agent → Product Quality Auditor creates one audit job for Active, Draft, and/or Archived products.
-2. The worker claims one bounded product snapshot at a time; it never loads the entire catalog into memory.
-3. Up to 12 public product images and the current copy are analyzed with Structured Outputs.
-4. Every image gets an explicit keep/remove decision, one kept image becomes the proposed hero, and dimensions are always marked approximate.
-5. The proposal appears in Admin with before/after names and copy, image decisions, confidence, and warnings. Staff can manually keep or remove any reviewed image before approval.
+2. The worker claims one bounded product snapshot at a time; it never loads the entire catalog into memory. The database seals a permanent attempt immediately before returning that snapshot to the model worker.
+3. Up to 12 public product images and the current copy are analyzed with Structured Outputs in at most one OpenAI POST.
+4. Every image gets an explicit keep/remove decision, one kept image becomes the proposed hero, and dimensions are always marked approximate. A completed model result is durably spooled before delivery, so a temporary Hooma API/network failure replays that result instead of spending tokens on the same item again.
+5. The proposal appears in Admin with before/after names and copy, image decisions, confidence, and warnings. Staff can edit both localized names and descriptions, and manually keep or remove any reviewed image before approval.
 6. Staff may approve or reject one product, delete an unwanted product through the existing protected catalog-deletion workflow, or approve up to 100 warning-free proposals at 85%+ confidence after typing `APPLY`.
 7. Approval changes names, copy, approximate dimensions, size label when it is Standard/Standart, and the public gallery. Price, product status, publication, license, and production data are preserved.
-8. An approved product receives a permanent audit marker and is excluded from every future audit job. Its immutable audit evidence remains in the database and Audit log but disappears from the active review queue.
+8. A valid AI result receives a permanent completion marker immediately, before human approval or rejection, and is excluded from every future audit job. Approval remains a separate action that applies the reviewer-edited copy, dimensions, and media. Immutable AI evidence stays in the database and Audit log.
+
+The worker makes at most one paid OpenAI request per claimed product; it never automatically repeats that request. Before delivery, a completed result is written and synced through `.audit-result-spool`, and a valid temp file is recovered after a restart. A crash after the database seals an attempt but before the response is durably spooled deliberately leaves that product attempted/failed for manual review instead of risking a second charge. Corrupt, conflicting, or permanently rejected delivery entries move to `.audit-result-spool/quarantine` instead of being deleted. While a retryable result remains pending delivery, new audit claims pause so the same product cannot spend tokens twice. A valid delivery quarantined after a permanent Hooma HTTP rejection is automatically retried and blocks new audit claims until Hooma accepts it; corrupt/conflicting evidence remains visible for manual inspection without blocking unrelated products. Import jobs continue normally, and `HOOMA_WORKER_MODE=import` does not process or wait on the audit spool.
+
+Provider HTTP failures stop the current job after recording the affected product, three consecutive invalid/refused model outputs trip a circuit breaker, and a completed analysis that Hooma permanently rejects is quarantined and stops the job immediately. This prevents a broken model name, schema, credential, or worker/API contract from consuming the entire catalog.
+
+If the worker reports a quarantined entry, keep the file for investigation and fix the API/configuration cause before moving or removing it. The database's attempted/completed marker prevents that product from being charged for another audit while unrelated products continue.
+
+The audit claim API also requires the protocol version built into this worker. During a production rollout, an older worker can still submit an already-started result, but it cannot claim another product. Stop the old process, update this folder from `main`, apply the accompanying Supabase migrations, and only then start `run.ps1` again.

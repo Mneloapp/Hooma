@@ -2,7 +2,6 @@ const openAiEndpoint = "https://api.openai.com/v1/responses";
 const supportedDetails = new Set(["low", "high", "auto"]);
 
 const clean = (value, maximum) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, maximum);
-const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 function outputText(response) {
   if (typeof response?.output_text === "string" && response.output_text.trim()) return response.output_text.trim();
@@ -129,39 +128,33 @@ function responseSchema(imageIds) {
 }
 
 async function requestOpenAi(body, apiKey, timeoutMs) {
-  let lastError = null;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(openAiEndpoint, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (response.ok) return payload;
-      const message = clean(payload?.error?.message, 500) || `OpenAI returned HTTP ${response.status}`;
-      lastError = new Error(message);
-      lastError.catalogAuditFatal = [401, 403, 429, 500, 502, 503, 504].includes(response.status);
-      if (![408, 409, 429, 500, 502, 503, 504].includes(response.status) || attempt === 4) throw lastError;
-      const retryAfter = Math.min(30, Math.max(1, Number(response.headers.get("retry-after")) || 2 ** attempt));
-      await wait(retryAfter * 1_000);
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      if (attempt === 4) {
-        lastError.catalogAuditFatal = true;
-        throw lastError;
-      }
-      if (!controller.signal.aborted && lastError.name !== "TypeError") throw lastError;
-      await wait(2 ** attempt * 1_000);
-    } finally {
-      clearTimeout(timeout);
-    }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // Never automatically repeat a paid model request. If the response is lost,
+    // retrying here could create a second charge for the same catalog item.
+    const response = await fetch(openAiEndpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) return payload;
+    const error = new Error(clean(payload?.error?.message, 500) || `OpenAI returned HTTP ${response.status}`);
+    // Provider HTTP failures are normally systemic (credentials, model,
+    // schema, quota, or service state). Stop the job after recording this one
+    // attempted product instead of sealing the same bad request 100,000 times.
+    error.catalogAuditFatal = true;
+    error.catalogAuditProviderStatus = response.status;
+    throw error;
+  } catch (value) {
+    const error = value instanceof Error ? value : new Error(String(value));
+    if (controller.signal.aborted || error.name === "TypeError") error.catalogAuditFatal = true;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  if (lastError) lastError.catalogAuditFatal = true;
-  throw lastError ?? new Error("OpenAI request failed.");
 }
 
 export function createProductAuditorFromEnv(env = process.env) {

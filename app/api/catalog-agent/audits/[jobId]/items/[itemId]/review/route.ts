@@ -7,6 +7,13 @@ export const runtime = "nodejs";
 
 const clean = (value: unknown, max = 500) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
+const isMissingAuditRpc = (error: any, rpcName: string) => {
+  const code = String(error?.code ?? "").toUpperCase();
+  const details = [error?.message, error?.details, error?.hint].filter(Boolean).join(" ").toLowerCase();
+  const missingSignal = code === "PGRST202" || code === "42883" || details.includes("schema cache");
+  return missingSignal && details.includes(rpcName.toLowerCase());
+};
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ jobId: string; itemId: string }> },
@@ -16,16 +23,17 @@ export async function POST(
   if (!catalogAgentHasScope(context.agent, "audits:process")) return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   const { jobId, itemId } = await params;
   const job = await catalogProductAuditJob(context.admin, context.agent.id, jobId);
-  if (!job || job.status !== "running") return NextResponse.json({ ok: false, message: "Audit job not available" }, { status: 404 });
+  if (!job) return NextResponse.json({ ok: true, status: "gone", productId: null, idempotent: true });
 
-  const { data: item } = await context.admin.from("catalog_product_audit_items")
+  const { data: item, error: itemError } = await context.admin.from("catalog_product_audit_items")
     .select("id,product_id,status,current_snapshot")
     .eq("id", itemId)
     .eq("job_id", job.id)
     .maybeSingle();
-  if (!item) return NextResponse.json({ ok: false, message: "Audit item not found" }, { status: 404 });
+  if (itemError) return NextResponse.json({ ok: false, message: itemError.message }, { status: 500 });
+  if (!item) return NextResponse.json({ ok: true, status: "gone", productId: null, idempotent: true });
   if (["ready", "applied", "rejected", "skipped"].includes(item.status)) {
-    return NextResponse.json({ ok: true, status: item.status, idempotent: true });
+    return NextResponse.json({ ok: true, status: item.status, productId: item.product_id, idempotent: true });
   }
 
   let body: any;
@@ -33,13 +41,71 @@ export async function POST(
   catch { return NextResponse.json({ ok: false, message: "Invalid JSON" }, { status: 400 }); }
   if (body?.error) {
     const message = clean(body.error) || "Product audit failed";
-    await context.admin.from("catalog_product_audit_items").update({
-      status: "failed",
-      error_message: message,
-      processed_at: new Date().toISOString(),
-    }).eq("id", item.id).eq("status", "processing");
-    await context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: job.id });
-    return NextResponse.json({ ok: true, status: "failed" });
+    const { data: failedItem, error: failureError } = await context.admin.rpc("finalize_catalog_product_audit_item_v1", {
+      requested_agent_id: context.agent.id,
+      requested_job_id: job.id,
+      requested_item_id: item.id,
+      requested_terminal_status: "failed",
+      requested_error_message: message,
+    });
+    if (failureError && isMissingAuditRpc(failureError, "finalize_catalog_product_audit_item_v1")) {
+      // Rolling-deploy bridge: the API can be live just before migration 003 is
+      // visible in PostgREST's schema cache. Preserve the already-paid worker
+      // delivery with the legacy compare-and-set; migration 003 will backfill
+      // its canonical attempt marker. Never use this path for other RPC errors.
+      const { data: legacyItem, error: legacyError } = await context.admin
+        .from("catalog_product_audit_items")
+        .update({
+          status: "failed",
+          error_message: message,
+          processed_at: new Date().toISOString(),
+        })
+        .eq("id", item.id)
+        .eq("job_id", job.id)
+        .eq("status", "processing")
+        .select("id,product_id,status")
+        .maybeSingle();
+      if (legacyError) return NextResponse.json({ ok: false, message: legacyError.message }, { status: 500 });
+      if (legacyItem) {
+        const { error: refreshError } = await context.admin.rpc("refresh_catalog_product_audit_job_counters", {
+          requested_job_id: job.id,
+        });
+        if (refreshError) return NextResponse.json({ ok: false, message: refreshError.message }, { status: 500 });
+        return NextResponse.json({
+          ok: true,
+          status: legacyItem.status,
+          productId: legacyItem.product_id,
+          idempotent: false,
+        });
+      }
+      const { data: replayedItem, error: replayError } = await context.admin
+        .from("catalog_product_audit_items")
+        .select("product_id,status")
+        .eq("id", item.id)
+        .eq("job_id", job.id)
+        .maybeSingle();
+      if (replayError) return NextResponse.json({ ok: false, message: replayError.message }, { status: 500 });
+      if (!replayedItem) return NextResponse.json({ ok: true, status: "gone", productId: null, idempotent: true });
+      if (["ready", "applied", "rejected", "skipped", "failed"].includes(replayedItem.status)) {
+        return NextResponse.json({
+          ok: true,
+          status: replayedItem.status,
+          productId: replayedItem.product_id,
+          idempotent: true,
+        });
+      }
+      return NextResponse.json({ ok: false, message: "Audit failure was not recorded" }, { status: 409 });
+    }
+    if (failureError) return NextResponse.json({ ok: false, message: failureError.message }, { status: 500 });
+    if (!failedItem || typeof failedItem !== "object" || typeof failedItem.status !== "string") {
+      return NextResponse.json({ ok: false, message: "Audit failure recorder returned an invalid response" }, { status: 500 });
+    }
+    return NextResponse.json({
+      ok: true,
+      status: failedItem.status,
+      productId: failedItem.product_id ?? item.product_id,
+      idempotent: failedItem.idempotent === true,
+    });
   }
 
   const analysis = asCatalogProductAuditAnalysis(body?.analysis ?? body);
@@ -59,7 +125,7 @@ export async function POST(
     || decisionUrls.some((url) => !imageSet.has(url))
     || snapshotImages.some((url: string) => !decisionUrls.includes(url))
   ) {
-    return NextResponse.json({ ok: false, message: "Image decisions do not match the claimed product" }, { status: 409 });
+    return NextResponse.json({ ok: false, message: "Image decisions do not match the claimed product" }, { status: 422 });
   }
   const keptImages = analysis.imageDecisions.filter((decision) => decision.keep).map((decision) => decision.url);
   const removedImages = analysis.imageDecisions.filter((decision) => !decision.keep).map((decision) => decision.url);
@@ -80,20 +146,83 @@ export async function POST(
     hero_image_url: analysis.heroImageUrl,
     summary: analysis.summary,
   };
-  const { data: reviewedItem, error } = await context.admin.from("catalog_product_audit_items").update({
-    status: "ready",
-    current_snapshot: snapshot,
-    suggestion,
-    confidence: analysis.dimensionConfidence,
-    warnings: analysis.warnings,
-    model_name: analysis.model,
-    provider_response_id: analysis.responseId,
-    processing_ms: analysis.processingMs === null ? null : Math.round(analysis.processingMs ?? 0),
-    error_message: null,
-    processed_at: new Date().toISOString(),
-  }).eq("id", item.id).eq("status", "processing").select("id").maybeSingle();
+  const { data: recorded, error } = await context.admin.rpc("record_catalog_product_audit_result_v1", {
+    requested_agent_id: context.agent.id,
+    requested_job_id: job.id,
+    requested_item_id: item.id,
+    requested_suggestion: suggestion,
+    requested_confidence: analysis.dimensionConfidence,
+    requested_warnings: analysis.warnings,
+    requested_model_name: analysis.model,
+    requested_provider_response_id: analysis.responseId ?? null,
+    requested_processing_ms: analysis.processingMs === null ? null : Math.round(analysis.processingMs ?? 0),
+  });
+  if (error && isMissingAuditRpc(error, "record_catalog_product_audit_result_v1")) {
+    // Delivery-only compatibility for a Vercel/Supabase rolling deploy. Claims
+    // are protocol-gated; this does not authorize a new model request.
+    const { data: legacyItem, error: legacyError } = await context.admin
+      .from("catalog_product_audit_items")
+      .update({
+        status: "ready",
+        current_snapshot: snapshot,
+        suggestion,
+        confidence: analysis.dimensionConfidence,
+        warnings: analysis.warnings,
+        model_name: analysis.model,
+        provider_response_id: analysis.responseId ?? null,
+        processing_ms: analysis.processingMs === null ? null : Math.round(analysis.processingMs ?? 0),
+        error_message: null,
+        processed_at: new Date().toISOString(),
+      })
+      .eq("id", item.id)
+      .eq("job_id", job.id)
+      .eq("status", "processing")
+      .select("id,product_id,status")
+      .maybeSingle();
+    if (legacyError) return NextResponse.json({ ok: false, message: legacyError.message }, { status: 500 });
+    if (legacyItem) {
+      const { error: refreshError } = await context.admin.rpc("refresh_catalog_product_audit_job_counters", {
+        requested_job_id: job.id,
+      });
+      if (refreshError) return NextResponse.json({ ok: false, message: refreshError.message }, { status: 500 });
+      return NextResponse.json({
+        ok: true,
+        status: legacyItem.status,
+        productId: legacyItem.product_id,
+        idempotent: false,
+      });
+    }
+    const { data: replayedItem, error: replayError } = await context.admin
+      .from("catalog_product_audit_items")
+      .select("product_id,status")
+      .eq("id", item.id)
+      .eq("job_id", job.id)
+      .maybeSingle();
+    if (replayError) return NextResponse.json({ ok: false, message: replayError.message }, { status: 500 });
+    if (!replayedItem) return NextResponse.json({ ok: true, status: "gone", productId: null, idempotent: true });
+    if (["ready", "applied", "rejected", "skipped", "failed"].includes(replayedItem.status)) {
+      return NextResponse.json({
+        ok: true,
+        status: replayedItem.status,
+        productId: replayedItem.product_id,
+        idempotent: true,
+      });
+    }
+    return NextResponse.json({ ok: false, message: "Audit result was not recorded" }, { status: 409 });
+  }
   if (error) return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
-  if (!reviewedItem) return NextResponse.json({ ok: true, status: "skipped", idempotent: true });
-  await context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: job.id });
-  return NextResponse.json({ ok: true, status: "ready", productId: item.product_id });
+  const recordedStatuses = new Set(["ready", "applied", "rejected", "skipped", "failed", "gone"]);
+  if (
+    !recorded
+    || typeof recorded !== "object"
+    || !recordedStatuses.has(recorded.status)
+    || (recorded.status !== "gone" && recorded.product_id !== item.product_id)
+    || typeof recorded.idempotent !== "boolean"
+  ) return NextResponse.json({ ok: false, message: "Audit result recorder returned an invalid response" }, { status: 500 });
+  return NextResponse.json({
+    ok: true,
+    status: recorded.status,
+    productId: recorded.product_id ?? item.product_id,
+    idempotent: recorded.idempotent,
+  });
 }
