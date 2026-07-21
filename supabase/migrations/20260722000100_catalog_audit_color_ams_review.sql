@@ -37,10 +37,10 @@ begin
 
   foreach selected_color in array requested_available_colors loop
     if selected_color is null
-      or selected_color not in (
+      or array_position(array[
         'თეთრი', 'შავი', 'ნაცრისფერი', 'ბეჟი', 'წითელი', 'ლურჯი',
         'მწვანე', 'ყვითელი', 'ნარინჯისფერი', 'იისფერი', 'ვარდისფერი', 'ყავისფერი'
-      ) then
+      ]::text[], selected_color) is null then
       raise exception 'Catalog audit color is invalid';
     end if;
     if array_position(validated_colors, selected_color) is not null then
