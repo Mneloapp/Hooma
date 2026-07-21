@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Bell, CheckCheck, ChevronRight } from "lucide-react";
-import LocalizedText from "@/components/LocalizedText";
+import { LocalizedText } from "@/components/LocalizedText";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import {
   markAllNotificationsReadAction,
