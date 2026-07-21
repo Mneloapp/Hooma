@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
-import { Bot, Check, CheckCircle2, Clock3, ImageOff, OctagonX, Play, Ruler, Sparkles, Trash2, TriangleAlert, X } from "lucide-react";
+import { Bot, Check, CheckCircle2, Clock3, ExternalLink, ImageOff, OctagonX, Palette, Play, Ruler, Sparkles, Trash2, TriangleAlert, X } from "lucide-react";
 import {
   applyCatalogProductAuditItemAction,
   applyHighConfidenceCatalogAuditsAction,
@@ -11,6 +11,7 @@ import {
   deleteCatalogProductFromAuditAction,
   rejectCatalogProductAuditItemAction,
 } from "@/app/admin/catalog-agent/audit-actions";
+import { productColorHex, productColorOptions } from "@/data/product-colors";
 
 type Agent = { id: string; name: string; is_active: boolean };
 type AuditJob = {
@@ -41,6 +42,9 @@ type AuditItem = {
   model_name: string | null;
   error_message: string | null;
   processed_at: string | null;
+  product_slug?: string | null;
+  available_colors?: string[];
+  color_mode?: "customer_choice" | "fixed_multicolor";
 };
 
 const inputClass = "mt-2 w-full rounded-2xl border border-hooma-text/10 bg-white px-4 py-3 outline-none transition focus:border-hooma-accent";
@@ -104,11 +108,16 @@ function AuditItemCard({ item }: { item: AuditItem }) {
   const proposedNameEn = String(suggestion.name_en || before.name_en || "");
   const proposedDescriptionKa = String(suggestion.description_ka || before.description_ka || "");
   const proposedDescriptionEn = String(suggestion.description_en || before.description_en || "");
+  const initialColors = Array.isArray(item.available_colors) ? item.available_colors : [];
+  const initialColorsKey = initialColors.join("\n");
+  const initialColorMode = item.color_mode === "fixed_multicolor" ? "fixed_multicolor" : "customer_choice";
   const [keptImages, setKeptImages] = useState<string[]>(suggestedKeptImages);
   const [nameKa, setNameKa] = useState(proposedNameKa);
   const [nameEn, setNameEn] = useState(proposedNameEn);
   const [descriptionKa, setDescriptionKa] = useState(proposedDescriptionKa);
   const [descriptionEn, setDescriptionEn] = useState(proposedDescriptionEn);
+  const [colorMode, setColorMode] = useState<"customer_choice" | "fixed_multicolor">(initialColorMode);
+  const [colors, setColors] = useState<string[]>(initialColors.length ? initialColors : [productColorOptions[0].name]);
   const [approvalState, approvalAction, approvalPending] = useActionState(applyCatalogProductAuditItemAction, {});
   const [photoMessage, setPhotoMessage] = useState("");
   useEffect(() => setKeptImages(suggestedKeptImages), [item.id, suggestedKeptKey]);
@@ -117,7 +126,9 @@ function AuditItemCard({ item }: { item: AuditItem }) {
     setNameEn(proposedNameEn);
     setDescriptionKa(proposedDescriptionKa);
     setDescriptionEn(proposedDescriptionEn);
-  }, [item.id, proposedNameKa, proposedNameEn, proposedDescriptionKa, proposedDescriptionEn]);
+    setColorMode(initialColorMode);
+    setColors(initialColors.length ? initialColors : [productColorOptions[0].name]);
+  }, [item.id, proposedNameKa, proposedNameEn, proposedDescriptionKa, proposedDescriptionEn, initialColorMode, initialColorsKey]);
   const kept = new Set(keptImages);
   const removedCount = images.filter((url) => !kept.has(url)).length;
   const ready = item.status === "ready";
@@ -127,6 +138,10 @@ function AuditItemCard({ item }: { item: AuditItem }) {
   const computedHero = kept.has(String(suggestion.hero_image_url))
     ? String(suggestion.hero_image_url)
     : keptImages[0];
+
+  const toggleColor = (color: string) => {
+    setColors((current) => current.includes(color) ? current.filter((item) => item !== color) : [...current, color]);
+  };
 
   const toggleImage = (url: string) => {
     setKeptImages((current) => {
@@ -148,7 +163,7 @@ function AuditItemCard({ item }: { item: AuditItem }) {
           <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{currentName}</h3><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.status === "ready" ? "bg-amber-100 text-amber-900" : item.status === "applied" ? "bg-emerald-100 text-emerald-800" : item.status === "failed" ? "bg-red-100 text-red-800" : "bg-hooma-panel text-hooma-muted"}`}>{auditStatusLabel[item.status] ?? item.status}</span>{confidence !== null ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">სანდოობა {confidence}%</span> : null}</div>
           <p className="mt-1 text-xs text-hooma-muted">{item.model_name || "—"}</p>
         </div>
-        <Link href={`/admin/products/${item.product_id}`} className="text-xs font-semibold underline underline-offset-4">პროდუქტის გახსნა</Link>
+        <div className="flex flex-wrap gap-3"><Link href={`/admin/products/${item.product_id}`} className="text-xs font-semibold underline underline-offset-4">ადმინში გახსნა</Link>{item.product_slug ? <Link href={`/product/${item.product_slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-hooma-accent underline underline-offset-4">საჯარო გვერდის შემოწმება<ExternalLink size={13} /></Link> : null}</div>
       </div>
 
       {ready || item.status === "applied" ? <>
@@ -165,9 +180,10 @@ function AuditItemCard({ item }: { item: AuditItem }) {
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs text-emerald-800">მიახლოებითი ზომა</p><p className="mt-2 text-sm font-semibold">{dimensionText({ ...suggestion.dimensions_mm, unit: "მმ" })}</p></div>
           <div className="rounded-xl border border-hooma-text/10 p-4"><p className="text-xs text-hooma-muted">ფოტოების გასუფთავება</p><p className="mt-2 text-sm font-semibold">რჩება {kept.size} · ამოსაღებია {removedCount}</p></div>
         </div>
+        <div className="mt-4 rounded-xl border border-hooma-text/10 p-4"><div className="flex items-center gap-2"><Palette size={16} className="text-hooma-accent" /><p className="text-sm font-semibold">ფერები და ბეჭდვის რეჟიმი</p></div><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={approvalPending} onClick={() => setColorMode("customer_choice")} className={`rounded-full border px-3 py-2 text-xs font-semibold ${colorMode === "customer_choice" ? "border-hooma-accent bg-hooma-accent text-white" : "border-hooma-text/15 bg-white"}`}>მომხმარებლის ფერის არჩევანი</button><button type="button" disabled={approvalPending} onClick={() => setColorMode("fixed_multicolor")} className={`rounded-full border px-3 py-2 text-xs font-semibold ${colorMode === "fixed_multicolor" ? "border-violet-600 bg-violet-600 text-white" : "border-hooma-text/15 bg-white"}`}>მრავალფერიანი · AMS</button></div><p className="mt-3 text-xs leading-5 text-hooma-muted">{colorMode === "fixed_multicolor" ? "AMS რეჟიმში მონიშნე მინიმუმ ორი ფერი, რომლებიც მოდელს სჭირდება." : "მონიშნე ფერები, რომელთა არჩევაც მომხმარებელს შეეძლება."}</p><div className="mt-3 flex flex-wrap gap-2">{productColorOptions.map((option) => { const selected = colors.includes(option.name); return <button key={option.name} type="button" disabled={approvalPending} aria-pressed={selected} onClick={() => toggleColor(option.name)} className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${selected ? "border-hooma-text bg-hooma-text text-white" : "border-hooma-text/15 bg-white text-hooma-text"}`}><span className="h-4 w-4 rounded-full border border-black/10" style={{ backgroundColor: productColorHex(option.name) }} />{option.name}{selected ? <Check size={12} /> : null}</button>; })}</div>{colors.length < (colorMode === "fixed_multicolor" ? 2 : 1) ? <p className="mt-2 text-xs font-semibold text-red-700">{colorMode === "fixed_multicolor" ? "AMS რეჟიმისთვის მინიმუმ ორი ფერი აირჩიე." : "მინიმუმ ერთი ფერი აირჩიე."}</p> : null}</div>
         <div className="mt-4"><p className="text-xs leading-5 text-hooma-muted">ფოტოზე დაჭერით თავად გადაწყვიტე დარჩეს თუ ამოიღოს. მინიმუმ ერთი ფოტო უნდა დარჩეს; თუ მთავარ ფოტოს ამოიღებ, პირველი დარჩენილი ფოტო გახდება მთავარი.</p><div className="mt-3 flex gap-2 overflow-x-auto pb-2">{images.map((url, index) => { const isKept = kept.has(url); const isHero = isKept && url === computedHero; return <button key={url} type="button" disabled={approvalPending} aria-pressed={isKept} aria-label={`ფოტო ${index + 1}: ${isHero ? "მთავარია; " : ""}${isKept ? "დარჩება, დააჭირე ამოსაღებად" : "ამოსაღებია, დააჭირე დასატოვებლად"}`} onClick={() => toggleImage(url)} className={`group relative h-28 w-36 shrink-0 overflow-hidden rounded-xl border-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-hooma-accent focus-visible:ring-offset-2 disabled:cursor-wait ${isKept ? "border-emerald-400" : "border-red-400 opacity-55"}`}><img src={url} alt={`აუდიტის ფოტო ${index + 1}`} className="h-full w-full object-cover" /><span className={`absolute inset-x-1 bottom-1 rounded-lg px-2 py-1 text-center text-[10px] font-semibold text-white ${isKept ? "bg-emerald-800/90" : "bg-red-900/90"}`}>{isHero ? "მთავარი · დარჩება" : isKept ? "დარჩება" : "ამოსაღებია"}</span>{!isKept ? <span className="absolute inset-0 grid place-items-center bg-red-950/20 text-white"><ImageOff size={20} /></span> : null}</button>; })}</div><p aria-live="polite" className="mt-2 text-xs text-red-700">{photoMessage}</p></div>
         {Array.isArray(item.warnings) && item.warnings.length ? <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-950"><strong>გაფრთხილება:</strong> {item.warnings.join(" · ")}</div> : null}
-        {ready ? <div className="mt-5"><p className="mb-3 text-xs leading-5 text-sky-800">AI აუდიტი უკვე დაფიქსირებულია და ეს პროდუქტი ხელახლა აღარ გაიგზავნება. ტექსტის ცვლილებები მხოლოდ „დამტკიცების“ შემდეგ შეინახება პროდუქტში.</p><div className="flex flex-wrap gap-3"><form id={approvalFormId} action={approvalAction} onSubmit={(event) => { if (!keptImages.length || !window.confirm("დამტკიცდეს შენ მიერ შესწორებული სახელები, აღწერები, მიახლოებითი ზომა და არჩეული ფოტოები?")) event.preventDefault(); }}><input type="hidden" name="item_id" value={item.id} />{keptImages.map((url) => <input key={url} type="hidden" name="kept_image_urls" value={url} />)}<button disabled={approvalPending || !keptImages.length} className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Check size={15} />{approvalPending ? "ინახება..." : "დამტკიცება"}</button></form><form action={rejectCatalogProductAuditItemAction} onSubmit={(event) => { if (!window.confirm("უარყოფის შემდეგ პროდუქტი ხელახლა აღარ გაივლის AI აუდიტს. გავაგრძელოთ?")) event.preventDefault(); }}><input type="hidden" name="item_id" value={item.id} /><button disabled={approvalPending} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-xs font-semibold text-red-800 disabled:opacity-50"><X size={15} />უარყოფა</button></form></div>{approvalState.message ? <p role="alert" aria-live="polite" className={`mt-3 text-xs leading-5 ${approvalState.ok ? "text-emerald-800" : "text-red-800"}`}>{approvalState.message}</p> : null}</div> : null}
+        {ready ? <div className="mt-5"><p className="mb-3 text-xs leading-5 text-sky-800">AI აუდიტი უკვე დაფიქსირებულია და ეს პროდუქტი ხელახლა აღარ გაიგზავნება. ტექსტის ცვლილებები მხოლოდ „დამტკიცების“ შემდეგ შეინახება პროდუქტში.</p><div className="flex flex-wrap gap-3"><form id={approvalFormId} action={approvalAction} onSubmit={(event) => { if (!keptImages.length || !window.confirm("დამტკიცდეს შენ მიერ შესწორებული სახელები, აღწერები, ფერები/AMS რეჟიმი, მიახლოებითი ზომა და არჩეული ფოტოები?")) event.preventDefault(); }}><input type="hidden" name="item_id" value={item.id} /><input type="hidden" name="color_mode" value={colorMode} />{colors.map((color) => <input key={color} type="hidden" name="colors" value={color} />)}{keptImages.map((url) => <input key={url} type="hidden" name="kept_image_urls" value={url} />)}<button disabled={approvalPending || !keptImages.length || colors.length < (colorMode === "fixed_multicolor" ? 2 : 1)} className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Check size={15} />{approvalPending ? "ინახება..." : "დამტკიცება"}</button></form><form action={rejectCatalogProductAuditItemAction} onSubmit={(event) => { if (!window.confirm("უარყოფის შემდეგ პროდუქტი ხელახლა აღარ გაივლის AI აუდიტს. გავაგრძელოთ?")) event.preventDefault(); }}><input type="hidden" name="item_id" value={item.id} /><button disabled={approvalPending} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-xs font-semibold text-red-800 disabled:opacity-50"><X size={15} />უარყოფა</button></form></div>{approvalState.message ? <p role="alert" aria-live="polite" className={`mt-3 text-xs leading-5 ${approvalState.ok ? "text-emerald-800" : "text-red-800"}`}>{approvalState.message}</p> : null}</div> : null}
       </> : null}
       {item.error_message ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-800">{item.error_message}</p> : null}
       <div className="mt-5 border-t border-hooma-text/10 pt-4"><DeleteProductFromAuditButton itemId={item.id} productName={currentName} /></div>

@@ -5,10 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 import { revalidateStorefrontCatalog } from "@/lib/storefront-cache";
 import { deleteCatalogProducts } from "@/app/admin/products/actions";
+import { productColorNames } from "@/data/product-colors";
 
 export type CatalogAuditActionState = { ok?: boolean; message?: string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const allowedProductColors = new Set<string>(productColorNames);
 const clean = (value: unknown, max = 100) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 const normalizedName = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizedDescription = (value: unknown) => String(value ?? "")
@@ -83,11 +85,19 @@ export async function applyCatalogProductAuditItemAction(
   const nameEn = normalizedName(formData.get("name_en"));
   const descriptionKa = normalizedDescription(formData.get("description_ka"));
   const descriptionEn = normalizedDescription(formData.get("description_en"));
+  const colorMode = clean(formData.get("color_mode"), 32);
+  const colors = Array.from(new Set(formData.getAll("colors").map((value) => clean(value, 60)).filter(Boolean)));
   if (nameKa.length < 2 || nameKa.length > 160 || nameEn.length < 2 || nameEn.length > 160) {
     return { message: "ქართული და ინგლისური სახელები უნდა შეიცავდეს 2-დან 160 სიმბოლომდე." };
   }
   if (descriptionKa.length < 10 || descriptionKa.length > 800 || descriptionEn.length < 10 || descriptionEn.length > 800) {
     return { message: "ქართული და ინგლისური აღწერები უნდა შეიცავდეს 10-დან 800 სიმბოლომდე." };
+  }
+  if (!["customer_choice", "fixed_multicolor"].includes(colorMode)) {
+    return { message: "ფერის რეჟიმი არასწორია." };
+  }
+  if (colors.some((color) => !allowedProductColors.has(color)) || colors.length < (colorMode === "fixed_multicolor" ? 2 : 1)) {
+    return { message: colorMode === "fixed_multicolor" ? "AMS პროდუქტისთვის აირჩიე მინიმუმ ორი ფერი." : "აირჩიე მინიმუმ ერთი ფერი." };
   }
 
   const submittedUrls = formData.getAll("kept_image_urls").map((value) => String(value ?? "").trim());
@@ -98,7 +108,7 @@ export async function applyCatalogProductAuditItemAction(
     || keptImageUrls.some((url) => url.length > 2_000 || !/^https:\/\//i.test(url))
   ) return { message: "დატოვე 1-დან 12-მდე სწორი HTTPS ფოტო." };
 
-  const { data, error } = await context.admin.rpc("apply_catalog_product_audit_item_v3", {
+  const { data, error } = await context.admin.rpc("apply_catalog_product_audit_item_v4", {
     actor_profile_id: context.actor.id,
     requested_item_id: itemId,
     requested_kept_image_urls: keptImageUrls,
@@ -106,6 +116,8 @@ export async function applyCatalogProductAuditItemAction(
     requested_name_en: nameEn,
     requested_description_ka: descriptionKa,
     requested_description_en: descriptionEn,
+    requested_available_colors: colors,
+    requested_color_mode: colorMode,
   });
   if (error) {
     refreshAudit();
