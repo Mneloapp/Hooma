@@ -111,6 +111,11 @@ export type CatalogProductAuditAnalysis = {
   descriptionEn: string;
   dimensionsMm: { x: number; y: number; z: number };
   dimensionConfidence: number;
+  colorMode: "customer_choice" | "fixed_multicolor";
+  colors: string[];
+  colorConfidence: number;
+  colorEvidence: string;
+  referenceChecked: boolean;
   imageDecisions: Array<{ url: string; keep: boolean; reason: string }>;
   heroImageUrl: string;
   summary: string;
@@ -139,7 +144,8 @@ export function asCatalogProductAuditAnalysis(value: unknown): CatalogProductAud
   const y = auditNumber(dimensionValues.y, 1, 5_000);
   const z = auditNumber(dimensionValues.z, 1, 5_000);
   const dimensionConfidence = auditNumber(candidate.dimensionConfidence, 0, 1);
-  if (x === null || y === null || z === null || dimensionConfidence === null) return null;
+  const colorConfidence = auditNumber(candidate.colorConfidence, 0, 1);
+  if (x === null || y === null || z === null || dimensionConfidence === null || colorConfidence === null) return null;
 
   const nameKa = auditText(candidate.nameKa, 160);
   const nameEn = auditText(candidate.nameEn, 160);
@@ -148,6 +154,12 @@ export function asCatalogProductAuditAnalysis(value: unknown): CatalogProductAud
   const heroImageUrl = auditText(candidate.heroImageUrl, 2_000);
   const summary = auditText(candidate.summary, 500);
   const model = auditText(candidate.model, 120);
+  const colorMode = candidate.colorMode === "fixed_multicolor" ? "fixed_multicolor" : candidate.colorMode === "customer_choice" ? "customer_choice" : null;
+  const allowedColors = new Set(["თეთრი", "შავი", "ნაცრისფერი", "ბეჟი", "წითელი", "ლურჯი", "მწვანე", "ყვითელი", "ნარინჯისფერი", "იისფერი", "ვარდისფერი", "ყავისფერი"]);
+  const colors = Array.isArray(candidate.colors) ? Array.from(new Set(candidate.colors.map((color) => auditText(color, 60)).filter((color) => allowedColors.has(color)))) : [];
+  const colorEvidence = auditText(candidate.colorEvidence, 500);
+  const referenceChecked = candidate.referenceChecked === true;
+  if (!colorMode || !colorEvidence || colors.length < (colorMode === "fixed_multicolor" ? 2 : 1)) return null;
   if (nameKa.length < 2 || nameEn.length < 2 || descriptionKa.length < 10 || descriptionEn.length < 10 || !heroImageUrl || !summary || !model) return null;
 
   if (!Array.isArray(candidate.imageDecisions) || candidate.imageDecisions.length < 1 || candidate.imageDecisions.length > 12) return null;
@@ -176,6 +188,11 @@ export function asCatalogProductAuditAnalysis(value: unknown): CatalogProductAud
     descriptionEn,
     dimensionsMm: { x, y, z },
     dimensionConfidence,
+    colorMode,
+    colors,
+    colorConfidence,
+    colorEvidence,
+    referenceChecked,
     imageDecisions,
     heroImageUrl,
     summary,
