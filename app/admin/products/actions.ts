@@ -31,7 +31,7 @@ const clean = (value: unknown, max: number) => String(value ?? "").trim().slice(
 
 function deleteError(message: string) {
   if (message.includes("active live order")) return "Archived პროდუქტს აქტიური რეალური შეკვეთა უკავშირდება და მის დასრულებამდე ან გაუქმებამდე ვერ წაიშლება.";
-  if (message.includes("deal history and must be archived")) return "პროდუქტს დღის შეთავაზებების ისტორია აქვს. უსაფრთხო წაშლამდე ჯერ გადაიყვანე Archived სტატუსში.";
+  if (message.includes("deal history and must be archived")) return "გაუშვი ბოლო Supabase migration — შემდეგ Daily Deals-ში არსებული პროდუქტი Archived სტატუსის გარეშე წაიშლება და ავტომატურად ჩანაცვლდება.";
   if (message.includes("must be archived")) return "პროდუქტი შეკვეთაშია გამოყენებული. უსაფრთხო წაშლამდე ჯერ გადაიყვანე Archived სტატუსში.";
   if (message.includes("snapshot is incomplete")) return "შეკვეთის ისტორიულ ჩანაწერში პროდუქტის snapshot არასრულია და უსაფრთხო წაშლა ვერ შესრულდება.";
   if (message.includes("referenced by an order")) return "პროდუქტი შეკვეთის ისტორიასთანაა დაკავშირებული და უსაფრთხო წაშლა ვერ შესრულდა.";
@@ -117,7 +117,15 @@ export async function deleteCatalogProducts(productIds: string[], options: { aud
   revalidateStorefrontCatalog();
   const deletedCount = Number(data?.deleted_count ?? uniqueIds.length);
   const removedDailyDealCount = Number(data?.removed_daily_deal_count ?? 0);
-  const dealMessage = removedDailyDealCount ? ` Daily Deals-ის ${removedDailyDealCount} კავშირი გასუფთავდა.` : "";
+  const removedCurrentDailyDealCount = Number(data?.removed_current_daily_deal_count ?? 0);
+  const refilledCurrentDailyDealCount = Number(data?.refilled_current_daily_deal_count ?? 0);
+  const currentDailyDealCount = Number(data?.current_daily_deal_count ?? 0);
+  const dealMessages: string[] = [];
+  if (removedDailyDealCount) dealMessages.push(`Daily Deals-ის ${removedDailyDealCount} კავშირი გასუფთავდა.`);
+  if (removedCurrentDailyDealCount || refilledCurrentDailyDealCount) {
+    dealMessages.push(`დღევანდელ სიაში დაემატა ${refilledCurrentDailyDealCount} შემცვლელი და ახლა ${currentDailyDealCount}/50 პროდუქტია.`);
+  }
+  const dealMessage = dealMessages.length ? ` ${dealMessages.join(" ")}` : "";
   return {
     ok: true,
     deletedCount,

@@ -19,7 +19,7 @@ For an Agent-created Draft whose external source has not previously been reviewe
 
 MakerWorld also supports **Clipper Auto Queue Mode V2** in an ordinary Chrome profile. After the operator completes the site's human verification and explicitly presses Start, a persistent Manifest V3 worker claims assigned jobs, discovers the category in one pinned tab, extracts one product at a time and creates private Drafts. It pauses without losing the item whenever verification reappears and resumes only after the operator completes it and presses Resume. It performs no automatic CAPTCHA solving, stealth/fingerprint changes, cookie export, or access-control bypass. The previous fully manual Clipper controls remain available. Use a separate agent identity/token so two workers cannot claim the same assigned job.
 
-The existing-product audit worker proposes corrected Georgian/English product names, concise descriptions, approximate dimensions, and gallery relevance decisions. Human reviewers can override the kept-photo set before approval or invoke the protected full-product deletion flow. Approval is atomic, records the human media override separately from the agent suggestion, and permanently excludes the product from later audit jobs while retaining database and Audit-log evidence outside the active review queue.
+The existing-product audit worker proposes corrected Georgian/English product names, concise descriptions, approximate dimensions, and gallery relevance decisions. Human reviewers can edit both localized names and descriptions, override the kept-photo set before approval, or invoke the protected full-product deletion flow. Immediately before a product is handed to the model, the database seals one permanent attempt; a successful response then receives a separate completion marker. Neither a pending human decision, rejection, cancellation, timeout, nor worker restart can automatically send that product to OpenAI again. Approval records human copy/media overrides separately from the immutable agent suggestion.
 
 ## Database
 
@@ -38,6 +38,13 @@ Migration `20260721000100_catalog_product_auditor.sql` adds:
 - Service-role-only claim/counter functions and an audited apply function with optimistic concurrency checks.
 - A product cursor index on `(status, created_at, id)` and a ready-result index for bounded review batches.
 - The `audits:process` machine scope, which can submit proposals but cannot apply them.
+
+Migrations `20260721000300_catalog_audit_completion_and_editable_copy.sql` and `20260721000400_daily_deal_delete_and_refill.sql` add:
+
+- Permanent attempt and successful-completion markers, a one-live-claim database guard, atomic result recording, and editable reviewer copy.
+- O(1) audit progress transitions on the 100,000-product hot path, with a full reconciliation only at job boundaries.
+- At most one OpenAI POST per sealed product plus durable result replay in the Windows worker, so ambiguous timeouts and Hooma delivery failures cannot trigger another paid model request.
+- Protected product deletion from Daily Deals without an archive-only requirement, followed by an atomic refill toward 50 products.
 
 Apply it from the Hooma repository after linking Supabase:
 
@@ -69,10 +76,10 @@ Production clients must call the canonical `https://www.hooma.ge` host directly.
 
 - **Credential theft:** tokens are shown once, stored hashed, scoped narrowly, and immediately revocable in Admin.
 - **Privilege escalation:** machine endpoints do not accept publication state, product category, pricing IDs, actor IDs, or arbitrary database operations from the worker. Server-owned job data and active database profiles are authoritative.
-- **Duplicate/replay:** job/source URLs are unique and item claims are atomic. Discovery, claim and Draft submission all check existing `source_imports` and `product_sources` by stable platform + source model ID with canonical URL fallback. A local extension history avoids repeat capture in the same Chrome profile, while server checks cover other jobs and machines. Existing imports in review are treated as already extracted.
+- **Duplicate/replay and token spend:** job/source URLs are unique and item claims are atomic. Existing-product audits seal a permanent attempt before model hand-off, issue at most one model POST, and durably spool any completed result before delivery. Only an unsealed preparation row may be reclaimed; a sealed row is never automatically sent to the model again. Discovery, claim and Draft submission also check existing `source_imports` and `product_sources` by stable platform + source model ID with canonical URL fallback.
 - **SSRF/off-site discovery:** category and product URLs must be HTTPS, credential-free, use allowed catalog hosts, and remain on the assigned source host. The API stores media references but does not server-fetch worker-supplied URLs.
 - **Unbounded crawling:** every job has a server-side 1–10,000 product cap; discovery accepts at most 100 URLs per request.
-- **Concurrent workers/crashes:** `SKIP LOCKED`, status transitions, heartbeats, and stale item reclaim make processing resumable.
+- **Concurrent workers/crashes:** `SKIP LOCKED`, one-live-product constraints, attempt ownership, and durable spool recovery make processing resumable without repeating a sealed model request. A protocol gate prevents an outdated worker from claiming new audit items during rollout while still allowing it to deliver an already-paid result.
 - **Source blocking:** the worker detects CAPTCHA/human-verification pages and stops. It does not bypass access controls.
 - **Unsafe publication:** imported products remain Draft/test-required and keep source-rights review pending until the existing human publication workflow is satisfied.
 - **Prompt injection and untrusted media:** product text, URLs, and image text are explicitly treated as untrusted data; the model receives no tools or database credentials and returns a strict JSON schema.
