@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const CATALOG_AUDIT_WORKER_PROTOCOL = "20260721-audit-at-most-once-v1";
+export const CATALOG_AUDIT_WORKER_PROTOCOL = "20260722-autonomous-colors-v2";
 
 export function supportsCatalogAuditWorkerProtocol(request: Request) {
   return request.headers.get("x-hooma-audit-protocol") === CATALOG_AUDIT_WORKER_PROTOCOL;
