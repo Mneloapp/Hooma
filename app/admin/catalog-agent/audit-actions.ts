@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
 import { revalidateStorefrontCatalog } from "@/lib/storefront-cache";
+import { deleteCatalogProducts } from "@/app/admin/products/actions";
 
 export type CatalogAuditActionState = { ok?: boolean; message?: string };
 
@@ -60,9 +61,11 @@ export async function applyCatalogProductAuditItemAction(formData: FormData) {
   if (!context) return;
   const itemId = clean(formData.get("item_id"), 36);
   if (!uuidPattern.test(itemId)) return;
-  const { data, error } = await context.admin.rpc("apply_catalog_product_audit_item_v1", {
+  const keptImageUrls = formData.getAll("kept_image_urls").map((value) => clean(value, 2_000));
+  const { data, error } = await context.admin.rpc("apply_catalog_product_audit_item_v2", {
     actor_profile_id: context.actor.id,
     requested_item_id: itemId,
+    requested_kept_image_urls: keptImageUrls,
   });
   if (error) {
     await context.admin.from("catalog_product_audit_items").update({ error_message: clean(error.message, 500) }).eq("id", itemId);
@@ -72,22 +75,48 @@ export async function applyCatalogProductAuditItemAction(formData: FormData) {
   refreshAudit(data?.product_id ? [data.product_id] : []);
 }
 
+export async function deleteCatalogProductFromAuditAction(
+  _state: CatalogAuditActionState,
+  formData: FormData,
+): Promise<CatalogAuditActionState> {
+  const context = await auditContext();
+  if (!context) return { message: "პროდუქტის წაშლის უფლება არ გაქვს." };
+  if (clean(formData.get("confirmation"), 30) !== "DELETE_PRODUCT") {
+    return { message: "პროდუქტის წაშლა არ დადასტურდა." };
+  }
+  const itemId = clean(formData.get("item_id"), 36);
+  if (!uuidPattern.test(itemId)) return { message: "აუდიტის ჩანაწერი არასწორია." };
+
+  const { data: item } = await context.admin.from("catalog_product_audit_items")
+    .select("id,product_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item?.product_id) return { message: "პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია." };
+
+  const result = await deleteCatalogProducts([item.product_id], { auditItemId: item.id });
+  if (!result.ok) return { message: result.message };
+  refreshAudit();
+  return { ok: true, message: result.message };
+}
+
 export async function rejectCatalogProductAuditItemAction(formData: FormData) {
   const context = await auditContext();
   if (!context) return;
   const itemId = clean(formData.get("item_id"), 36);
   if (!uuidPattern.test(itemId)) return;
-  const { data: item } = await context.admin.from("catalog_product_audit_items")
-    .select("id,job_id,product_id,status")
-    .eq("id", itemId)
-    .maybeSingle();
-  if (!item || item.status !== "ready") return;
-  await context.admin.from("catalog_product_audit_items").update({
+  const { data: item, error } = await context.admin.from("catalog_product_audit_items").update({
     status: "rejected",
+    review_visible: false,
     reviewed_by: context.actor.id,
     reviewed_at: new Date().toISOString(),
     error_message: null,
-  }).eq("id", item.id).eq("status", "ready");
+  })
+    .eq("id", itemId)
+    .eq("status", "ready")
+    .eq("review_visible", true)
+    .select("id,job_id,product_id")
+    .maybeSingle();
+  if (error || !item) return;
   await Promise.all([
     context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: item.job_id }),
     context.admin.from("audit_log").insert({
@@ -116,6 +145,7 @@ export async function applyHighConfidenceCatalogAuditsAction(
     .select("id,product_id,warnings")
     .eq("job_id", jobId)
     .eq("status", "ready")
+    .eq("review_visible", true)
     .gte("confidence", 0.85)
     .order("confidence", { ascending: false })
     .limit(100);

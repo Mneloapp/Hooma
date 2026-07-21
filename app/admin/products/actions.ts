@@ -38,10 +38,11 @@ function deleteError(message: string) {
   if (message.includes("deal history")) return "დღის შეთავაზებების ისტორიის უსაფრთხო გასუფთავება ვერ შესრულდა.";
   if (message.includes("Only Draft")) return "მხოლოდ Draft სტატუსის პროდუქტის წაშლა შეიძლება.";
   if (message.includes("Some requested products")) return "ერთ-ერთი მონიშნული პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია. განაახლე გვერდი და სცადე თავიდან.";
+  if (message.includes("delete_catalog_products_v2") || message.includes("delete_catalog_product_from_audit_v1") || message.includes("schema cache")) return "გაუშვი ბოლო Supabase migration და სცადე თავიდან.";
+  if (message.includes("no longer available for deletion")) return "აუდიტის ეს შედეგი უკვე დამუშავდა. განაახლე გვერდი.";
   if (message.includes("not found")) return "პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია.";
   if (message.includes("Between 1 and 100")) return "ერთ ოპერაციაში მონიშნე 1-დან 100-მდე პროდუქტი.";
   if (message.includes("Owner, Admin, or Catalog Manager")) return "პროდუქტის წაშლა მხოლოდ Owner-ს, Admin-ს ან კატალოგის მენეჯერს შეუძლია.";
-  if (message.includes("delete_catalog_products_v2") || message.includes("schema cache")) return "გაუშვი ბოლო Supabase migration და სცადე თავიდან.";
   return "პროდუქტის წაშლა ვერ დასრულდა. სცადე თავიდან.";
 }
 
@@ -58,7 +59,7 @@ function publicationError(message: string) {
   return "გამოქვეყნება ვერ დასრულდა.";
 }
 
-async function deleteCatalogProducts(productIds: string[]) {
+export async function deleteCatalogProducts(productIds: string[], options: { auditItemId?: string } = {}) {
   const profile = await requirePermission("catalog.manage");
   const admin = createAdminClient() as any;
   if (!profile || !admin || !deletionRoles.includes(profile.role)) {
@@ -68,13 +69,35 @@ async function deleteCatalogProducts(productIds: string[]) {
   if (!uniqueIds.length || uniqueIds.length > 100 || uniqueIds.some((id) => !uuidPattern.test(id))) {
     return { ok: false, message: "მონიშნული პროდუქტების სია არასწორია." } as const;
   }
+  const auditItemId = options.auditItemId;
+  if (auditItemId && (!uuidPattern.test(auditItemId) || uniqueIds.length !== 1)) {
+    return { ok: false, message: "აუდიტის ჩანაწერი არასწორია." } as const;
+  }
+
+  if (auditItemId) {
+    const { data: auditItem, error: auditItemError } = await admin.from("catalog_product_audit_items")
+      .select("product_id,status,review_visible")
+      .eq("id", auditItemId)
+      .maybeSingle();
+    if (auditItemError || auditItem?.product_id !== uniqueIds[0]) {
+      return { ok: false, message: "პროდუქტი ვერ მოიძებნა ან უკვე წაშლილია." } as const;
+    }
+    if (auditItem.review_visible !== true || !["ready", "failed"].includes(auditItem.status)) {
+      return { ok: false, message: "აუდიტის ეს შედეგი უკვე დამუშავდა. განაახლე გვერდი." } as const;
+    }
+  }
 
   const { data: productMedia, error: mediaReadError } = await admin.from("products").select("id,hero_image,gallery_images,video_url").in("id", uniqueIds);
   if (mediaReadError) return { ok: false, message: "პროდუქტების მედიის შემოწმება ვერ მოხერხდა." } as const;
-  const { data, error } = await admin.rpc("delete_catalog_products_v2", {
-    requested_product_ids: uniqueIds,
-    actor_profile_id: profile.id,
-  });
+  const { data, error } = auditItemId
+    ? await admin.rpc("delete_catalog_product_from_audit_v1", {
+      actor_profile_id: profile.id,
+      requested_item_id: auditItemId,
+    })
+    : await admin.rpc("delete_catalog_products_v2", {
+      requested_product_ids: uniqueIds,
+      actor_profile_id: profile.id,
+    });
   if (error) return { ok: false, message: deleteError(error.message) } as const;
 
   const mediaPaths = Array.from(new Set((productMedia ?? []).flatMap((product: any) => [
@@ -90,6 +113,7 @@ async function deleteCatalogProducts(productIds: string[]) {
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/admin/products");
   revalidatePath("/admin/imports");
+  revalidatePath("/admin/catalog-agent");
   revalidateStorefrontCatalog();
   const deletedCount = Number(data?.deleted_count ?? uniqueIds.length);
   const removedDailyDealCount = Number(data?.removed_daily_deal_count ?? 0);

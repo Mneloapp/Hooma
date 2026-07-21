@@ -105,6 +105,8 @@ export type CatalogAgentClipperPayload = {
 };
 
 export type CatalogProductAuditAnalysis = {
+  nameKa: string;
+  nameEn: string;
   descriptionKa: string;
   descriptionEn: string;
   dimensionsMm: { x: number; y: number; z: number };
@@ -139,12 +141,14 @@ export function asCatalogProductAuditAnalysis(value: unknown): CatalogProductAud
   const dimensionConfidence = auditNumber(candidate.dimensionConfidence, 0, 1);
   if (x === null || y === null || z === null || dimensionConfidence === null) return null;
 
+  const nameKa = auditText(candidate.nameKa, 160);
+  const nameEn = auditText(candidate.nameEn, 160);
   const descriptionKa = auditText(candidate.descriptionKa, 800);
   const descriptionEn = auditText(candidate.descriptionEn, 800);
   const heroImageUrl = auditText(candidate.heroImageUrl, 2_000);
   const summary = auditText(candidate.summary, 500);
   const model = auditText(candidate.model, 120);
-  if (descriptionKa.length < 10 || descriptionEn.length < 10 || !heroImageUrl || !summary || !model) return null;
+  if (nameKa.length < 2 || nameEn.length < 2 || descriptionKa.length < 10 || descriptionEn.length < 10 || !heroImageUrl || !summary || !model) return null;
 
   if (!Array.isArray(candidate.imageDecisions) || candidate.imageDecisions.length < 1 || candidate.imageDecisions.length > 12) return null;
   const imageDecisions = candidate.imageDecisions.flatMap((decision) => {
@@ -166,6 +170,8 @@ export function asCatalogProductAuditAnalysis(value: unknown): CatalogProductAud
   if (candidate.processingMs !== null && candidate.processingMs !== undefined && processingMs === null) return null;
 
   return {
+    nameKa,
+    nameEn,
     descriptionKa,
     descriptionEn,
     dimensionsMm: { x, y, z },

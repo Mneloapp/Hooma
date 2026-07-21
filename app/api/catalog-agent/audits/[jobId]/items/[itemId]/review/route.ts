@@ -37,7 +37,7 @@ export async function POST(
       status: "failed",
       error_message: message,
       processed_at: new Date().toISOString(),
-    }).eq("id", item.id);
+    }).eq("id", item.id).eq("status", "processing");
     await context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: job.id });
     return NextResponse.json({ ok: true, status: "failed" });
   }
@@ -68,6 +68,8 @@ export async function POST(
   }
 
   const suggestion = {
+    name_ka: analysis.nameKa,
+    name_en: analysis.nameEn,
     description_ka: analysis.descriptionKa,
     description_en: analysis.descriptionEn,
     dimensions_mm: analysis.dimensionsMm,
@@ -78,7 +80,7 @@ export async function POST(
     hero_image_url: analysis.heroImageUrl,
     summary: analysis.summary,
   };
-  const { error } = await context.admin.from("catalog_product_audit_items").update({
+  const { data: reviewedItem, error } = await context.admin.from("catalog_product_audit_items").update({
     status: "ready",
     current_snapshot: snapshot,
     suggestion,
@@ -89,8 +91,9 @@ export async function POST(
     processing_ms: analysis.processingMs === null ? null : Math.round(analysis.processingMs ?? 0),
     error_message: null,
     processed_at: new Date().toISOString(),
-  }).eq("id", item.id).eq("status", "processing");
+  }).eq("id", item.id).eq("status", "processing").select("id").maybeSingle();
   if (error) return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  if (!reviewedItem) return NextResponse.json({ ok: true, status: "skipped", idempotent: true });
   await context.admin.rpc("refresh_catalog_product_audit_job_counters", { requested_job_id: job.id });
   return NextResponse.json({ ok: true, status: "ready", productId: item.product_id });
 }

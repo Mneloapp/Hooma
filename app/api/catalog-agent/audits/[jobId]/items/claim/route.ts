@@ -73,6 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     variant_id: variant.id,
     variant_updated_at: variant.updated_at,
     name_ka: product.name_ka || product.hooma_name || "",
+    name_en: product.hooma_name || product.name_ka || "",
     description_ka: product.short_description_ka || product.long_description_ka || product.short_description || "",
     description_en: product.short_description || product.long_description || "",
     hero_image: product.hero_image,
@@ -80,12 +81,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     size_label: variant.size_label,
     product_dimensions: variant.product_dimensions_cm,
   };
-  const { error: snapshotError } = await context.admin.from("catalog_product_audit_items")
+  const { data: snapshottedItem, error: snapshotError } = await context.admin.from("catalog_product_audit_items")
     .update({ current_snapshot: snapshot })
     .eq("id", item.id)
     .eq("job_id", job.id)
-    .eq("status", "processing");
+    .eq("status", "processing")
+    .select("id")
+    .maybeSingle();
   if (snapshotError) return NextResponse.json({ ok: false, message: snapshotError.message }, { status: 500 });
+  if (!snapshottedItem) {
+    return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
+  }
 
   return NextResponse.json({
     ok: true,

@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
-import { Bot, Check, CheckCircle2, Clock3, ImageOff, OctagonX, Play, Ruler, Sparkles, TriangleAlert, X } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
+import { Bot, Check, CheckCircle2, Clock3, ImageOff, OctagonX, Play, Ruler, Sparkles, Trash2, TriangleAlert, X } from "lucide-react";
 import {
   applyCatalogProductAuditItemAction,
   applyHighConfidenceCatalogAuditsAction,
   cancelCatalogProductAuditJobAction,
   createCatalogProductAuditJobAction,
+  deleteCatalogProductFromAuditAction,
   rejectCatalogProductAuditItemAction,
 } from "@/app/admin/catalog-agent/audit-actions";
 
@@ -66,26 +67,74 @@ function dimensionText(value: any) {
   return `${value.x} × ${value.y} × ${value.z} ${value.unit || "მმ"}`;
 }
 
+function DeleteProductFromAuditButton({ itemId, productName }: { itemId: string; productName: string }) {
+  const [state, action, pending] = useActionState(deleteCatalogProductFromAuditAction, {});
+  return (
+    <div>
+      <form
+        action={action}
+        onSubmit={(event) => {
+          if (!window.confirm(`ნამდვილად წაიშალოს „${productName}“ მთლიანად პროდუქტების ბაზიდან?`)) {
+            event.preventDefault();
+            return;
+          }
+          if (!window.confirm("ეს მოქმედება შეუქცევადია. შეკვეთასთან დაკავშირებული დაცული პროდუქტი არ წაიშლება. საბოლოოდ ვადასტურებთ?")) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <input type="hidden" name="item_id" value={itemId} />
+        <input type="hidden" name="confirmation" value="DELETE_PRODUCT" />
+        <button disabled={pending} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-xs font-semibold text-red-800 disabled:opacity-50">
+          <Trash2 size={15} />{pending ? "იშლება..." : "პროდუქტის მთლიანად წაშლა"}
+        </button>
+      </form>
+      {state.message && !state.ok ? <p className="mt-2 max-w-xl text-xs leading-5 text-red-800">{state.message}</p> : null}
+    </div>
+  );
+}
+
 function AuditItemCard({ item }: { item: AuditItem }) {
   const before = item.current_snapshot ?? {};
   const suggestion = item.suggestion ?? {};
   const images = asImages(before.gallery_images);
-  const kept = new Set(asImages(suggestion.kept_image_urls));
-  const removedCount = asImages(suggestion.removed_image_urls).length;
+  const suggestedKeptImages = asImages(suggestion.kept_image_urls);
+  const suggestedKeptKey = suggestedKeptImages.join("\n");
+  const [keptImages, setKeptImages] = useState<string[]>(suggestedKeptImages);
+  useEffect(() => setKeptImages(suggestedKeptImages), [item.id, suggestedKeptKey]);
+  const kept = new Set(keptImages);
+  const removedCount = images.filter((url) => !kept.has(url)).length;
   const ready = item.status === "ready";
   const confidence = item.confidence === null ? null : Math.round(Number(item.confidence) * 100);
+  const currentName = String(before.name_ka || before.name_en || "პროდუქტი");
+  const computedHero = kept.has(String(suggestion.hero_image_url))
+    ? String(suggestion.hero_image_url)
+    : keptImages[0];
+
+  const toggleImage = (url: string) => {
+    setKeptImages((current) => {
+      if (current.includes(url) && current.length === 1) return current;
+      return current.includes(url)
+        ? current.filter((imageUrl) => imageUrl !== url)
+        : images.filter((imageUrl) => current.includes(imageUrl) || imageUrl === url);
+    });
+  };
 
   return (
     <article className="rounded-2xl border border-hooma-text/10 bg-white p-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
-          <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{before.name_ka || "პროდუქტი"}</h3><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.status === "ready" ? "bg-amber-100 text-amber-900" : item.status === "applied" ? "bg-emerald-100 text-emerald-800" : item.status === "failed" ? "bg-red-100 text-red-800" : "bg-hooma-panel text-hooma-muted"}`}>{auditStatusLabel[item.status] ?? item.status}</span>{confidence !== null ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">სანდოობა {confidence}%</span> : null}</div>
+          <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{currentName}</h3><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.status === "ready" ? "bg-amber-100 text-amber-900" : item.status === "applied" ? "bg-emerald-100 text-emerald-800" : item.status === "failed" ? "bg-red-100 text-red-800" : "bg-hooma-panel text-hooma-muted"}`}>{auditStatusLabel[item.status] ?? item.status}</span>{confidence !== null ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">სანდოობა {confidence}%</span> : null}</div>
           <p className="mt-1 text-xs text-hooma-muted">{item.model_name || "—"}</p>
         </div>
         <Link href={`/admin/products/${item.product_id}`} className="text-xs font-semibold underline underline-offset-4">პროდუქტის გახსნა</Link>
       </div>
 
       {ready || item.status === "applied" ? <>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl bg-hooma-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hooma-muted">ძველი სახელი</p><p className="mt-2 text-sm font-semibold leading-6">{before.name_ka || "—"}</p><p className="mt-1 text-xs text-hooma-muted">{before.name_en || "—"}</p></div>
+          <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">შესწორებული სახელი</p><p className="mt-2 text-sm font-semibold leading-6">{suggestion.name_ka || before.name_ka || "—"}</p><p className="mt-1 text-xs text-emerald-800/80">{suggestion.name_en || before.name_en || "—"}</p></div>
+        </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl bg-hooma-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hooma-muted">ძველი აღწერა</p><p className="mt-2 text-sm leading-6">{before.description_ka || "—"}</p></div>
           <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">შემოკლებული აღწერა</p><p className="mt-2 text-sm leading-6">{suggestion.description_ka || "—"}</p></div>
@@ -95,11 +144,12 @@ function AuditItemCard({ item }: { item: AuditItem }) {
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs text-emerald-800">მიახლოებითი ზომა</p><p className="mt-2 text-sm font-semibold">{dimensionText({ ...suggestion.dimensions_mm, unit: "მმ" })}</p></div>
           <div className="rounded-xl border border-hooma-text/10 p-4"><p className="text-xs text-hooma-muted">ფოტოების გასუფთავება</p><p className="mt-2 text-sm font-semibold">რჩება {kept.size} · ამოსაღებია {removedCount}</p></div>
         </div>
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">{images.map((url, index) => <div key={url} className={`relative h-24 w-32 shrink-0 overflow-hidden rounded-xl border ${kept.has(url) ? "border-emerald-300" : "border-red-300 opacity-45"}`}><img src={url} alt={`აუდიტის ფოტო ${index + 1}`} className="h-full w-full object-cover" />{!kept.has(url) ? <span className="absolute inset-0 grid place-items-center bg-red-950/25 text-white"><ImageOff size={20} /></span> : null}</div>)}</div>
+        <div className="mt-4"><p className="text-xs leading-5 text-hooma-muted">ფოტოზე დაჭერით თავად გადაწყვიტე დარჩეს თუ ამოიღოს. მინიმუმ ერთი ფოტო უნდა დარჩეს; თუ მთავარ ფოტოს ამოიღებ, პირველი დარჩენილი ფოტო გახდება მთავარი.</p><div className="mt-3 flex gap-2 overflow-x-auto pb-2">{images.map((url, index) => { const isKept = kept.has(url); const isHero = isKept && url === computedHero; return <button key={url} type="button" aria-pressed={isKept} aria-label={`ფოტო ${index + 1}: ${isHero ? "მთავარია; " : ""}${isKept ? "დარჩება, დააჭირე ამოსაღებად" : "ამოსაღებია, დააჭირე დასატოვებლად"}`} onClick={() => toggleImage(url)} className={`group relative h-28 w-36 shrink-0 overflow-hidden rounded-xl border-2 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-hooma-accent focus-visible:ring-offset-2 ${isKept ? "border-emerald-400" : "border-red-400 opacity-55"}`}><img src={url} alt={`აუდიტის ფოტო ${index + 1}`} className="h-full w-full object-cover" /><span className={`absolute inset-x-1 bottom-1 rounded-lg px-2 py-1 text-center text-[10px] font-semibold text-white ${isKept ? "bg-emerald-800/90" : "bg-red-900/90"}`}>{isHero ? "მთავარი · დარჩება" : isKept ? "დარჩება" : "ამოსაღებია"}</span>{!isKept ? <span className="absolute inset-0 grid place-items-center bg-red-950/20 text-white"><ImageOff size={20} /></span> : null}</button>; })}</div></div>
         {Array.isArray(item.warnings) && item.warnings.length ? <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-950"><strong>გაფრთხილება:</strong> {item.warnings.join(" · ")}</div> : null}
-        {ready ? <div className="mt-5 flex flex-wrap gap-3"><form action={applyCatalogProductAuditItemAction} onSubmit={(event) => { if (!window.confirm("დამტკიცდეს აღწერა, მიახლოებითი ზომა და ფოტოების სია?")) event.preventDefault(); }}><input type="hidden" name="item_id" value={item.id} /><button className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white"><Check size={15} />დამტკიცება</button></form><form action={rejectCatalogProductAuditItemAction}><input type="hidden" name="item_id" value={item.id} /><button className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-xs font-semibold text-red-800"><X size={15} />უარყოფა</button></form></div> : null}
+        {ready ? <div className="mt-5 flex flex-wrap gap-3"><form action={applyCatalogProductAuditItemAction} onSubmit={(event) => { if (!keptImages.length || !window.confirm("დამტკიცდეს შესწორებული სახელები, აღწერები, მიახლოებითი ზომა და შენ მიერ არჩეული ფოტოების სია?")) event.preventDefault(); }}><input type="hidden" name="item_id" value={item.id} />{keptImages.map((url) => <input key={url} type="hidden" name="kept_image_urls" value={url} />)}<button disabled={!keptImages.length} className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Check size={15} />დამტკიცება</button></form><form action={rejectCatalogProductAuditItemAction}><input type="hidden" name="item_id" value={item.id} /><button className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-xs font-semibold text-red-800"><X size={15} />უარყოფა</button></form></div> : null}
       </> : null}
       {item.error_message ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-800">{item.error_message}</p> : null}
+      <div className="mt-5 border-t border-hooma-text/10 pt-4"><DeleteProductFromAuditButton itemId={item.id} productName={currentName} /></div>
     </article>
   );
 }
@@ -134,12 +184,12 @@ export function CatalogProductAuditConsole({
 
   return (
     <section className="space-y-6 border-t border-hooma-text/10 pt-8">
-      <div><div className="flex items-center gap-2 text-hooma-accent"><Sparkles size={19} /><p className="text-xs font-semibold uppercase tracking-[0.22em]">Catalog quality auditor</p></div><h2 className="mt-3 text-3xl font-semibold">პროდუქტების ზომა, აღწერა და ფოტოები</h2><p className="mt-3 max-w-4xl text-sm leading-6 text-hooma-muted">Vision Agent გაივლის პროდუქტებს keyset-რიგით — მთელი კატალოგი მეხსიერებაში არ იტვირთება. შედეგი ჯერ აქ მოდის დასამტკიცებლად; პროდუქტის ფასი, სტატუსი და გამოქვეყნება არ იცვლება.</p></div>
+      <div><div className="flex items-center gap-2 text-hooma-accent"><Sparkles size={19} /><p className="text-xs font-semibold uppercase tracking-[0.22em]">Catalog quality auditor</p></div><h2 className="mt-3 text-3xl font-semibold">პროდუქტების სახელი, ზომა, აღწერა და ფოტოები</h2><p className="mt-3 max-w-4xl text-sm leading-6 text-hooma-muted">Vision Agent გაივლის პროდუქტებს keyset-რიგით — მთელი კატალოგი მეხსიერებაში არ იტვირთება. შედეგი ჯერ აქ მოდის დასამტკიცებლად; პროდუქტის ფასი, სტატუსი და გამოქვეყნება არ იცვლება.</p></div>
 
       {!migrationReady ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong>Catalog Product Auditor migration ჯერ არ არის გაშვებული.</strong></div> : null}
 
       <form action={createJob} className="rounded-[1.75rem] bg-white/75 p-6 shadow-soft">
-        <div className="flex items-start gap-3"><span className="rounded-2xl bg-hooma-accent/10 p-3 text-hooma-accent"><Bot size={22} /></span><div><h3 className="text-xl font-semibold">ყველა პროდუქტის ახალი აუდიტი</h3><p className="mt-1 text-sm leading-6 text-hooma-muted">ფოტოებზე დაყრდნობით შეიქმნება მიახლოებითი ზომა, მოკლე ქართული/ინგლისური აღწერა და ფოტოების relevance სია.</p></div></div>
+        <div className="flex items-start gap-3"><span className="rounded-2xl bg-hooma-accent/10 p-3 text-hooma-accent"><Bot size={22} /></span><div><h3 className="text-xl font-semibold">ყველა პროდუქტის ახალი აუდიტი</h3><p className="mt-1 text-sm leading-6 text-hooma-muted">ფოტოებსა და არსებულ მონაცემებზე დაყრდნობით შეიქმნება ბუნებრივი ქართული/ინგლისური სახელი, მიახლოებითი ზომა, მოკლე აღწერა და ფოტოების relevance სია.</p></div></div>
         <div className="mt-5 grid gap-4 md:grid-cols-2"><label className="text-sm font-medium">Catalog Agent<select name="agent_id" required className={inputClass}><option value="">აირჩიე</option>{activeAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><fieldset><legend className="text-sm font-medium">პროდუქტის სტატუსები</legend><div className="mt-2 flex flex-wrap gap-2">{[["active", "გამოქვეყნებული"], ["draft", "Draft"], ["archived", "არქივი"]].map(([value, label]) => <label key={value} className="flex items-center gap-2 rounded-full border border-hooma-text/10 bg-white px-4 py-2.5 text-sm"><input type="checkbox" name="product_statuses" value={value} defaultChecked={value !== "archived"} className="accent-hooma-accent" />{label}</label>)}</div></fieldset></div>
         <button disabled={pending || !activeAgents.length || !migrationReady} className="mt-5 inline-flex items-center gap-2 rounded-full bg-hooma-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"><Play size={16} />{pending ? "იქმნება..." : "აუდიტის გაშვება"}</button>
         {state.message ? <p className={`mt-4 rounded-xl p-4 text-sm ${state.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-900"}`}>{state.message}</p> : null}

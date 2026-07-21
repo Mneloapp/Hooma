@@ -3,7 +3,7 @@
 This worker has two resumable modes:
 
 1. Import mode receives a whole catalog category from Hooma, discovers its product pages, runs the same extraction engine as the Hooma Catalog Clipper, and sends reviewed data back as private Drafts.
-2. Audit mode walks existing Hooma products with keyset pagination and uses vision to propose concise Georgian/English copy, approximate `X × Y × Z mm` dimensions, and a relevant product-image set.
+2. Audit mode walks existing Hooma products with keyset pagination and uses vision to propose natural Georgian/English names, concise copy, approximate `X × Y × Z mm` dimensions, and a relevant product-image set.
 
 ## Security model
 
@@ -47,6 +47,7 @@ MakerWorld may repeatedly request bot verification from an automated Playwright 
 2. The worker claims one bounded product snapshot at a time; it never loads the entire catalog into memory.
 3. Up to 12 public product images and the current copy are analyzed with Structured Outputs.
 4. Every image gets an explicit keep/remove decision, one kept image becomes the proposed hero, and dimensions are always marked approximate.
-5. The proposal appears in Admin with before/after copy, image decisions, confidence, and warnings.
-6. Staff may approve or reject one product, or approve up to 100 warning-free proposals at 85%+ confidence after typing `APPLY`.
-7. Approval changes only copy, approximate dimensions, size label when it is Standard/Standart, and the public gallery. Price, product status, publication, license, and production data are preserved.
+5. The proposal appears in Admin with before/after names and copy, image decisions, confidence, and warnings. Staff can manually keep or remove any reviewed image before approval.
+6. Staff may approve or reject one product, delete an unwanted product through the existing protected catalog-deletion workflow, or approve up to 100 warning-free proposals at 85%+ confidence after typing `APPLY`.
+7. Approval changes names, copy, approximate dimensions, size label when it is Standard/Standart, and the public gallery. Price, product status, publication, license, and production data are preserved.
+8. An approved product receives a permanent audit marker and is excluded from every future audit job. Its immutable audit evidence remains in the database and Audit log but disappears from the active review queue.
