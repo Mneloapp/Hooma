@@ -10,6 +10,7 @@ import { BrandLogo } from "./BrandLogo";
 import { LanguageToggle } from "./LanguageToggle";
 import { useLanguage } from "./LanguageProvider";
 import { createClient } from "@/lib/supabase/client";
+import NotificationBell from "./notifications/NotificationBell";
 
 type HeaderAccount = { signedIn: boolean; name: string; initial: string };
 
@@ -119,6 +120,7 @@ export function Header() {
           <div className="hidden min-w-0 flex-1 md:flex"><SearchForm /></div>
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
             <div className="hidden lg:block"><LanguageToggle /></div>
+            {account.signedIn ? <NotificationBell georgian={georgian} /> : null}
             <Link href={accountHref} aria-label={accountLabel} title={account.signedIn ? account.name : undefined} className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 sm:flex">
               <span className="relative"><UserRound size={25} />{account.signedIn ? <span className="absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-hooma-secondary px-1 text-[10px] font-bold text-hooma-text">{account.initial}</span> : null}</span><strong className="text-sm">{accountLabel}</strong>
             </Link>
