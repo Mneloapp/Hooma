@@ -21,6 +21,38 @@ export default async function CatalogAgentPage() {
     admin.from("products").select("catalog_audit_attempted_at").limit(1),
   ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const categories = buildCategoryOptions((categoryResult.data ?? []) as CategoryRow[]).map(({ id, name }) => ({ id, name }));
+  const auditItems = [...(readyAuditItemResult.data ?? []), ...(failedAuditItemResult.data ?? [])] as any[];
+  const auditProductIds = Array.from(new Set(auditItems.map((item) => item.product_id).filter(Boolean)));
+  const auditProductResult = admin && auditProductIds.length
+    ? await admin.from("products")
+      .select("id,slug,product_variants(id,is_active,available_colors,attributes)")
+      .in("id", auditProductIds)
+    : { data: [], error: null };
+  const auditProducts = new Map((auditProductResult.data ?? []).map((product: any) => [product.id, product]));
+  const enrichedAuditItems = auditItems.map((item) => {
+    const product: any = auditProducts.get(item.product_id);
+    const variants = Array.isArray(product?.product_variants) ? product.product_variants : [];
+    const snapshotVariantId = item.current_snapshot?.variant_id;
+    const variant = variants.find((candidate: any) => candidate.id === snapshotVariantId)
+      ?? variants.find((candidate: any) => candidate.is_active)
+      ?? variants[0];
+    const attributes = variant?.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes)
+      ? variant.attributes
+      : {};
+    const fixedPalette = Array.isArray(attributes.fixed_color_palette)
+      ? attributes.fixed_color_palette.filter((color: unknown): color is string => typeof color === "string")
+      : [];
+    const availableColors = Array.isArray(variant?.available_colors)
+      ? variant.available_colors.filter((color: unknown): color is string => typeof color === "string")
+      : [];
+    const fixedMulticolor = attributes.ams_required === true && attributes.color_mode === "fixed_multicolor";
+    return {
+      ...item,
+      product_slug: product?.slug ?? null,
+      color_mode: fixedMulticolor ? "fixed_multicolor" : "customer_choice",
+      available_colors: fixedMulticolor ? fixedPalette : availableColors,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -36,8 +68,8 @@ export default async function CatalogAgentPage() {
       <CatalogProductAuditConsole
         agents={(agentResult.data ?? []) as any}
         jobs={(auditJobResult.data ?? []) as any}
-        items={[...(readyAuditItemResult.data ?? []), ...(failedAuditItemResult.data ?? [])] as any}
-        migrationReady={!auditJobResult.error && !readyAuditItemResult.error && !failedAuditItemResult.error && !auditSchemaResult.error}
+        items={enrichedAuditItems as any}
+        migrationReady={!auditJobResult.error && !readyAuditItemResult.error && !failedAuditItemResult.error && !auditSchemaResult.error && !auditProductResult.error}
       />
     </div>
   );
