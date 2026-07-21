@@ -35,6 +35,7 @@ async function auditContext() {
 
 function refreshAudit(productIds: string[] = []) {
   revalidatePath("/admin/catalog-agent");
+  revalidatePath("/admin/audit-agent");
   revalidatePath("/admin/products");
   for (const productId of productIds) revalidatePath(`/admin/products/${productId}`);
   if (productIds.length) {
