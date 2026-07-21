@@ -5,6 +5,7 @@ import {
   catalogProductAuditJob,
   supportsCatalogAuditWorkerProtocol,
 } from "@/lib/catalog-agent/server";
+import { normalizeCatalogUrl } from "@/lib/catalog-agent";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,13 +58,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
   }
 
-  const [productResult, variantsResult, categoryResult] = await Promise.all([
+  const [productResult, variantsResult, categoryResult, sourceResult] = await Promise.all([
     context.admin.from("products")
       .select("id,slug,hooma_name,name_ka,short_description,short_description_ka,long_description,long_description_ka,hero_image,gallery_images,status,category_id,updated_at")
       .eq("id", item.product_id)
       .maybeSingle(),
     context.admin.from("product_variants")
-      .select("id,size_label,product_dimensions_cm,updated_at")
+      .select("id,size_label,product_dimensions_cm,available_colors,attributes,updated_at")
       .eq("product_id", item.product_id)
       .eq("is_active", true)
       .order("created_at")
@@ -71,6 +72,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     context.admin.from("products")
       .select("categories(name_en,name_ka)")
       .eq("id", item.product_id)
+      .maybeSingle(),
+    context.admin.from("product_sources")
+      .select("source_url")
+      .eq("product_id", item.product_id)
+      .not("source_url", "is", null)
+      .limit(1)
       .maybeSingle(),
   ]);
   const finishUnsealedItem = async (message: string) => context.admin.rpc("finalize_catalog_product_audit_item_v1", {
@@ -81,8 +88,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     requested_error_message: message,
   });
 
-  if (productResult.error || variantsResult.error || categoryResult.error) {
-    const queryError = productResult.error ?? variantsResult.error ?? categoryResult.error;
+  if (productResult.error || variantsResult.error || categoryResult.error || sourceResult.error) {
+    const queryError = productResult.error ?? variantsResult.error ?? categoryResult.error ?? sourceResult.error;
     const { error: terminalError } = await finishUnsealedItem("Catalog data could not be read while preparing the audit");
     return NextResponse.json({
       ok: false,
@@ -114,6 +121,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
   }
 
   const categoryRow = Array.isArray(category?.categories) ? category.categories[0] : category?.categories;
+  const variantAttributes = variant.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes) ? variant.attributes : {};
+  const fixedMulticolor = variantAttributes.ams_required === true && variantAttributes.color_mode === "fixed_multicolor";
+  const fixedPalette = Array.isArray(variantAttributes.fixed_color_palette) ? variantAttributes.fixed_color_palette.filter((color: unknown): color is string => typeof color === "string") : [];
+  const availableColors = Array.isArray(variant.available_colors) ? variant.available_colors.filter((color: unknown): color is string => typeof color === "string") : [];
+  let referenceUrl: string | null = null;
+  try { referenceUrl = sourceResult.data?.source_url ? normalizeCatalogUrl(sourceResult.data.source_url).toString() : null; }
+  catch { referenceUrl = null; }
   const snapshot = {
     product_updated_at: product.updated_at,
     variant_id: variant.id,
@@ -126,6 +140,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     gallery_images: images,
     size_label: variant.size_label,
     product_dimensions: variant.product_dimensions_cm,
+    color_mode: fixedMulticolor ? "fixed_multicolor" : "customer_choice",
+    colors: fixedMulticolor ? fixedPalette : availableColors,
+    reference_url: referenceUrl,
   };
   const { data: attempt, error: attemptError } = await context.admin.rpc("begin_catalog_product_audit_attempt_v1", {
     requested_agent_id: context.agent.id,
@@ -165,7 +182,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
           id: variant.id,
           sizeLabel: variant.size_label || "Standard",
           dimensions: variant.product_dimensions_cm ?? null,
+          colorMode: fixedMulticolor ? "fixed_multicolor" : "customer_choice",
+          colors: fixedMulticolor ? fixedPalette : availableColors,
         },
+        referenceUrl,
       },
       snapshot: sealedSnapshot,
     },
