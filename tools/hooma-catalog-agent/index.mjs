@@ -804,16 +804,28 @@ async function boundedResponseText(response, maximum = 1_000_000) {
 
 async function publicReferenceEvidence(referenceUrl) {
   if (!auditReferenceAllowed(referenceUrl)) return "";
-  const response = await fetch(referenceUrl, {
-    method: "GET",
-    redirect: "follow",
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "Hooma-Audit-Agent/2.0 (+https://www.hooma.ge)",
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok || !auditReferenceAllowed(response.url)) return "";
+  let currentUrl = referenceUrl;
+  let response = null;
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+    response = await fetch(currentUrl, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Hooma-Audit-Agent/2.0 (+https://www.hooma.ge)",
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    const location = response.headers.get("location");
+    await response.body?.cancel().catch(() => {});
+    if (!location || redirectCount === 3) return "";
+    const nextUrl = new URL(location, currentUrl).toString();
+    if (!auditReferenceAllowed(nextUrl)) return "";
+    currentUrl = nextUrl;
+    response = null;
+  }
+  if (!response?.ok || !auditReferenceAllowed(response.url)) return "";
   const contentType = String(response.headers.get("content-type") || "").toLowerCase();
   if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) return "";
   const html = await boundedResponseText(response);
