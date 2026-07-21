@@ -8,6 +8,7 @@ export const adminNavItems: Array<[string, string, Permission]> = [
   ["/admin/products", "პროდუქტები", "catalog.manage"],
   ["/admin/reviews", "შეფასებები", "catalog.manage"],
   ["/admin/catalog-agent", "Catalog Agent", "catalog.manage"],
+  ["/admin/audit-agent", "Audit Agent", "catalog.manage"],
   ["/admin/inventory", "მარაგები", "inventory.manage"],
   ["/admin/orders", "შეკვეთების კანბანი", "orders.manage"],
   ["/admin/custom-orders", "ინდივიდუალური ფასები", "quotes.manage"],

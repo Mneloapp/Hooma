@@ -10,7 +10,7 @@ This worker has two resumable modes:
 - The worker receives a revocable `hooma_ca_...` token, never a Supabase secret.
 - The token can only claim assigned jobs, create Draft results, and submit audit proposals.
 - Publishing, deleting products, pricing settings, users, orders, and production are unavailable.
-- Audit proposals never update a product automatically. Owner/Admin/Catalog Manager approval is required, the previous values are retained in Audit log, and removed gallery images remain in Storage for rollback.
+- Audit results with no warnings, at least 75% dimension confidence, and at least 80% color/AMS confidence are applied automatically under the audit job creator’s catalog permission. Lower-confidence results remain in Audit Agent for manual review. Previous values and the exact AI/manual decision remain in Audit log, and removed gallery images remain in Storage for rollback.
 - Hooma validates the job category, source host, pricing profile, material profile, product limits, and idempotency server-side.
 - The worker stops and reports an error when a source requests CAPTCHA or human verification. It does not bypass access controls.
 
@@ -43,13 +43,13 @@ MakerWorld may repeatedly request bot verification from an automated Playwright 
 
 ## Existing-product audit flow
 
-1. Admin → Catalog Agent → Product Quality Auditor creates one audit job for Active, Draft, and/or Archived products.
+1. Admin → Audit Agent creates one audit job for Active, Draft, and/or Archived products.
 2. The worker claims one bounded product snapshot at a time; it never loads the entire catalog into memory. The database seals a permanent attempt immediately before returning that snapshot to the model worker.
-3. Up to 12 public product images and the current copy are analyzed with Structured Outputs in at most one OpenAI POST.
+3. Up to 12 public product images, the current copy, and a bounded public-text extract from the allow-listed source reference (when readable) are analyzed with Structured Outputs in at most one OpenAI POST. Cookies, login state, customer data, internal costs, and private admin data are never sent.
 4. Every image gets an explicit keep/remove decision, one kept image becomes the proposed hero, and dimensions are always marked approximate. A completed model result is durably spooled before delivery, so a temporary Hooma API/network failure replays that result instead of spending tokens on the same item again.
-5. The proposal appears in Admin with before/after names and copy, image decisions, confidence, and warnings. Staff can edit both localized names and descriptions, and manually keep or remove any reviewed image before approval.
-6. Staff may approve or reject one product, delete an unwanted product through the existing protected catalog-deletion workflow, or approve up to 100 warning-free proposals at 85%+ confidence after typing `APPLY`.
-7. Approval changes names, copy, approximate dimensions, size label when it is Standard/Standart, and the public gallery. Price, product status, publication, license, and production data are preserved.
+5. The model also selects customer-choice colors or a fixed AMS palette from Hooma’s canonical color list and records its evidence/confidence. Warning-free results above the autonomous confidence thresholds are applied automatically; the rest appear in Audit Agent with full manual controls.
+6. For retained exceptions, staff may edit and approve or reject one product, delete an unwanted product through the existing protected catalog-deletion workflow, or approve up to 100 warning-free proposals at 85%+ confidence after typing `APPLY`.
+7. Automatic or manual approval changes names, copy, approximate dimensions, size label when it is Standard/Standart, public gallery, offered colors, and AMS/customer-choice mode. Price, product status, publication, license, and production data are preserved.
 8. A valid AI result receives a permanent completion marker immediately, before human approval or rejection, and is excluded from every future audit job. Approval remains a separate action that applies the reviewer-edited copy, dimensions, and media. Immutable AI evidence stays in the database and Audit log.
 
 The worker makes at most one paid OpenAI request per claimed product; it never automatically repeats that request. Before delivery, a completed result is written and synced through `.audit-result-spool`, and a valid temp file is recovered after a restart. A crash after the database seals an attempt but before the response is durably spooled deliberately leaves that product attempted/failed for manual review instead of risking a second charge. Corrupt, conflicting, or permanently rejected delivery entries move to `.audit-result-spool/quarantine` instead of being deleted. While a retryable result remains pending delivery, new audit claims pause so the same product cannot spend tokens twice. A valid delivery quarantined after a permanent Hooma HTTP rejection is automatically retried and blocks new audit claims until Hooma accepts it; corrupt/conflicting evidence remains visible for manual inspection without blocking unrelated products. Import jobs continue normally, and `HOOMA_WORKER_MODE=import` does not process or wait on the audit spool.

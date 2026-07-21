@@ -5,7 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { createProductAuditorFromEnv } from "./product-auditor.mjs";
 
-const auditProtocolVersion = "20260721-audit-at-most-once-v1";
+const auditProtocolVersion = "20260722-autonomous-colors-v2";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const extractorPath = path.resolve(here, "../hooma-catalog-clipper/extractor.js");
 const extractorSource = await readFile(extractorPath, "utf8");
@@ -774,10 +774,82 @@ async function claimAuditItem(jobId) {
   return null;
 }
 
+const auditReferenceHosts = new Set(["makerworld.com", "www.makerworld.com", "printables.com", "www.printables.com", "thingiverse.com", "www.thingiverse.com", "thangs.com", "www.thangs.com", "myminifactory.com", "www.myminifactory.com", "cults3d.com", "www.cults3d.com"]);
+
+function auditReferenceAllowed(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password
+      && Array.from(auditReferenceHosts).some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
+}
+
+async function boundedResponseText(response, maximum = 1_000_000) {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let output = "";
+  let length = 0;
+  while (length < maximum) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.byteLength;
+    output += decoder.decode(value, { stream: true });
+  }
+  await reader.cancel().catch(() => {});
+  return output.slice(0, maximum);
+}
+
+async function publicReferenceEvidence(referenceUrl) {
+  if (!auditReferenceAllowed(referenceUrl)) return "";
+  let currentUrl = referenceUrl;
+  let response = null;
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+    response = await fetch(currentUrl, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Hooma-Audit-Agent/2.0 (+https://www.hooma.ge)",
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    const location = response.headers.get("location");
+    await response.body?.cancel().catch(() => {});
+    if (!location || redirectCount === 3) return "";
+    const nextUrl = new URL(location, currentUrl).toString();
+    if (!auditReferenceAllowed(nextUrl)) return "";
+    currentUrl = nextUrl;
+    response = null;
+  }
+  if (!response?.ok || !auditReferenceAllowed(response.url)) return "";
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) return "";
+  const html = await boundedResponseText(response);
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "";
+  const descriptions = Array.from(html.matchAll(/<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']+)["'][^>]*>/gi)).map((match) => match[1]);
+  const visible = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(?:nbsp|amp|quot|#39|lt|gt);/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return [title, ...descriptions, visible].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 6_000);
+}
+
 async function processAuditItem(job, item) {
   let analysis;
   try {
-    analysis = await auditProduct(item.product);
+    let referenceEvidence = "";
+    if (item.product?.referenceUrl) {
+      try { referenceEvidence = await publicReferenceEvidence(item.product.referenceUrl); }
+      catch (value) { log("Public audit reference could not be read; continuing with catalog images", { productId: item.productId, error: asError(value).message }); }
+    }
+    analysis = await auditProduct({ ...item.product, referenceEvidence });
   } catch (value) {
     const error = asError(value);
     const message = String(error.message || "Product audit failed").replace(/\s+/g, " ").trim().slice(0, 500);
