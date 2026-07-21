@@ -51,7 +51,6 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           <Link href={`/shop?category=${product.categorySlug}`} className="text-xs font-semibold uppercase tracking-[0.16em] text-hooma-accent hover:underline"><LocalizedText ka={product.category} en={localizedCategory?.name ?? product.category} /></Link>
           <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.03em] sm:text-4xl"><LocalizedText ka={product.nameKa} en={product.hoomaName} /></h1>
           <Link href="#reviews" className="mt-3 inline-flex rounded-full border border-hooma-text/10 bg-white/65 px-3 py-2 transition hover:border-hooma-accent/35"><ProductRatingSummary average={product.ratingAverage} ratingCount={product.ratingCount} salesCount={product.salesCount} detailed /></Link>
-          <p className="mt-4 text-base leading-7 text-hooma-muted"><LocalizedText ka={product.shortDescriptionKa} en={product.shortDescription} /></p>
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-hooma-text/10 py-4 text-sm"><span className="font-medium">SKU: {defaultVariant.sku}</span><span className="text-hooma-muted"><LocalizedText ka={product.isOrderable ? "წარმოებისთვის დამტკიცებული" : "კატალოგის სატესტო პროდუქტი"} en={product.isOrderable ? "Approved for production" : "Catalog test product"} /></span></div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
