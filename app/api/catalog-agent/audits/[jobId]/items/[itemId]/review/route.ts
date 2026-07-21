@@ -247,6 +247,20 @@ export async function POST(
     if (!applyError && applied?.product_id === item.product_id) {
       finalStatus = "applied";
       autoApplied = true;
+      await context.admin.from("audit_log").insert({
+        actor_id: job.created_by,
+        action: "catalog_product_audit_auto_applied",
+        entity_type: "product",
+        entity_id: item.product_id,
+        metadata: {
+          audit_job_id: job.id,
+          audit_item_id: item.id,
+          agent_id: context.agent.id,
+          dimension_confidence: analysis.dimensionConfidence,
+          color_confidence: analysis.colorConfidence,
+          reference_checked: analysis.referenceChecked,
+        },
+      });
     } else {
       autoApplyMessage = clean(applyError?.message || "Automatic apply returned an invalid response");
     }
