@@ -20,31 +20,39 @@ declare
   audit_item public.catalog_product_audit_items%rowtype;
   variant_id uuid;
   requested_product_id uuid;
-  allowed_colors constant text[] := array[
-    'თეთრი', 'შავი', 'ნაცრისფერი', 'ბეჟი', 'წითელი', 'ლურჯი',
-    'მწვანე', 'ყვითელი', 'ნარინჯისფერი', 'იისფერი', 'ვარდისფერი', 'ყავისფერი'
-  ];
+  selected_color text;
+  validated_colors text[] := '{}'::text[];
   application_result jsonb;
   effective_overrides jsonb;
   applied_log_id bigint;
 begin
-  if not (requested_color_mode = any(array['customer_choice', 'fixed_multicolor']::text[])) then
+  if requested_color_mode is null
+    or (requested_color_mode <> 'customer_choice' and requested_color_mode <> 'fixed_multicolor') then
     raise exception 'Catalog audit color mode is invalid';
   end if;
-  if requested_available_colors is null
-    or cardinality(requested_available_colors) < case when requested_color_mode = 'fixed_multicolor' then 2 else 1 end
-    or cardinality(requested_available_colors) > cardinality(allowed_colors)
-    or exists (
-      select 1
-      from unnest(requested_available_colors) as selected(color_name)
-      where selected.color_name is null
-        or not (selected.color_name = any(allowed_colors))
-    )
-    or cardinality(requested_available_colors) <> (
-      select count(distinct selected.color_name)::integer
-      from unnest(requested_available_colors) as selected(color_name)
-    ) then
-    raise exception 'Catalog audit colors are invalid';
+
+  if requested_available_colors is null then
+    raise exception 'Catalog audit colors are required';
+  end if;
+
+  foreach selected_color in array requested_available_colors loop
+    if selected_color is null
+      or selected_color not in (
+        'თეთრი', 'შავი', 'ნაცრისფერი', 'ბეჟი', 'წითელი', 'ლურჯი',
+        'მწვანე', 'ყვითელი', 'ნარინჯისფერი', 'იისფერი', 'ვარდისფერი', 'ყავისფერი'
+      ) then
+      raise exception 'Catalog audit color is invalid';
+    end if;
+    if array_position(validated_colors, selected_color) is not null then
+      raise exception 'Catalog audit colors must be unique';
+    end if;
+    validated_colors := array_append(validated_colors, selected_color);
+  end loop;
+
+  if cardinality(validated_colors) > 12
+    or (requested_color_mode = 'customer_choice' and cardinality(validated_colors) < 1)
+    or (requested_color_mode = 'fixed_multicolor' and cardinality(validated_colors) < 2) then
+    raise exception 'Catalog audit color count is invalid';
   end if;
 
   select * into audit_item
