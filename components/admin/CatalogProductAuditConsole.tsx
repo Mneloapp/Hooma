@@ -43,6 +43,7 @@ type AuditItem = {
   error_message: string | null;
   processed_at: string | null;
   product_slug?: string | null;
+  source_url?: string | null;
   available_colors?: string[];
   color_mode?: "customer_choice" | "fixed_multicolor";
 };
@@ -137,7 +138,9 @@ function AuditItemCard({ item }: { item: AuditItem }) {
   const currentName = String(before.name_ka || before.name_en || "პროდუქტი");
   const sourceUrl = typeof before.reference_url === "string" && /^https:\/\//i.test(before.reference_url)
     ? before.reference_url
-    : null;
+    : typeof item.source_url === "string" && /^https:\/\//i.test(item.source_url)
+      ? item.source_url
+      : null;
   const approvalFormId = `catalog-audit-approval-${item.id}`;
   const computedHero = kept.has(String(suggestion.hero_image_url))
     ? String(suggestion.hero_image_url)
