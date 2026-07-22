@@ -121,14 +121,23 @@ export async function POST(
   const decisionUrls = analysis.imageDecisions.map((decision) => decision.url);
   if (
     new Set(decisionUrls).size !== decisionUrls.length
-    || decisionUrls.length !== snapshotImages.length
+    || decisionUrls.length < 1
     || decisionUrls.some((url) => !imageSet.has(url))
-    || snapshotImages.some((url: string) => !decisionUrls.includes(url))
   ) {
     return NextResponse.json({ ok: false, message: "Image decisions do not match the claimed product" }, { status: 422 });
   }
-  const keptImages = analysis.imageDecisions.filter((decision) => decision.keep).map((decision) => decision.url);
-  const removedImages = analysis.imageDecisions.filter((decision) => !decision.keep).map((decision) => decision.url);
+
+  // The cost-bounded worker may inspect only the first configured image sample.
+  // Never remove an image the model did not receive: complete the delivery with
+  // conservative keep decisions for every uninspected snapshot image.
+  const auditedDecisions = new Map(analysis.imageDecisions.map((decision) => [decision.url, decision]));
+  const completedImageDecisions = snapshotImages.map((url: string) => auditedDecisions.get(url) ?? {
+    url,
+    keep: true,
+    reason: "Not included in the bounded vision sample; retained for safety.",
+  });
+  const keptImages = completedImageDecisions.filter((decision) => decision.keep).map((decision) => decision.url);
+  const removedImages = completedImageDecisions.filter((decision) => !decision.keep).map((decision) => decision.url);
   if (!keptImages.length || !keptImages.includes(analysis.heroImageUrl)) {
     return NextResponse.json({ ok: false, message: "At least one kept hero image is required" }, { status: 400 });
   }
@@ -147,7 +156,7 @@ export async function POST(
     reference_checked: analysis.referenceChecked,
     kept_image_urls: keptImages,
     removed_image_urls: removedImages,
-    image_decisions: analysis.imageDecisions,
+    image_decisions: completedImageDecisions,
     hero_image_url: analysis.heroImageUrl,
     summary: analysis.summary,
   };
