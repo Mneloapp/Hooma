@@ -48,7 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     auditSchemaReady = true;
   }
 
-  const { data: item, error } = await context.admin.rpc("claim_catalog_product_audit_item", {
+  const { data: item, error } = await context.admin.rpc("claim_catalog_product_audit_item_v2", {
     requested_agent_id: context.agent.id,
     requested_job_id: job.id,
   });
