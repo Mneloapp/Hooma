@@ -60,10 +60,16 @@ export async function createCatalogProductAuditJobAction(
   const statuses = formData.getAll("product_statuses").map((value) => clean(value, 30)).filter((value) => allowedStatuses.has(value));
   if (!statuses.length) return { message: "აირჩიე მინიმუმ ერთი პროდუქტის სტატუსი." };
 
-  const { data, error } = await context.admin.rpc("create_catalog_product_audit_job_v1", {
+  const requestedLimit = Number(clean(formData.get("product_limit"), 10));
+  if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100_000) {
+    return { message: "პროდუქტების რაოდენობა მიუთითე 1-დან 100 000-მდე." };
+  }
+
+  const { data, error } = await context.admin.rpc("create_catalog_product_audit_job_v2", {
     actor_profile_id: context.actor.id,
     requested_agent_id: agentId,
     requested_product_statuses: Array.from(new Set(statuses)),
+    requested_max_products: requestedLimit,
   });
   if (error || !data?.id) {
     const migrationMissing = error?.message?.includes("function") || error?.message?.includes("schema cache");
