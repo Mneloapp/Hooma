@@ -11,6 +11,7 @@ import {
   deleteCatalogProductFromAuditAction,
   rejectCatalogProductAuditItemAction,
 } from "@/app/admin/catalog-agent/audit-actions";
+import { AgentProgressAutoRefresh } from "@/components/admin/AgentProgressAutoRefresh";
 import { productColorHex, productColorOptions } from "@/data/product-colors";
 
 type Agent = { id: string; name: string; is_active: boolean };
@@ -242,6 +243,7 @@ export function CatalogProductAuditConsole({
   const [state, createJob, pending] = useActionState(createCatalogProductAuditJobAction, {});
   const activeAgents = agents.filter((agent) => agent.is_active);
   const agentNames = new Map(agents.map((agent) => [agent.id, agent.name]));
+  const hasActiveJobs = jobs.some((job) => ["queued", "running"].includes(job.status));
 
   return (
     <section className="min-w-0 max-w-full space-y-6 overflow-x-hidden border-t border-hooma-text/10 pt-8">
@@ -257,6 +259,8 @@ export function CatalogProductAuditConsole({
       </form>
 
       <div className="overflow-hidden rounded-[1.75rem] bg-white/75 shadow-soft"><div className="p-6"><h3 className="text-xl font-semibold">აუდიტის პროგრესი</h3></div><div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm"><thead className="bg-hooma-panel text-xs uppercase tracking-[0.12em] text-hooma-muted"><tr><th className="px-5 py-4">აუდიტი</th><th className="px-5 py-4">სტატუსი</th><th className="px-5 py-4">პროგრესი</th><th className="px-5 py-4">შედეგი</th><th className="px-5 py-4">მართვა</th></tr></thead><tbody className="divide-y divide-hooma-text/10">{jobs.length ? jobs.map((job) => <tr key={job.id}><td className="px-5 py-4"><p className="font-semibold">{job.product_statuses.join(" · ")}</p><p className="mt-1 text-xs text-hooma-muted">{agentNames.get(job.agent_id) || "Agent"}{job.worker_name ? ` · ${job.worker_name}` : ""}</p></td><td className="px-5 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${job.status === "completed" ? "bg-emerald-100 text-emerald-800" : job.status === "running" ? "bg-sky-100 text-sky-800" : job.status === "failed" ? "bg-red-100 text-red-800" : "bg-hooma-panel text-hooma-muted"}`}>{job.status === "running" ? <Clock3 size={13} /> : job.status === "completed" ? <CheckCircle2 size={13} /> : null}{auditStatusLabel[job.status] ?? job.status}</span>{job.error_message ? <p className="mt-1 text-xs text-red-700">{job.error_message}</p> : null}</td><td className="px-5 py-4"><span className="font-semibold">{number.format(job.processed_count)}/{number.format(job.total_count)}</span><div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-hooma-panel"><div className="h-full rounded-full bg-hooma-accent" style={{ width: `${job.total_count ? Math.min(100, (job.processed_count / job.total_count) * 100) : 0}%` }} /></div></td><td className="px-5 py-4 text-xs leading-5"><span className="text-amber-800">მზადაა {job.ready_count}</span> · <span className="text-emerald-800">დამტკიცდა {job.applied_count}</span><br /><span className="text-hooma-muted">უარი {job.rejected_count} · გამოტოვებული {job.skipped_count} · შეცდომა {job.failed_count}</span></td><td className="px-5 py-4">{["queued", "running"].includes(job.status) ? <form action={cancelCatalogProductAuditJobAction}><input type="hidden" name="job_id" value={job.id} /><button className="inline-flex items-center gap-1 text-xs font-semibold text-red-700"><OctagonX size={14} />გაუქმება</button></form> : "—"}</td></tr>) : <tr><td colSpan={5} className="px-5 py-10 text-center text-hooma-muted">აუდიტი ჯერ არ გაშვებულა.</td></tr>}</tbody></table></div></div>
+
+      <div className="flex justify-end"><AgentProgressAutoRefresh active={hasActiveJobs} /></div>
 
       <BulkApproval jobs={jobs} />
 
