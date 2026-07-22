@@ -858,7 +858,10 @@ async function processAuditItem(job, item) {
     log("Catalog product audit failed", { productId: item.productId, status: failureResult.status, error: message });
     if (failureResult.status !== "failed") return { auditFailed: false };
     if (error?.catalogAuditFatal === true) throw error;
-    return { auditFailed: error?.catalogAuditCountsTowardCircuitBreaker !== false };
+    return {
+      auditFailed: true,
+      countsTowardCircuitBreaker: error?.catalogAuditCountsTowardCircuitBreaker !== false,
+    };
   }
 
   // Persist the paid model result before the first delivery attempt. If the
@@ -898,8 +901,8 @@ async function processAuditJob(job) {
     if (failed?.status === "rejected") throw failed.reason;
     for (const result of results) {
       if (result.status !== "fulfilled") continue;
-      if (result.value?.auditFailed === true) consecutiveModelFailures += 1;
-      else consecutiveModelFailures = 0;
+      if (result.value?.auditFailed !== true) consecutiveModelFailures = 0;
+      else if (result.value?.countsTowardCircuitBreaker !== false) consecutiveModelFailures += 1;
       if (consecutiveModelFailures >= 3) {
         const error = new Error("Catalog audit stopped after 3 consecutive model-output failures; verify the model and schema before restarting.");
         error.catalogAuditFailureThreshold = true;
