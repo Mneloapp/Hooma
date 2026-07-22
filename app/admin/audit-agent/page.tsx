@@ -35,7 +35,7 @@ export default async function AuditAgentPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
       <div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Autonomous catalog quality</p><h1 className="mt-3 text-4xl font-medium">Audit Agent</h1><p className="mt-3 max-w-4xl text-sm leading-6 text-hooma-muted">არსებულ პროდუქტებს ამოწმებს ფოტოებითა და ხელმისაწვდომი რეფერენს-გვერდით, ასწორებს ტექსტს, ზომას, მედიას, ფერებსა და AMS რეჟიმს. სანდო და წინააღმდეგობის გარეშე შედეგი ავტომატურად ინახება; გაურკვეველი შემთხვევა რჩება ხელით გადასამოწმებლად.</p></div>
       <CatalogProductAuditConsole
         agents={(agentResult.data ?? []) as any}
