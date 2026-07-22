@@ -18,7 +18,7 @@ export default async function AuditAgentPage() {
   const items = [...(readyResult.data ?? []), ...(failedResult.data ?? [])] as any[];
   const productIds = Array.from(new Set(items.map((item) => item.product_id).filter(Boolean)));
   const productResult = admin && productIds.length
-    ? await admin.from("products").select("id,slug,product_variants(id,is_active,available_colors,attributes)").in("id", productIds)
+    ? await admin.from("products").select("id,slug,product_sources(source_url),product_variants(id,is_active,available_colors,attributes)").in("id", productIds)
     : { data: [], error: null };
   const products = new Map((productResult.data ?? []).map((product: any) => [product.id, product]));
   const enrichedItems = items.map((item) => {
@@ -31,7 +31,9 @@ export default async function AuditAgentPage() {
     const fixedPalette = Array.isArray(attributes.fixed_color_palette) ? attributes.fixed_color_palette.filter((color: unknown): color is string => typeof color === "string") : [];
     const availableColors = Array.isArray(variant?.available_colors) ? variant.available_colors.filter((color: unknown): color is string => typeof color === "string") : [];
     const fixedMulticolor = attributes.ams_required === true && attributes.color_mode === "fixed_multicolor";
-    return { ...item, product_slug: product?.slug ?? null, color_mode: fixedMulticolor ? "fixed_multicolor" : "customer_choice", available_colors: fixedMulticolor ? fixedPalette : availableColors };
+    const sources = Array.isArray(product?.product_sources) ? product.product_sources : [];
+    const sourceUrl = sources.find((source: any) => typeof source?.source_url === "string" && /^https:\/\//i.test(source.source_url))?.source_url ?? null;
+    return { ...item, product_slug: product?.slug ?? null, source_url: sourceUrl, color_mode: fixedMulticolor ? "fixed_multicolor" : "customer_choice", available_colors: fixedMulticolor ? fixedPalette : availableColors };
   });
 
   return (
