@@ -106,7 +106,7 @@ function responseSchema(imageIds) {
       },
       dimension_confidence: { type: "number", minimum: 0, maximum: 1 },
       color_mode: { type: "string", enum: ["customer_choice", "fixed_multicolor"] },
-      colors: { type: "array", minItems: 1, maxItems: 12, uniqueItems: true, items: { type: "string", enum: allowedColors } },
+      colors: { type: "array", minItems: 1, maxItems: 12, items: { type: "string", enum: allowedColors } },
       color_confidence: { type: "number", minimum: 0, maximum: 1 },
       color_evidence: { type: "string", minLength: 2, maxLength: 500 },
       reference_checked: { type: "boolean" },
@@ -181,14 +181,17 @@ async function requestOpenAi(body, apiKey, timeoutMs) {
 
 export function createProductAuditorFromEnv(env = process.env) {
   const apiKey = clean(env.OPENAI_API_KEY, 500);
-  const model = clean(env.HOOMA_AUDIT_MODEL || "gpt-5.4-mini", 120);
+  const model = clean(env.HOOMA_AUDIT_MODEL || "gpt-5-mini", 120);
+  const maxImages = Math.min(12, Math.max(1, Number(env.HOOMA_AUDIT_MAX_IMAGES) || 4));
+  const referenceEvidenceChars = Math.min(6_000, Math.max(500, Number(env.HOOMA_AUDIT_REFERENCE_CHARS) || 2_000));
+  const maxOutputTokens = Math.min(2_000, Math.max(800, Number(env.HOOMA_AUDIT_MAX_OUTPUT_TOKENS) || 1_200));
   const configuredDetail = clean(env.HOOMA_AUDIT_IMAGE_DETAIL || "low", 20).toLowerCase();
   const detail = supportedDetails.has(configuredDetail) ? configuredDetail : "low";
   const timeoutMs = Math.min(300_000, Math.max(30_000, Number(env.HOOMA_AUDIT_TIMEOUT_MS) || 180_000));
 
   return async function auditProduct(product) {
     if (!apiKey || !apiKey.startsWith("sk-")) throw new Error("OPENAI_API_KEY is required for product audit jobs.");
-    const images = Array.isArray(product?.images) ? product.images.filter((url) => typeof url === "string" && url.startsWith("https://")).slice(0, 12) : [];
+    const images = Array.isArray(product?.images) ? product.images.filter((url) => typeof url === "string" && url.startsWith("https://")).slice(0, maxImages) : [];
     if (!images.length) throw new Error("Product has no HTTPS images for vision audit.");
     const imageRecords = images.map((url, index) => ({ id: `image_${index + 1}`, url }));
     const startedAt = Date.now();
@@ -228,7 +231,7 @@ export function createProductAuditorFromEnv(env = process.env) {
                 current_color_mode: product.variant?.colorMode ?? null,
                 current_colors: product.variant?.colors ?? [],
                 reference_url: clean(product.referenceUrl, 2_000) || null,
-                reference_evidence: clean(product.referenceEvidence, 6_000) || null,
+                reference_evidence: clean(product.referenceEvidence, referenceEvidenceChars) || null,
                 image_ids_in_order: imageRecords.map((image) => image.id),
               },
             }),
@@ -244,7 +247,8 @@ export function createProductAuditorFromEnv(env = process.env) {
           schema: responseSchema(imageRecords.map((image) => image.id)),
         },
       },
-      max_output_tokens: 2_000,
+      reasoning: { effort: "low" },
+      max_output_tokens: maxOutputTokens,
     }, apiKey, timeoutMs);
 
     if (response?.status !== "completed") {

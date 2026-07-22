@@ -25,7 +25,7 @@ This worker has two resumable modes:
 7. For product audits, add an OpenAI Platform API key as `OPENAI_API_KEY`. The key stays on this Windows worker and is sent only to `api.openai.com`.
 8. Run `powershell -ExecutionPolicy Bypass -File .\run.ps1`.
 
-`HOOMA_WORKER_MODE` can be `all`, `import`, or `audit`. For a large existing catalog, set the worker to `audit` so category imports cannot delay the quality audit. Audit-only mode does not launch Chrome; it runs as a lightweight API worker. The default audit concurrency is 2 and can be raised carefully with `HOOMA_AUDIT_CONCURRENCY` according to the API project's rate limits.
+`HOOMA_WORKER_MODE` can be `all`, `import`, or `audit`. For a large existing catalog, set the worker to `audit` so category imports cannot delay the quality audit. Audit-only mode does not launch Chrome; it runs as a lightweight API worker. The default audit concurrency is 2 and can be raised carefully with `HOOMA_AUDIT_CONCURRENCY` according to the API project's rate limits. The cost-optimized defaults use `gpt-5-mini`, low reasoning, up to 4 images, 2,000 reference-evidence characters, and 1,200 output tokens. Override them only when a measured quality test requires it with `HOOMA_AUDIT_MODEL`, `HOOMA_AUDIT_MAX_IMAGES` (1–12), `HOOMA_AUDIT_REFERENCE_CHARS` (500–6,000), or `HOOMA_AUDIT_MAX_OUTPUT_TOKENS` (800–2,000).
 
 In `import` or `all` mode, Chrome opens with a dedicated profile in `.hooma-browser-profile`. Keep this window available to the worker. If the source asks for a normal consent, login, or verification step, complete it in that browser and restart the job. A failed job can be recreated from the Hooma admin page.
 
@@ -45,7 +45,7 @@ MakerWorld may repeatedly request bot verification from an automated Playwright 
 
 1. Admin → Audit Agent creates one audit job for Active, Draft, and/or Archived products.
 2. The worker claims one bounded product snapshot at a time; it never loads the entire catalog into memory. The database seals a permanent attempt immediately before returning that snapshot to the model worker.
-3. Up to 12 public product images, the current copy, and a bounded public-text extract from the allow-listed source reference (when readable) are analyzed with Structured Outputs in at most one OpenAI POST. Cookies, login state, customer data, internal costs, and private admin data are never sent.
+3. Up to 4 public product images by default, the current copy, and a bounded public-text extract from the allow-listed source reference (when readable) are analyzed with Structured Outputs in at most one OpenAI POST. Cookies, login state, customer data, internal costs, and private admin data are never sent.
 4. Every image gets an explicit keep/remove decision, one kept image becomes the proposed hero, and dimensions are always marked approximate. A completed model result is durably spooled before delivery, so a temporary Hooma API/network failure replays that result instead of spending tokens on the same item again.
 5. The model also selects customer-choice colors or a fixed AMS palette from Hooma’s canonical color list and records its evidence/confidence. Warning-free results above the autonomous confidence thresholds are applied automatically; the rest appear in Audit Agent with full manual controls.
 6. For retained exceptions, staff may edit and approve or reject one product, delete an unwanted product through the existing protected catalog-deletion workflow, or approve up to 100 warning-free proposals at 85%+ confidence after typing `APPLY`.
