@@ -10,6 +10,7 @@ import {
   rotateCatalogAgentTokenAction,
   toggleCatalogAgentAction,
 } from "@/app/admin/catalog-agent/actions";
+import { AgentProgressAutoRefresh } from "@/components/admin/AgentProgressAutoRefresh";
 
 type Agent = {
   id: string;
@@ -115,6 +116,7 @@ export function CatalogAgentConsole({
   const activeAgents = agents.filter((agent) => agent.is_active);
   const agentNames = new Map(agents.map((agent) => [agent.id, agent.name]));
   const jobNames = new Map(jobs.map((job) => [job.id, job.category_label]));
+  const hasActiveJobs = jobs.some((job) => ["queued", "running", "paused"].includes(job.status));
 
   return (
     <div className="space-y-6">
@@ -146,7 +148,7 @@ export function CatalogAgentConsole({
       </section>
 
       <section className="overflow-hidden rounded-[1.75rem] bg-white/75 shadow-soft">
-        <div className="p-6"><h2 className="text-xl font-semibold">დავალებების პროგრესი</h2><p className="mt-2 text-sm text-hooma-muted">Worker შეწყვეტის შემდეგ იმავე დაუმუშავებელი პროდუქტიდან აგრძელებს.</p></div>
+        <div className="flex flex-col justify-between gap-3 p-6 sm:flex-row sm:items-start"><div><h2 className="text-xl font-semibold">დავალებების პროგრესი</h2><p className="mt-2 text-sm text-hooma-muted">Worker შეწყვეტის შემდეგ იმავე დაუმუშავებელი პროდუქტიდან აგრძელებს.</p></div><AgentProgressAutoRefresh active={hasActiveJobs} /></div>
         <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-sm"><thead className="bg-hooma-panel text-xs uppercase tracking-[0.12em] text-hooma-muted"><tr><th className="px-5 py-4">დავალება</th><th className="px-5 py-4">სტატუსი</th><th className="px-5 py-4">პროგრესი</th><th className="px-5 py-4">შედეგი</th><th className="px-5 py-4">მართვა</th></tr></thead><tbody className="divide-y divide-hooma-text/10">{jobs.length ? jobs.map((job) => <tr key={job.id}><td className="px-5 py-4"><a href={job.source_url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 font-semibold hover:text-hooma-accent">{job.category_label}<ExternalLink size={13} /></a><span className="block text-xs text-hooma-muted">{job.source_platform} · {agentNames.get(job.agent_id) ?? "Agent"} · ლიმიტი {job.max_products}</span>{job.error_message ? <span className="mt-1 block max-w-md text-xs text-red-700">{job.error_message}</span> : null}</td><td className="px-5 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${job.status === "completed" ? "bg-emerald-100 text-emerald-800" : job.status === "running" ? "bg-sky-100 text-sky-800" : job.status === "failed" ? "bg-red-100 text-red-800" : "bg-hooma-panel text-hooma-muted"}`}>{job.status === "running" ? <Clock3 size={13} /> : job.status === "completed" ? <CheckCircle2 size={13} /> : job.status === "failed" ? <TriangleAlert size={13} /> : null}{jobStatusLabel[job.status] ?? job.status}</span>{job.worker_name ? <span className="mt-1 block text-xs text-hooma-muted">{job.worker_name}</span> : null}</td><td className="px-5 py-4"><span className="font-semibold">{job.processed_count}/{job.discovered_count}</span><div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-hooma-panel"><div className="h-full rounded-full bg-hooma-accent" style={{ width: `${job.discovered_count ? Math.min(100, (job.processed_count / job.discovered_count) * 100) : 0}%` }} /></div></td><td className="px-5 py-4 text-xs leading-5"><span className="text-emerald-800">Draft {job.draft_count}</span> · <span className="text-amber-800">Review {job.review_count}</span><br /><span className="text-hooma-muted">დუბლია {job.duplicate_count} · შეცდომა {job.failed_count}</span></td><td className="px-5 py-4">{["queued", "running", "paused"].includes(job.status) ? <form action={cancelCatalogAgentJobAction}><input type="hidden" name="job_id" value={job.id} /><button className="inline-flex items-center gap-1 text-xs font-semibold text-red-700"><OctagonX size={14} />გაუქმება</button></form> : <span className="text-xs text-hooma-muted">—</span>}</td></tr>) : <tr><td colSpan={5} className="px-5 py-10 text-center text-hooma-muted">დავალებები ჯერ არ შექმნილა.</td></tr>}</tbody></table></div>
       </section>
 
