@@ -4,6 +4,14 @@ const allowedColors = ["თეთრი", "შავი", "ნაცრისფ
 
 const clean = (value, maximum) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, maximum);
 
+export function isCatalogAuditPerProductMediaError(message, code = "") {
+  const normalizedMessage = clean(message, 1_000).toLowerCase();
+  const normalizedCode = clean(code, 120).toLowerCase();
+  return ["invalid_image_url", "image_too_large", "unsupported_image"].includes(normalizedCode)
+    || /error while downloading (?:file|image)/i.test(normalizedMessage)
+    || /(?:failed|unable|could not) to download (?:the )?(?:file|image)/i.test(normalizedMessage);
+}
+
 function outputText(response) {
   if (typeof response?.output_text === "string" && response.output_text.trim()) return response.output_text.trim();
   return (Array.isArray(response?.output) ? response.output : [])
@@ -98,11 +106,15 @@ async function requestOpenAi(body, apiKey, timeoutMs) {
     });
     const payload = await response.json().catch(() => ({}));
     if (response.ok) return payload;
-    const error = new Error(clean(payload?.error?.message, 500) || `OpenAI returned HTTP ${response.status}`);
-    // Provider HTTP failures are normally systemic (credentials, model,
-    // schema, quota, or service state). Stop the job after recording this one
-    // attempted product instead of sealing the same bad request 100,000 times.
-    error.catalogAuditFatal = true;
+    const providerMessage = clean(payload?.error?.message, 500) || `OpenAI returned HTTP ${response.status}`;
+    const error = new Error(providerMessage);
+    // Credentials, model, schema, quota, and service failures are systemic and
+    // stop the job. A provider-side failure to fetch this product's image is
+    // isolated to the sealed item and must not stop the rest of the catalog.
+    const perProductMediaError = isCatalogAuditPerProductMediaError(providerMessage, payload?.error?.code);
+    error.catalogAuditFatal = !perProductMediaError;
+    error.catalogAuditCountsTowardCircuitBreaker = !perProductMediaError;
+    error.catalogAuditPerProductMedia = perProductMediaError;
     error.catalogAuditProviderStatus = response.status;
     throw error;
   } catch (value) {
