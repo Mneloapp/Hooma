@@ -106,7 +106,7 @@ function responseSchema(imageIds) {
       },
       dimension_confidence: { type: "number", minimum: 0, maximum: 1 },
       color_mode: { type: "string", enum: ["customer_choice", "fixed_multicolor"] },
-      colors: { type: "array", minItems: 1, maxItems: 12, uniqueItems: true, items: { type: "string", enum: allowedColors } },
+      colors: { type: "array", minItems: 1, maxItems: 12, items: { type: "string", enum: allowedColors } },
       color_confidence: { type: "number", minimum: 0, maximum: 1 },
       color_evidence: { type: "string", minLength: 2, maxLength: 500 },
       reference_checked: { type: "boolean" },
