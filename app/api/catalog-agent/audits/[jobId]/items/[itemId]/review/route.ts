@@ -234,49 +234,11 @@ export async function POST(
     || (recorded.status !== "gone" && recorded.product_id !== item.product_id)
     || typeof recorded.idempotent !== "boolean"
   ) return NextResponse.json({ ok: false, message: "Audit result recorder returned an invalid response" }, { status: 500 });
-  let finalStatus = recorded.status;
-  let autoApplied = false;
-  let autoApplyMessage: string | null = null;
-  const eligibleForAutomaticApply = recorded.status === "ready"
-    && analysis.warnings.length === 0
-    && analysis.dimensionConfidence >= 0.75
-    && analysis.colorConfidence >= 0.8;
-
-  if (eligibleForAutomaticApply) {
-    const { data: applied, error: applyError } = await context.admin.rpc("apply_catalog_product_audit_item_v4", {
-      actor_profile_id: job.created_by,
-      requested_item_id: item.id,
-      requested_kept_image_urls: keptImages,
-      requested_name_ka: analysis.nameKa,
-      requested_name_en: analysis.nameEn,
-      requested_description_ka: analysis.descriptionKa,
-      requested_description_en: analysis.descriptionEn,
-      requested_available_colors: analysis.colors,
-      requested_color_mode: analysis.colorMode,
-    });
-    if (!applyError && applied?.product_id === item.product_id) {
-      finalStatus = "applied";
-      autoApplied = true;
-      await context.admin.from("audit_log").insert({
-        actor_id: job.created_by,
-        action: "catalog_product_audit_auto_applied",
-        entity_type: "product",
-        entity_id: item.product_id,
-        metadata: {
-          audit_job_id: job.id,
-          audit_item_id: item.id,
-          agent_id: context.agent.id,
-          dimension_confidence: analysis.dimensionConfidence,
-          color_confidence: analysis.colorConfidence,
-          reference_checked: analysis.referenceChecked,
-        },
-      });
-    } else {
-      autoApplyMessage = clean(applyError?.message || "Automatic apply returned an invalid response");
-    }
-  } else if (recorded.status === "ready") {
-    autoApplyMessage = "Result retained for review because confidence is below the autonomous safety threshold or warnings exist";
-  }
+  const finalStatus = recorded.status;
+  const autoApplied = false;
+  const autoApplyMessage = recorded.status === "ready"
+    ? "Manager review and approval are required before changing the product"
+    : null;
 
   return NextResponse.json({
     ok: true,
