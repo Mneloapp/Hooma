@@ -135,6 +135,9 @@ function AuditItemCard({ item }: { item: AuditItem }) {
   const ready = item.status === "ready";
   const confidence = item.confidence === null ? null : Math.round(Number(item.confidence) * 100);
   const currentName = String(before.name_ka || before.name_en || "პროდუქტი");
+  const sourceUrl = typeof before.reference_url === "string" && /^https:\/\//i.test(before.reference_url)
+    ? before.reference_url
+    : null;
   const approvalFormId = `catalog-audit-approval-${item.id}`;
   const computedHero = kept.has(String(suggestion.hero_image_url))
     ? String(suggestion.hero_image_url)
@@ -178,7 +181,10 @@ function AuditItemCard({ item }: { item: AuditItem }) {
           <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{currentName}</h3><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.status === "ready" ? "bg-amber-100 text-amber-900" : item.status === "applied" ? "bg-emerald-100 text-emerald-800" : item.status === "failed" ? "bg-red-100 text-red-800" : "bg-hooma-panel text-hooma-muted"}`}>{auditStatusLabel[item.status] ?? item.status}</span>{confidence !== null ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">სანდოობა {confidence}%</span> : null}</div>
           <p className="mt-1 text-xs text-hooma-muted">{item.model_name || "—"}</p>
         </div>
-        <div className="flex flex-wrap gap-3"><Link href={`/admin/products/${item.product_id}`} className="text-xs font-semibold underline underline-offset-4">ადმინში გახსნა</Link>{item.product_slug ? <Link href={`/product/${item.product_slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-hooma-accent underline underline-offset-4">საჯარო გვერდის შემოწმება<ExternalLink size={13} /></Link> : null}</div>
+        <div className="flex flex-wrap gap-2">
+          {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-hooma-accent/30 bg-hooma-accent/5 px-3 py-2 text-xs font-semibold text-hooma-accent">წყაროს გახსნა<ExternalLink size={13} /></a> : null}
+          <Link href={`/admin/products/${item.product_id}`} className="inline-flex items-center rounded-full border border-hooma-text/15 bg-white px-3 py-2 text-xs font-semibold">ადმინში გახსნა</Link>
+        </div>
       </div>
 
       {ready || item.status === "applied" ? <>
