@@ -71,7 +71,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
 
   let productsQuery = supabase
     ?.from("products")
-    .select("id,slug,hooma_name,name_ka,status,production_status,estimated_print_minutes,material_grams,base_price,categories(slug,name_en,name_ka)", { count: "exact" })
+    .select("id,slug,hooma_name,name_ka,status,production_status,estimated_print_minutes,material_grams,base_price,catalog_audit_completed_at,categories(slug,name_en,name_ka)", { count: "exact" })
     .order("created_at", { ascending: false })
     .order("id", { ascending: true });
   if (q) productsQuery = productsQuery.or(`hooma_name.ilike.%${q}%,name_ka.ilike.%${q}%,slug.ilike.%${q}%`);
@@ -108,6 +108,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
       price: row.base_price === null ? null : Number(row.base_price),
       production: row.production_status,
       status: row.status,
+      auditCompletedAt: row.catalog_audit_completed_at,
     };
   });
   const productLoadError = categoryError ?? counts.error ?? productResponse.error ?? null;
