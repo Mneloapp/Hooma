@@ -130,7 +130,7 @@ export async function POST(
   // The cost-bounded worker may inspect only the first configured image sample.
   // Never remove an image the model did not receive: complete the delivery with
   // conservative keep decisions for every uninspected snapshot image.
-  const completedImageDecisions = snapshotImages.map((url: string) => (
+  const completedImageDecisions: Array<{ url: string; keep: boolean; reason: string }> = snapshotImages.map((url: string) => (
     analysis.imageDecisions.find((decision) => decision.url === url) ?? {
       url,
       keep: true,
