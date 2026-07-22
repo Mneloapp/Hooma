@@ -858,7 +858,7 @@ async function processAuditItem(job, item) {
     log("Catalog product audit failed", { productId: item.productId, status: failureResult.status, error: message });
     if (failureResult.status !== "failed") return { auditFailed: false };
     if (error?.catalogAuditFatal === true) throw error;
-    return { auditFailed: true };
+    return { auditFailed: error?.catalogAuditCountsTowardCircuitBreaker !== false };
   }
 
   // Persist the paid model result before the first delivery attempt. If the
