@@ -160,29 +160,39 @@ test("terminal payment provenance survives rejected -> manual review -> complete
 });
 
 test("stale welcome-unit reservations require an authenticated rejected BOG receipt", () => {
-  const action = readFileSync(
-    new URL("../app/auth/actions.ts", import.meta.url),
+  const checkoutService = readFileSync(
+    new URL("../lib/commerce/catalog-checkout-service.ts", import.meta.url),
     "utf8",
   );
-  assert.match(action, /getBogPaymentDetails\(recoveredProviderId\)/);
-  assert.match(action, /receipt\.status === "rejected"/);
-  assert.match(action, /release_rejected_bog_delivery_reservation_v1/);
+  const recovery = readFileSync(
+    new URL("../lib/payments/bog-stale-recovery.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(checkoutService, /reconcileCustomerCatalogBogAttempts/);
+  assert.match(recovery, /getBogPaymentDetails\(providerOrderId\)/);
+  assert.match(recovery, /receipt\.status === "rejected"/);
+  assert.match(recovery, /release_rejected_bog_delivery_reservation_v1/);
   assert.doesNotMatch(
-    action,
-    /Date\.now\(\) - attemptCreatedAt > 20 \* 60 \* 1000[\s\S]{0,300}resetCheckout: true/,
+    checkoutService,
+    /Date\.now\(\)[\s\S]{0,300}resetCheckout: true/,
     "local age alone must not release a benefit reservation",
   );
 });
 
 test("stale membership sessions reconcile before allowing another charge", () => {
-  const action = readFileSync(
-    new URL("../app/account/hooma-plus/actions.ts", import.meta.url),
+  const checkoutService = readFileSync(
+    new URL("../lib/commerce/hooma-plus-checkout-service.ts", import.meta.url),
     "utf8",
   );
-  assert.match(action, /getBogPaymentDetails\(recoveredProviderId\)/);
-  assert.match(action, /receipt\.status === "rejected"/);
-  assert.match(action, /recover_rejected_bog_hooma_plus_v1/);
-  assert.match(action, /callback-ს ველოდებით\. ხელახლა ნუ გადაიხდი/);
+  const recovery = readFileSync(
+    new URL("../lib/payments/bog-stale-recovery.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(checkoutService, /reconcileCustomerHoomaPlusBogAttempts/);
+  assert.match(recovery, /getBogPaymentDetails\(providerOrderId\)/);
+  assert.match(recovery, /receipt\.status === "rejected"/);
+  assert.match(recovery, /recover_rejected_bog_hooma_plus_v1/);
+  assert.match(checkoutService, /სტატუსს ველოდებით\. ხელახლა ნუ გადაიხდი/);
 });
 
 test("lost browser checkout keys are recovered from customer-scoped attempts", () => {

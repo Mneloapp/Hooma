@@ -253,7 +253,7 @@ export async function getStorefrontProductBySlug(slug: string): Promise<Product 
   const [{ data: row }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
     admin
       .from("products")
-      .select("id,slug,hooma_name,name_ka,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,sale_price,delivery_estimate,lead_time_business_days,estimated_print_minutes,catalog_audit_applied_at")
+      .select("id,slug,hooma_name,name_ka,short_description,short_description_ka,long_description,safety_notes,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,sale_price,delivery_estimate,lead_time_business_days,estimated_print_minutes,catalog_audit_applied_at")
       .eq("id", card.id)
       .eq("status", "active")
       .eq("production_status", "approved")
@@ -316,6 +316,7 @@ export async function getStorefrontProductBySlug(slug: string): Promise<Product 
     shortDescription: row.short_description || "Made on demand by Hooma.",
     shortDescriptionKa: row.short_description_ka || row.short_description || "პროდუქტი მზადდება შეკვეთის შემდეგ.",
     longDescription: row.long_description || row.short_description || "",
+    safetyNotes: row.safety_notes || undefined,
     heroImage,
     galleryImages: galleryImages.length ? galleryImages : [heroImage],
     videoUrl: safeCatalogVideo(row.video_url),

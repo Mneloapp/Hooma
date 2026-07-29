@@ -104,6 +104,22 @@ export function getBogReturnUrls(orderId: string) {
   };
 }
 
+export function getBogMobileReturnUrls(orderId: string) {
+  const origin = canonicalOrigin();
+  if (!origin) throw new BogPaymentError("NEXT_PUBLIC_SITE_URL must be a canonical HTTPS origin");
+  const success = new URL("/mobile/payment/result", origin);
+  success.searchParams.set("order", orderId);
+  success.searchParams.set("return", "success");
+  const fail = new URL("/mobile/payment/result", origin);
+  fail.searchParams.set("order", orderId);
+  fail.searchParams.set("return", "fail");
+  return {
+    callbackUrl: new URL("/api/payments/bog/callback", origin).toString(),
+    successUrl: success.toString(),
+    failUrl: fail.toString(),
+  };
+}
+
 export function getBogHoomaPlusReturnUrls(purchaseId: string) {
   const origin = canonicalOrigin();
   if (!origin) throw new BogPaymentError("NEXT_PUBLIC_SITE_URL must be a canonical HTTPS origin");
@@ -111,6 +127,22 @@ export function getBogHoomaPlusReturnUrls(purchaseId: string) {
   success.searchParams.set("purchase", purchaseId);
   success.searchParams.set("return", "success");
   const fail = new URL("/account/hooma-plus/result", origin);
+  fail.searchParams.set("purchase", purchaseId);
+  fail.searchParams.set("return", "fail");
+  return {
+    callbackUrl: new URL("/api/payments/bog/hooma-plus/callback", origin).toString(),
+    successUrl: success.toString(),
+    failUrl: fail.toString(),
+  };
+}
+
+export function getBogMobileHoomaPlusReturnUrls(purchaseId: string) {
+  const origin = canonicalOrigin();
+  if (!origin) throw new BogPaymentError("NEXT_PUBLIC_SITE_URL must be a canonical HTTPS origin");
+  const success = new URL("/mobile/hooma-plus/result", origin);
+  success.searchParams.set("purchase", purchaseId);
+  success.searchParams.set("return", "success");
+  const fail = new URL("/mobile/hooma-plus/result", origin);
   fail.searchParams.set("purchase", purchaseId);
   fail.searchParams.set("return", "fail");
   return {

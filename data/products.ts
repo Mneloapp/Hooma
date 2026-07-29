@@ -41,6 +41,7 @@ export type Product = {
   shortDescription: string;
   shortDescriptionKa: string;
   longDescription: string;
+  safetyNotes?: string;
   heroImage: string;
   galleryImages: string[];
   videoUrl?: string;
@@ -116,6 +117,7 @@ const product = ({
   shortDescription,
   shortDescriptionKa,
   longDescription: `${hoomaName} is a preview product concept prepared for the new Hooma catalog. Final specifications, source rights, print profile, and price must be approved in the admin panel before launch.`,
+  safetyNotes: "Use only for the intended purpose. Keep away from high heat.",
   heroImage: image,
   galleryImages: [image],
   variants: [

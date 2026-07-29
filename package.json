@@ -2,6 +2,7 @@
   "name": "hooma-store",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,11 +10,19 @@
     "db:push:dry-run": "supabase db push --linked --dry-run",
     "db:push": "supabase db push --linked",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint app components data lib middleware.ts",
     "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs",
     "test:audit-launch": "node --test tools/catalog-audit-launch-rules.test.mjs",
     "test:payments": "node --experimental-strip-types --test tools/bog-payment-rules.test.mjs",
-    "test:hooma-plus": "node --experimental-strip-types --test tools/hooma-plus-rules.test.mjs"
+    "test:hooma-plus": "node --experimental-strip-types --test tools/hooma-plus-rules.test.mjs",
+    "test:mobile-api": "node --experimental-strip-types --test tools/mobile-api-authorization.test.mjs",
+    "mobile:start": "pnpm --dir apps/mobile start",
+    "mobile:android": "pnpm --dir apps/mobile android",
+    "mobile:ios": "pnpm --dir apps/mobile ios",
+    "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
+    "mobile:lint": "pnpm --dir apps/mobile lint",
+    "mobile:test": "pnpm --dir apps/mobile test",
+    "mobile:doctor": "pnpm --dir apps/mobile doctor"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -25,10 +34,13 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "15.5.20",
     "postcss": "^8.4.49",
     "supabase": "^2.109.1",
     "tailwindcss": "^3.4.17",
