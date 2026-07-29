@@ -44,6 +44,7 @@ Do not submit or publish without explicit CEO approval.
 
 - [ ] APNs configured in EAS.
 - [ ] FCM V1 configured in EAS.
+- [ ] Five-minute production push scheduling enabled through Vercel or an approved external scheduler.
 - [ ] Order-received, payment-confirmed, production, quality, ready, courier, delivered and Hooma+ expiry events tested.
 - [ ] DeviceNotRegistered tokens are disabled.
 - [ ] `apple-app-site-association` returns the production App ID.

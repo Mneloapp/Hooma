@@ -122,6 +122,13 @@ Infrastructure:
 - `GET /mobile/payment/result`
 - `GET /mobile/hooma-plus/result`
 
+The checked-in Vercel schedule invokes mobile push once daily at `20:05 UTC`, which
+keeps preview/production deployments compatible with the project's current Vercel
+Cron plan. Before production push launch, either upgrade Vercel and change the
+schedule to `*/5 * * * *`, or invoke the same protected endpoint every five
+minutes from an approved scheduler. Until then, notifications remain immediately
+available in the in-app inbox, while OS push delivery may be delayed.
+
 ## Migration
 
 Apply only:
@@ -313,6 +320,8 @@ No BOG, OpenAI, service-role, Apple private, APNs or FCM secret may use an `EXPO
 - This Mac needs Android Studio, JDK 17 and the Android SDK for a local Android compile, or the EAS development profile.
 - Apple Developer membership/device registration is required for a physical iPhone build.
 - APNs and FCM V1 credentials are required for production push.
+- Near-real-time OS push requires a Vercel plan that permits a five-minute cron
+  schedule, or an approved external scheduler calling the protected endpoint.
 - Supabase redirect allow-list and Apple provider configuration require Dashboard access.
 - The universal/app association environment values require Vercel deployment.
 - Live BOG and Hooma+ flags intentionally remain disabled pending separate CEO approval.

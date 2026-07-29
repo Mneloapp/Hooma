@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/mobile-push",
-      "schedule": "*/5 * * * *"
+      "schedule": "5 20 * * *"
     }
   ]
 }
