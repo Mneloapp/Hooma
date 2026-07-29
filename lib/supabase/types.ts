@@ -46,6 +46,8 @@ export type OrderRow = {
   payment_status: PaymentStatus;
   subtotal: number;
   delivery_fee: number;
+  delivery_benefit_code: "hooma_plus" | "subtotal_threshold" | "welcome_units" | "standard_fee" | "legacy_free";
+  delivery_pricing_snapshot: Record<string, unknown>;
   total: number;
   delivery_address: Record<string, unknown> | null;
   notes: string | null;

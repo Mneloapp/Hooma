@@ -8,6 +8,7 @@ import { useLanguage } from "@/components/LanguageProvider";
 
 const links = [
   ["/account", "მიმოხილვა", "Overview"],
+  ["/account/hooma-plus", "Hooma+", "Hooma+"],
   ["/account/orders", "შეკვეთები", "Orders"],
   ["/account/custom-orders", "ინდივიდუალური მოთხოვნები", "Custom requests"],
   ["/account/addresses", "მისამართები", "Addresses"],

@@ -39,6 +39,7 @@ export function Header() {
   ];
   const deliveryCityLabel = deliveryCities.find(([value]) => value === deliveryCity)?.[georgian ? 1 : 2] ?? deliveryCity;
   const utilityLinks = [
+    ["Hooma+", "/hooma-plus"],
     [georgian ? "დღის შეთავაზებები" : "Daily deals", "/deals"],
     [georgian ? "როგორ შევუკვეთოთ?" : "How to order", "/how-it-works"],
     [georgian ? "შეკვეთის ტრეკინგი" : "Order tracking", "/account/orders"],
@@ -142,7 +143,7 @@ export function Header() {
             {open ? <X size={18} /> : <Menu size={18} />}{georgian ? "ყველა კატეგორია" : "All categories"}
           </button>
           <button type="button" onClick={() => setLocationOpen(true)} className="flex h-full shrink-0 items-center gap-1.5 px-2.5 transition hover:bg-white/10 xl:hidden"><MapPin size={14} className="text-hooma-secondary" />{deliveryCityLabel}</button>
-          {utilityLinks.map(([label, href], index) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${index === 0 ? "font-semibold text-hooma-secondary" : ""}`}>{label}</Link>)}
+          {utilityLinks.map(([label, href]) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${href === "/hooma-plus" || href === "/deals" ? "font-semibold text-hooma-secondary" : ""}`}>{label}</Link>)}
           <span className="ml-auto hidden shrink-0 text-xs text-white/65 xl:block">{georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery"}</span>
         </div>
       </div>
@@ -178,7 +179,7 @@ export function Header() {
                 <h3 className="font-semibold">{georgian ? "დახმარება და პარამეტრები" : "Help and settings"}</h3>
                 <div className="mt-3 grid gap-3 text-sm text-hooma-muted">
                   <button type="button" onClick={() => { setOpen(false); setLocationOpen(true); }} className="flex items-center gap-2 text-left hover:text-hooma-accent"><MapPin size={15} />{georgian ? "მიწოდების ქალაქი" : "Delivery city"}: {deliveryCityLabel}</button>
-                  {utilityLinks.slice(1, 3).map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="hover:text-hooma-accent">{label}</Link>)}
+                  {utilityLinks.slice(0, 3).map(([label, href]) => <Link key={label} href={href} onClick={() => setOpen(false)} className="hover:text-hooma-accent">{label}</Link>)}
                   <div className="pt-2"><LanguageToggle /></div>
                 </div>
               </div>

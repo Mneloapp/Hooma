@@ -1,6 +1,7 @@
 # BOG full-payment checkout
 
-Hooma V1 uses Bank of Georgia hosted checkout for normal catalog orders only.
+Hooma V1 uses Bank of Georgia hosted checkout for normal catalog orders and
+prepaid Hooma+ membership purchases.
 
 ## Commercial scope
 
@@ -11,7 +12,9 @@ Hooma V1 uses Bank of Georgia hosted checkout for normal catalog orders only.
 - No installment (`bog_loan`)
 - No BNPL
 - No split payment
-- No saved cards or recurring/subscription payments
+- No saved cards or recurring/automatic subscription charges
+- Hooma+ is a one-time prepaid purchase for one month or one year and renews
+  only when the customer explicitly pays again
 - No preauthorization
 - No custom-quote payment flow in this version
 
@@ -25,6 +28,7 @@ Set these server-side variables in Vercel for the intended environment:
 ```text
 NEXT_PUBLIC_SITE_URL=https://hooma.ge
 BOG_PAYMENTS_ENABLED=false
+HOOMA_PLUS_PAYMENTS_ENABLED=false
 BOG_CLIENT_ID=<bank-issued client id>
 BOG_CLIENT_SECRET=<bank-issued secret>
 BOG_PAYMENT_METHODS=card
@@ -44,6 +48,7 @@ Callback URL registered/sent to BOG:
 
 ```text
 https://hooma.ge/api/payments/bog/callback
+https://hooma.ge/api/payments/bog/hooma-plus/callback
 ```
 
 The implementation uses BOG's published production API origins. The public
@@ -53,9 +58,10 @@ credentials and the approved test procedure directly from BOG.
 ## State and trust flow
 
 1. The signed-in customer submits delivery data and a stable checkout UUID.
-2. `begin_bog_checkout_v1` locks that UUID, rechecks catalog visibility and
-   server pricing, then atomically creates the real order, item snapshots, and
-   BOG payment attempt.
+2. `begin_bog_checkout_v2` locks that UUID, rechecks catalog visibility,
+   server pricing, Hooma+ status, welcome-unit balance and delivery pricing,
+   then atomically creates the real order, item snapshots, benefit reservation,
+   and BOG payment attempt.
 3. The payment-attempt UUID becomes BOG's `external_order_id`; the checkout UUID
    becomes BOG's `Idempotency-Key`.
 4. Hooma requests an automatic full-charge order and redirects only to the
@@ -71,6 +77,28 @@ credentials and the approved test procedure directly from BOG.
    method all match.
 9. Payment does not create print jobs. The existing human production approval
    remains mandatory.
+
+Hooma+ uses separate purchase, payment-attempt, period, and event tables so a
+membership payment can never enter physical production, catalog order
+notifications, or product-sales accounting. Its callback performs the same raw
+signature and fresh-receipt checks. A successful one-time payment activates a
+calendar-month or calendar-year period; an active renewal extends from the
+current expiry.
+
+## Delivery policy
+
+The database snapshots the rule and fee before BOG payment creation:
+
+1. Active Hooma+ member: free standard catalog delivery.
+2. Product subtotal strictly above GEL 100: free delivery.
+3. If the complete cart's unit count fits inside the customer's remaining first
+   10 welcome units: free delivery and those units are reserved.
+4. Otherwise: GEL 5 per catalog order.
+
+Welcome units are consumed only by the signed paid callback. A failed payment
+releases them. Hooma+ and the subtotal threshold do not consume welcome units.
+The BOG payload uses `purchase_units.delivery.amount` for a paid delivery fee,
+so the basket plus delivery exactly equals the authoritative order total.
 
 Callback events are deduplicated by both the signed raw-body SHA-256 and a
 normalized fresh-receipt state SHA-256. This allows an unchanged callback retry
@@ -114,6 +142,8 @@ BOG_PAYMENT_METHODS=card,google_pay,apple_pay
 ```
 
 Finally set `BOG_PAYMENTS_ENABLED=true` and redeploy.
+Set `HOOMA_PLUS_PAYMENTS_ENABLED=true` only after the separate Hooma+ callback
+has also passed BOG acceptance testing.
 
 ## Pre-live checks
 

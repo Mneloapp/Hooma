@@ -25,7 +25,7 @@ export default async function PaymentResultPage({
   const { data: order } = supabase && uuidPattern.test(orderId)
     ? await supabase
       .from("orders")
-      .select("id,tracking_code,payment_status,total,test_mode")
+      .select("id,tracking_code,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,test_mode")
       .eq("id", orderId)
       .eq("test_mode", false)
       .maybeSingle()
@@ -94,6 +94,11 @@ export default async function PaymentResultPage({
         <p className="mt-4 leading-7 text-hooma-muted"><LocalizedText ka={state.bodyKa} en={state.bodyEn} /></p>
         <PaymentResultAutoRefresh settled={settled} paid={paid} failed={failed} refunded={refunded} />
         <p className="mt-5 text-2xl font-semibold">{money.format(Number(order.total ?? 0))}</p>
+        <p className="mt-2 text-xs text-hooma-muted">
+          <LocalizedText ka="პროდუქტები" en="Products" /> {money.format(Number(order.subtotal ?? 0))}
+          {" · "}
+          <LocalizedText ka="მიწოდება" en="Delivery" /> {Number(order.delivery_fee ?? 0) === 0 ? <LocalizedText ka="უფასო" en="Free" /> : money.format(Number(order.delivery_fee))}
+        </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link href="/account/orders" className="rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="შეკვეთების ნახვა" en="View orders" /></Link>
           {failed

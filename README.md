@@ -31,6 +31,7 @@ OPENAI_API_KEY=
 HOOMA_ASSISTANT_MODEL=gpt-5-mini
 HOOMA_ASSISTANT_RATE_LIMIT_SECRET=
 BOG_PAYMENTS_ENABLED=false
+HOOMA_PLUS_PAYMENTS_ENABLED=false
 BOG_CLIENT_ID=
 BOG_CLIENT_SECRET=
 BOG_PAYMENT_METHODS=card
@@ -42,7 +43,7 @@ BOG_CALLBACK_PUBLIC_KEY=
 `CRON_SECRET` protects the daily-deal rotation endpoint. See `docs/daily-deals.md` for the 100-product, 50%-off rotation rules.
 `GOOGLE_CLOUD_TRANSLATION_API_KEY` is also server-only. It enables authenticated Catalog Clipper imports to translate product names and descriptions into Georgian through the [Cloud Translation API](https://cloud.google.com/translate); never add it to the extension or a `NEXT_PUBLIC_` variable. Hooma's admin import UI identifies automatic results as powered by Google Translate and requires operator review before publication.
 `OPENAI_API_KEY` is server-only and enables non-template storefront-assistant answers. Common approved FAQ answers remain available without a model call. `HOOMA_ASSISTANT_MODEL` defaults to `gpt-5-mini`; use a separate OpenAI project/key and project spend limit for the public assistant. `HOOMA_ASSISTANT_RATE_LIMIT_SECRET` is optional but recommended so rate-limit identifiers remain independent from API-key rotation.
-`BOG_CLIENT_ID` and `BOG_CLIENT_SECRET` are server-only. New live payment sessions remain fail-closed until `BOG_PAYMENTS_ENABLED=true`; start with `BOG_PAYMENT_METHODS=card` and add wallets only after bank activation. See `docs/bog-payments.md` for rollout, callback security, and incident steps.
+`BOG_CLIENT_ID` and `BOG_CLIENT_SECRET` are server-only. New live payment sessions remain fail-closed until `BOG_PAYMENTS_ENABLED=true`; Hooma+ also requires its independent `HOOMA_PLUS_PAYMENTS_ENABLED=true` switch. Start with `BOG_PAYMENT_METHODS=card` and add wallets only after bank activation. See `docs/bog-payments.md` for rollout, callback security, delivery pricing, and incident steps.
 
 Apply Supabase migrations in chronological order from `supabase/migrations`.
 
@@ -51,6 +52,7 @@ Apply Supabase migrations in chronological order from `supabase/migrations`.
 - New 3D-print product category tree
 - Georgian-first storefront and catalog preview
 - Cart and BOG hosted full-payment checkout
+- Server-authoritative delivery fees, first-10-unit benefit, and prepaid Hooma+
 - Admin import inbox and production queue
 - Authenticated custom-part file upload and individual quote workflow
 - Admin-only manual product Draft creation, material/time costing, margin calculator, and universal Catalog Clipper JSON import

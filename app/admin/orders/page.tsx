@@ -12,6 +12,9 @@ type Order = {
   guest_email: string | null;
   guest_phone: string | null;
   payment_status: string;
+  subtotal: number | string | null;
+  delivery_fee: number | string | null;
+  delivery_benefit_code: string;
   total: number | string | null;
   delivery_address: Record<string, unknown> | null;
   fulfillment_status: string;
@@ -55,7 +58,7 @@ export default async function AdminOrdersPage() {
 
   const { data: orderRows, error: orderError } = admin ? await admin
     .from("orders")
-    .select("id,customer_id,guest_email,guest_phone,payment_status,total,delivery_address,fulfillment_status,tracking_code,test_mode,created_at")
+    .select("id,customer_id,guest_email,guest_phone,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,delivery_address,fulfillment_status,tracking_code,test_mode,created_at")
     .order("created_at", { ascending: false })
     .limit(500) : { data: [], error: null };
   const orders = (orderRows ?? []) as Order[];
@@ -94,6 +97,9 @@ export default async function AdminOrdersPage() {
       id: order.id,
       label: `#${order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}`,
       fulfillmentStatus: order.fulfillment_status,
+      subtotal: Number(order.subtotal ?? 0),
+      deliveryFee: Number(order.delivery_fee ?? 0),
+      deliveryBenefitCode: order.delivery_benefit_code,
       total: Number(order.total ?? 0),
       createdAtLabel: dateFormat.format(new Date(order.created_at)),
       customerName: customer?.full_name || String(order.delivery_address?.full_name ?? "მომხმარებელი"),

@@ -6,6 +6,7 @@ export type StorefrontAssistantAction =
   | "shop"
   | "custom_order"
   | "orders"
+  | "hooma_plus"
   | "how_it_works"
   | "faq"
   | "privacy"

@@ -11,6 +11,9 @@ type Order = {
   tracking_code: string | null;
   status: string;
   payment_status: string;
+  subtotal: number | string | null;
+  delivery_fee: number | string | null;
+  delivery_benefit_code: string;
   total: number | string | null;
   fulfillment_status: string;
   promised_at: string | null;
@@ -74,7 +77,7 @@ export default async function AccountOrdersPage() {
   const { data: orderRows, error: orderError } = supabase
     ? await supabase
       .from("orders")
-      .select("id,tracking_code,status,payment_status,total,fulfillment_status,promised_at,delivery_address,test_mode,created_at")
+      .select("id,tracking_code,status,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,fulfillment_status,promised_at,delivery_address,test_mode,created_at")
       .order("created_at", { ascending: false })
       .limit(50)
     : { data: [], error: null };
@@ -118,7 +121,18 @@ export default async function AccountOrdersPage() {
           <article key={order.id} className="overflow-hidden rounded-[2rem] border border-hooma-text/10 bg-white/75 shadow-soft">
             <div className="flex flex-col justify-between gap-4 border-b border-hooma-text/10 p-5 sm:flex-row sm:items-start lg:p-6">
               <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={cancelled ? "შეკვეთა გაუქმებულია" : !paymentReady ? paymentTitle[0] : stages[currentStage][0]} en={cancelled ? "Order cancelled" : !paymentReady ? paymentTitle[1] : stages[currentStage][1]} /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
-              <div className="text-left sm:text-right"><p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p><p className="mt-1 text-xs text-hooma-muted"><LocalizedText ka={order.test_mode ? "სატესტო შეკვეთა — თანხა არ ჩამოგეჭრება" : order.payment_status === "paid" ? "გადახდილია" : order.payment_status === "failed" ? "გადახდა ვერ დასრულდა" : reviewRequired ? "დამატებითი შემოწმება მიმდინარეობს" : order.payment_status === "refunded" ? "თანხა დაბრუნებულია" : "გადახდას ელოდება"} en={order.test_mode ? "Test order — you will not be charged" : order.payment_status === "paid" ? "Paid" : order.payment_status === "failed" ? "Payment failed" : reviewRequired ? "Additional review in progress" : order.payment_status === "refunded" ? "Refunded" : "Awaiting payment"} /></p></div>
+              <div className="text-left sm:text-right">
+                <p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p>
+                <p className="mt-1 text-xs text-hooma-muted"><LocalizedText ka={order.test_mode ? "სატესტო შეკვეთა — თანხა არ ჩამოგეჭრება" : order.payment_status === "paid" ? "გადახდილია" : order.payment_status === "failed" ? "გადახდა ვერ დასრულდა" : reviewRequired ? "დამატებითი შემოწმება მიმდინარეობს" : order.payment_status === "refunded" ? "თანხა დაბრუნებულია" : "გადახდას ელოდება"} en={order.test_mode ? "Test order — you will not be charged" : order.payment_status === "paid" ? "Paid" : order.payment_status === "failed" ? "Payment failed" : reviewRequired ? "Additional review in progress" : order.payment_status === "refunded" ? "Refunded" : "Awaiting payment"} /></p>
+                <div className="mt-3 space-y-1 text-xs text-hooma-muted">
+                  <p><LocalizedText ka="პროდუქტები" en="Products" />: {money.format(Number(order.subtotal ?? 0))}</p>
+                  <p><LocalizedText ka="მიწოდება" en="Delivery" />: {Number(order.delivery_fee ?? 0) === 0 ? <LocalizedText ka="უფასო" en="Free" /> : money.format(Number(order.delivery_fee))}</p>
+                  <p className="font-medium text-hooma-text"><LocalizedText
+                    ka={order.delivery_benefit_code === "hooma_plus" ? "Hooma+ ბენეფიტი" : order.delivery_benefit_code === "subtotal_threshold" ? "100₾-ზე მეტი" : order.delivery_benefit_code === "welcome_units" ? "პირველი 10 ერთეული" : order.delivery_benefit_code === "standard_fee" ? "სტანდარტული ტარიფი" : "ძველი უფასო პირობა"}
+                    en={order.delivery_benefit_code === "hooma_plus" ? "Hooma+ benefit" : order.delivery_benefit_code === "subtotal_threshold" ? "Over ₾100" : order.delivery_benefit_code === "welcome_units" ? "First 10 units" : order.delivery_benefit_code === "standard_fee" ? "Standard rate" : "Legacy free condition"}
+                  /></p>
+                </div>
+              </div>
             </div>
 
             {!cancelled && paymentReady ? (

@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { CreditCard, ExternalLink, LockKeyhole, MapPin } from "lucide-react";
+import { CreditCard, ExternalLink, LockKeyhole, MapPin, Sparkles, Truck } from "lucide-react";
 import { Button } from "@/components/Button";
 import { useCart } from "@/components/CartContext";
 import { createOrderAction } from "@/app/auth/actions";
 import { useLanguage } from "@/components/LanguageProvider";
+import {
+  quoteCatalogDelivery,
+  type HoomaPlusSummary,
+} from "@/lib/commerce/hooma-plus";
 import {
   clearCheckoutPaymentSession,
   getOrCreateCheckoutKey,
@@ -24,17 +28,33 @@ type CheckoutFormProps = {
   initialValues: CheckoutInitialValues;
   paymentAvailable: boolean;
   paymentMethods: string[];
+  deliveryRulesReady: boolean;
+  deliverySummary: HoomaPlusSummary;
 };
 
-const money = new Intl.NumberFormat("ka-GE", {
+const moneyKa = new Intl.NumberFormat("ka-GE", {
   style: "currency",
   currency: "GEL",
+  currencyDisplay: "narrowSymbol",
+  minimumFractionDigits: 2,
+});
+const moneyEn = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GEL",
+  currencyDisplay: "narrowSymbol",
   minimumFractionDigits: 2,
 });
 
-export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }: CheckoutFormProps) {
+export function CheckoutForm({
+  initialValues,
+  paymentAvailable,
+  paymentMethods,
+  deliveryRulesReady,
+  deliverySummary,
+}: CheckoutFormProps) {
   const { language } = useLanguage();
   const georgian = language === "ka";
+  const money = georgian ? moneyKa : moneyEn;
   const { items } = useCart();
   const [message, setMessage] = useState("");
   const [city, setCity] = useState(initialValues.city);
@@ -50,6 +70,16 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
   const subtotal = pricesComplete
     ? items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
     : 0;
+  const subtotalMinor = pricesComplete ? Math.round(subtotal * 100) : 0;
+  const unitCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const deliveryQuote = quoteCatalogDelivery({
+    subtotalMinor,
+    unitCount,
+    summary: deliverySummary,
+  });
+  const total = deliveryQuote.totalMinor / 100;
+  const delivery = deliveryQuote.deliveryMinor / 100;
+  const checkoutAvailable = paymentAvailable && deliveryRulesReady;
 
   useEffect(() => {
     if (initialValues.city) return;
@@ -65,10 +95,14 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
   }
 
   function submit(formData: FormData) {
-    if (!paymentAvailable) {
-      setMessage(georgian
-        ? "BOG ონლაინ გადახდა დროებით მიუწვდომელია. თანხა არ ჩამოგეჭრება."
-        : "BOG online payment is temporarily unavailable. You will not be charged.");
+    if (!checkoutAvailable) {
+      setMessage(!deliveryRulesReady
+        ? georgian
+          ? "მიწოდების პირობები ჯერ არ არის სინქრონიზებული. თანხა არ ჩამოგეჭრება."
+          : "Delivery terms are not synchronized yet. You will not be charged."
+        : georgian
+          ? "BOG ონლაინ გადახდა დროებით მიუწვდომელია. თანხა არ ჩამოგეჭრება."
+          : "BOG online payment is temporarily unavailable. You will not be charged.");
       return;
     }
     const payloadWithoutKey = {
@@ -83,7 +117,7 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
       longitude: String(formData.get("longitude") ?? ""),
       notes: String(formData.get("notes") ?? ""),
       language,
-      expected_total_minor: pricesComplete ? Math.round(subtotal * 100) : null,
+      expected_total_minor: pricesComplete ? deliveryQuote.totalMinor : null,
       items,
     };
     const paymentFingerprint = JSON.stringify({
@@ -97,7 +131,6 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
       latitude: payloadWithoutKey.latitude,
       longitude: payloadWithoutKey.longitude,
       notes: payloadWithoutKey.notes,
-      expected_total_minor: payloadWithoutKey.expected_total_minor,
       items: items.map((item) => ({
         product_id: item.product_id,
         variant_id: item.variant_id,
@@ -142,20 +175,22 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
           <h1 className="mt-3 text-3xl font-medium">{georgian ? "შეკვეთის გაფორმება" : "Complete your order"}</h1>
           <p className="mt-3 text-hooma-muted">{georgian ? "სრული თანხა გადაიხდება საქართველოს ბანკის (BOG) უსაფრთხო გვერდზე. განვადება და თანხის გაყოფა არ გამოიყენება; წარმოებას გადახდის დადასტურების შემდეგ ოპერატორი ამოწმებს." : "The full amount is paid on Bank of Georgia’s (BOG) secure page. Installments and split payments are not used; an operator reviews the order after payment confirmation."}</p>
         </div>
-        <div className={`rounded-2xl border p-4 text-sm ${paymentAvailable ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+        <div className={`rounded-2xl border p-4 text-sm ${checkoutAvailable ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
           <div className="flex items-start gap-3">
-            {paymentAvailable ? <LockKeyhole className="mt-0.5 shrink-0" size={18} /> : <CreditCard className="mt-0.5 shrink-0" size={18} />}
+            {checkoutAvailable ? <LockKeyhole className="mt-0.5 shrink-0" size={18} /> : <CreditCard className="mt-0.5 shrink-0" size={18} />}
             <div>
-              <p className="font-semibold">{paymentAvailable ? (georgian ? "საქართველოს ბანკით სრული გადახდა" : "Bank of Georgia full payment") : (georgian ? "გადახდა დროებით მიუწვდომელია" : "Payment temporarily unavailable")}</p>
-              <p className="mt-1 leading-6">{paymentAvailable
+              <p className="font-semibold">{checkoutAvailable ? (georgian ? "საქართველოს ბანკით სრული გადახდა" : "Bank of Georgia full payment") : (georgian ? "გადახდა დროებით მიუწვდომელია" : "Payment temporarily unavailable")}</p>
+              <p className="mt-1 leading-6">{checkoutAvailable
                 ? (georgian
                   ? `ხელმისაწვდომია: ${paymentMethods.map((method) => method === "card" ? "ბარათი" : method === "apple_pay" ? "Apple Pay" : "Google Pay").join(", ")}. ბარათის სრული მონაცემები Hooma-ში არ ინახება.`
                   : `Available: ${paymentMethods.map((method) => method === "card" ? "Card" : method === "apple_pay" ? "Apple Pay" : "Google Pay").join(", ")}. Hooma does not store full card details.`)
-                : (georgian ? "შეკვეთას ვერ გააგზავნი და თანხა არ ჩამოგეჭრება, სანამ საბანკო კავშირი არ გააქტიურდება." : "The order cannot be submitted and you will not be charged until the bank connection is activated.")}</p>
+                : !deliveryRulesReady
+                  ? (georgian ? "მიწოდების ახალი წესების migration ჯერ არ არის გააქტიურებული." : "The new delivery-rules migration is not active yet.")
+                  : (georgian ? "შეკვეთას ვერ გააგზავნი და თანხა არ ჩამოგეჭრება, სანამ საბანკო კავშირი არ გააქტიურდება." : "The order cannot be submitted and you will not be charged until the bank connection is activated.")}</p>
             </div>
           </div>
         </div>
-        <fieldset disabled={!paymentAvailable || isPending} className="space-y-5 disabled:opacity-60">
+        <fieldset disabled={!checkoutAvailable || isPending} className="space-y-5 disabled:opacity-60">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium">{georgian ? "სახელი და გვარი" : "Full name"}<input name="full_name" autoComplete="name" required defaultValue={initialValues.fullName} className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
             <label className="block text-sm font-medium">{georgian ? "ტელეფონი" : "Phone"}<input name="guest_phone" type="tel" autoComplete="tel" required defaultValue={initialValues.phone} className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
@@ -169,7 +204,7 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
           <label className="block text-sm font-medium">{georgian ? "შენიშვნა" : "Notes"}<textarea name="notes" rows={4} className="mt-2 w-full rounded-[1.5rem] border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
         </fieldset>
         {message ? <p role="alert" aria-live="polite" className="rounded-2xl bg-hooma-panel p-4 text-sm text-hooma-text">{message}</p> : null}
-        <Button className="w-full" disabled={!items.length || !pricesComplete || isPending || !paymentAvailable}>{isPending ? (georgian ? "გადახდა მზადდება..." : "Preparing payment...") : pricesComplete ? (georgian ? `${money.format(subtotal)} — სრული თანხის გადახდა` : `Pay ${money.format(subtotal)} in full`) : (georgian ? "ფასი გადასამოწმებელია" : "Price requires review")}</Button>
+        <Button className="w-full" disabled={!items.length || !pricesComplete || isPending || !checkoutAvailable}>{isPending ? (georgian ? "გადახდა მზადდება..." : "Preparing payment...") : pricesComplete ? (georgian ? `${money.format(total)} — სრული თანხის გადახდა` : `Pay ${money.format(total)} in full`) : (georgian ? "ფასი გადასამოწმებელია" : "Price requires review")}</Button>
       </form>
       <aside className="order-1 h-fit rounded-[2rem] bg-white/75 p-6 shadow-soft lg:order-2 lg:sticky lg:top-24">
         <h2 className="text-xl font-medium">{georgian ? "შეკვეთის შეჯამება" : "Order summary"}</h2>
@@ -185,11 +220,53 @@ export function CheckoutForm({ initialValues, paymentAvailable, paymentMethods }
             </div>
           )) : <p className="text-sm text-hooma-muted">{georgian ? "კალათა ცარიელია." : "Your cart is empty."}</p>}
         </div>
+        {items.length && pricesComplete ? (
+          <div className={`mt-5 rounded-2xl border p-4 text-sm ${
+            deliveryQuote.deliveryMinor === 0
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-hooma-text/10 bg-hooma-panel/60 text-hooma-text"
+          }`}>
+            <div className="flex items-start gap-3">
+              {deliveryQuote.benefitCode === "hooma_plus"
+                ? <Sparkles className="mt-0.5 shrink-0" size={18} />
+                : <Truck className="mt-0.5 shrink-0" size={18} />}
+              <div>
+                <p className="font-semibold">
+                  {deliveryQuote.benefitCode === "hooma_plus"
+                    ? (georgian ? "Hooma+ — უფასო მიწოდება" : "Hooma+ — free delivery")
+                    : deliveryQuote.benefitCode === "subtotal_threshold"
+                      ? (georgian ? "100₾-ზე მეტი — უფასო მიწოდება" : "Over ₾100 — free delivery")
+                      : deliveryQuote.benefitCode === "welcome_units"
+                        ? (georgian ? "ახალი მომხმარებლის უფასო მიწოდება" : "New-customer free delivery")
+                        : (georgian ? "სტანდარტული მიწოდება — 5₾" : "Standard delivery — ₾5")}
+                </p>
+                <p className="mt-1 leading-6">
+                  {deliveryQuote.benefitCode === "welcome_units"
+                    ? (georgian
+                      ? `გადახდის დადასტურების შემდეგ უფასო მიწოდების ${deliveryQuote.welcomeUnitsRemainingAfterPayment} პროდუქტის ერთეული დაგრჩება.`
+                      : `After payment, ${deliveryQuote.welcomeUnitsRemainingAfterPayment} free-delivery product units will remain.`)
+                    : deliveryQuote.benefitCode === "standard_fee" && deliverySummary.welcomeUnitsRemaining > 0
+                      ? (georgian
+                        ? `დარჩენილია ${deliverySummary.welcomeUnitsRemaining} უფასო ერთეული, კალათაში კი ${unitCount}-ია. ამ ბენეფიტისთვის კალათა დარჩენილ რაოდენობაში უნდა ჩაეტიოს.`
+                        : `${deliverySummary.welcomeUnitsRemaining} free units remain, while this cart has ${unitCount}. The whole cart must fit within the remaining units.`)
+                      : deliveryQuote.benefitCode === "standard_fee"
+                        ? (georgian
+                          ? `${money.format(deliveryQuote.amountUntilFreeDeliveryMinor / 100)} დაამატე, რომ პროდუქტის ჯამმა 100₾-ს გადააჭარბოს და მიწოდება უფასო გახდეს.`
+                          : `Add ${money.format(deliveryQuote.amountUntilFreeDeliveryMinor / 100)} so the product subtotal exceeds ₾100 and delivery becomes free.`)
+                        : deliveryQuote.benefitCode === "hooma_plus"
+                          ? (georgian ? "აქტიური წევრობა პირველ 10 უფასო ერთეულს არ ხარჯავს." : "Active membership does not use your first 10 free units.")
+                          : (georgian ? "პროდუქტის ჯამი 100₾-ზე მეტია." : "The product subtotal is over ₾100.")}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {items.length ? <dl className="mt-5 space-y-3 border-t border-hooma-text/10 pt-5 text-sm">
           <div className="flex justify-between gap-4"><dt className="text-hooma-muted">{georgian ? "პროდუქტები" : "Subtotal"}</dt><dd className="font-semibold">{pricesComplete ? money.format(subtotal) : "—"}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-hooma-muted">{georgian ? "მიწოდება" : "Delivery"}</dt><dd className="font-semibold">{georgian ? "უფასო" : "Free"}</dd></div>
-          <div className="flex justify-between gap-4 border-t border-hooma-text/10 pt-3 text-base"><dt className="font-semibold">{georgian ? "სულ გადასახდელი" : "Total due"}</dt><dd className="font-semibold">{pricesComplete ? money.format(subtotal) : "—"}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-hooma-muted">{georgian ? "მიწოდება" : "Delivery"}</dt><dd className="font-semibold">{pricesComplete ? delivery === 0 ? (georgian ? "უფასო" : "Free") : money.format(delivery) : "—"}</dd></div>
+          <div className="flex justify-between gap-4 border-t border-hooma-text/10 pt-3 text-base"><dt className="font-semibold">{georgian ? "სულ გადასახდელი" : "Total due"}</dt><dd className="font-semibold">{pricesComplete ? money.format(total) : "—"}</dd></div>
         </dl> : null}
+        {items.length ? <p className="mt-4 text-xs leading-5 text-hooma-muted">{georgian ? "მიწოდების საბოლოო თანხა და ბენეფიტი სერვერზე ხელახლა მოწმდება გადახდის შექმნამდე." : "The final delivery fee and benefit are revalidated on the server before payment is created."}</p> : null}
       </aside>
     </div>
   );

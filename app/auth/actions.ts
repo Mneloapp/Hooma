@@ -10,10 +10,18 @@ import {
   BogPaymentError,
   createBogOrder,
   getBogCheckoutAvailability,
+  getBogPaymentDetails,
   getBogPaymentMethods,
   getBogReturnUrls,
 } from "@/lib/payments/bog";
-import { isTrustedBogRedirect, moneyToMinor } from "@/lib/payments/bog-core";
+import {
+  isTrustedBogRedirect,
+  minorToAmount,
+  moneyToMinor,
+  parseBogPaymentDetails,
+  sanitizeBogPaymentDetails,
+} from "@/lib/payments/bog-core";
+import { reconcileCustomerCatalogBogAttempts } from "@/lib/payments/bog-stale-recovery";
 
 type AuthState = {
   ok?: boolean;
@@ -208,6 +216,41 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
   if (!customer?.id) return { ok: false, message: georgian ? "მომხმარებლის პროფილი ვერ მოიძებნა. გამოდი ანგარიშიდან და ხელახლა შედი." : "Your customer profile could not be found. Sign out and sign in again." };
   const customerId = customer.id;
 
+  try {
+    const recovery = await reconcileCustomerCatalogBogAttempts(
+      admin,
+      customerId,
+    );
+    if (recovery.redirectUrl) {
+      return {
+        ok: true,
+        redirectUrl: recovery.redirectUrl,
+        message: georgian
+          ? "წინა უსაფრთხო გადახდის სესია აღდგა..."
+          : "Your previous secure payment session was recovered...",
+      };
+    }
+    if (recovery.blocked) {
+      return {
+        ok: false,
+        message: georgian
+          ? "წინა გადახდის საბოლოო საბანკო სტატუსს ველოდებით. ხელახლა ნუ გადაიხდი; მოგვიანებით სცადე ან დაგვიკავშირდი."
+          : "We are waiting for a previous payment's final bank status. Do not pay again; retry later or contact us.",
+      };
+    }
+  } catch (error) {
+    console.error("BOG_CUSTOMER_STALE_RECONCILIATION_FAILED", {
+      customerId,
+      retryable: error instanceof BogPaymentError ? error.retryable : null,
+    });
+    return {
+      ok: false,
+      message: georgian
+        ? "წინა გადახდის უსაფრთხოდ შემოწმება ვერ მოხერხდა. ხელახლა ნუ გადაიხდი; მოგვიანებით სცადე ან დაგვიკავშირდი."
+        : "A previous payment could not be checked safely. Do not pay again; retry later or contact us.",
+    };
+  }
+
   const authoritativeItems = await Promise.all(payload.items.map(async (item) => {
     const catalogProduct = products.find((product) => product.id === item.product_id);
     const quantity = Number(item.quantity);
@@ -276,7 +319,8 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
   );
   if (
     !Number.isSafeInteger(payload.expected_total_minor)
-    || payload.expected_total_minor !== basketTotalMinor
+    || payload.expected_total_minor! < basketTotalMinor
+    || payload.expected_total_minor! > basketTotalMinor + 500
   ) {
     return {
       ok: false,
@@ -314,7 +358,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
     quantity: item.quantity,
   }));
 
-  const { data: checkoutData, error: checkoutError } = await admin.rpc("begin_bog_checkout_v1", {
+  const { data: checkoutData, error: checkoutError } = await admin.rpc("begin_bog_checkout_v2", {
     requested_customer_id: customerId,
     requested_guest_email: user.email ?? payload.guest_email ?? null,
     requested_guest_phone: payload.guest_phone,
@@ -322,6 +366,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
     requested_notes: payload.notes ?? null,
     requested_promised_at: promisedAt.toISOString(),
     requested_idempotency_key: payload.checkout_key,
+    requested_expected_total: minorToAmount(payload.expected_total_minor!),
     requested_items: checkoutItems,
   });
   const checkout = checkoutData && typeof checkoutData === "object"
@@ -331,18 +376,41 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
   const attemptId = typeof checkout?.attempt_id === "string" ? checkout.attempt_id : "";
   const trackingCode = typeof checkout?.tracking_code === "string" ? checkout.tracking_code : "";
   const attemptStatus = typeof checkout?.attempt_status === "string" ? checkout.attempt_status : "";
+  const providerPaymentId = typeof checkout?.provider_payment_id === "string"
+    ? checkout.provider_payment_id
+    : "";
+  const attemptCreatedAt = typeof checkout?.attempt_created_at === "string"
+    ? Date.parse(checkout.attempt_created_at)
+    : Number.NaN;
+  const reusedCheckout = checkout?.reused === true;
   const totalMinor = moneyToMinor(checkout?.amount);
+  const deliveryMinor = moneyToMinor(checkout?.delivery_fee);
+  const ttlMinutes = Number(checkout?.payment_ttl_minutes ?? 15);
   if (checkoutError || !uuidPattern.test(orderId) || !uuidPattern.test(attemptId) || !attemptStatus || totalMinor === null || totalMinor <= 0) {
     console.error("BOG_CHECKOUT_PREPARATION_FAILED", { code: checkoutError?.code ?? null });
+    const totalChanged = checkoutError?.message?.includes("HOOMA_CHECKOUT_TOTAL_CHANGED");
     return {
       ok: false,
-      message: georgian
-        ? "შეკვეთის უსაფრთხოდ მომზადება ვერ მოხერხდა. თანხა არ ჩამოგეჭრება."
-        : "The order could not be prepared safely. You will not be charged.",
+      resetCheckout: totalChanged,
+      message: totalChanged
+        ? georgian
+          ? "კალათის ან მიწოდების ფასი შეიცვალა. გვერდი განაახლე და შეკვეთა ხელახლა გადაამოწმე."
+          : "A cart or delivery price changed. Refresh the page and review the order again."
+        : georgian
+          ? "შეკვეთის უსაფრთხოდ მომზადება ვერ მოხერხდა. თანხა არ ჩამოგეჭრება."
+          : "The order could not be prepared safely. You will not be charged.",
     };
   }
 
-  if (basketTotalMinor !== totalMinor) {
+  if (
+    deliveryMinor === null
+    || basketTotalMinor + deliveryMinor !== totalMinor
+    || (totalMinor !== payload.expected_total_minor
+      && (!reusedCheckout || totalMinor > payload.expected_total_minor!))
+    || !Number.isInteger(ttlMinutes)
+    || ttlMinutes < 2
+    || ttlMinutes > 1_440
+  ) {
     return {
       ok: false,
       message: georgian
@@ -371,6 +439,121 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
         : "The previous payment session has ended. Press the payment button again to start a new secure session.",
     };
   }
+  if (
+    ["created", "pending"].includes(attemptStatus)
+    && (
+      !Number.isFinite(attemptCreatedAt)
+      || Date.now() - attemptCreatedAt > 20 * 60 * 1000
+    )
+  ) {
+    try {
+      let recoveredProviderId = providerPaymentId;
+      let recoveredRedirect = "";
+      if (!recoveredProviderId) {
+        // BOG idempotency returns the original order when the first response
+        // was lost. This recovers its provider ID before any reservation can
+        // be released.
+        const urls = getBogReturnUrls(orderId);
+        const recoveredPayment = await createBogOrder({
+          callbackUrl: urls.callbackUrl,
+          externalOrderId: attemptId,
+          totalMinor,
+          basket: safeBasket,
+          deliveryMinor,
+          ttlMinutes,
+          successUrl: urls.successUrl,
+          failUrl: urls.failUrl,
+          paymentMethods: getBogPaymentMethods(),
+        }, payload.checkout_key, georgian ? "ka" : "en");
+        recoveredProviderId = recoveredPayment.providerOrderId;
+        recoveredRedirect = recoveredPayment.redirectUrl;
+        const { error: recoveredBindError } = await admin.rpc(
+          "bind_bog_payment_attempt_v1",
+          {
+            requested_attempt_id: attemptId,
+            requested_provider_payment_id: recoveredProviderId,
+            requested_response: recoveredPayment.safeResponse,
+          },
+        );
+        if (recoveredBindError?.message?.includes("BOG_PROVIDER_ID_CONFLICT")) {
+          throw new Error("BOG_PROVIDER_ID_CONFLICT");
+        }
+      }
+
+      const receipt = parseBogPaymentDetails(
+        await getBogPaymentDetails(recoveredProviderId),
+      );
+      if (
+        !receipt
+        || receipt.orderId !== recoveredProviderId
+        || receipt.externalOrderId !== attemptId
+      ) {
+        throw new Error("BOG_STALE_RECEIPT_MISMATCH");
+      }
+
+      if (receipt.status === "rejected") {
+        const { error: releaseError } = await admin.rpc(
+          "release_rejected_bog_delivery_reservation_v1",
+          {
+            requested_attempt_id: attemptId,
+            requested_provider_payment_id: receipt.orderId,
+            requested_external_order_id: receipt.externalOrderId,
+            requested_provider_status: receipt.status,
+            requested_capture: receipt.capture,
+            requested_currency: receipt.currency,
+            requested_request_amount: receipt.requestAmountMinor === null
+              ? null
+              : minorToAmount(receipt.requestAmountMinor),
+            requested_has_split: receipt.hasSplit,
+            requested_safe_payload: sanitizeBogPaymentDetails(receipt),
+          },
+        );
+        if (releaseError) throw releaseError;
+        return {
+          ok: false,
+          resetCheckout: true,
+          message: georgian
+            ? "წინა გადახდის სესია ბანკმა დახურა. დაჯავშნილი უფასო ერთეულები აღდგა; ახალი სესიისთვის ხელახლა დააჭირე."
+            : "The bank closed the previous payment session. Reserved free units were restored; press again to start a new session.",
+        };
+      }
+
+      if (
+        recoveredRedirect
+        && ["created", "processing"].includes(receipt.status)
+      ) {
+        return {
+          ok: true,
+          redirectUrl: recoveredRedirect,
+          message: georgian
+            ? "უსაფრთხო გადახდის სესია აღდგა..."
+            : "Secure payment session recovered...",
+        };
+      }
+
+      return {
+        ok: false,
+        message: receipt.status === "completed"
+          ? georgian
+            ? `ბანკში გადახდა ჩანს, მაგრამ დაცულ callback-ს ველოდებით. ხელახლა ნუ გადაიხდი; თუ სტატუსი არ განახლდა, დაგვიკავშირდი კოდით ${trackingCode || orderId.slice(0, 8)}.`
+            : `The bank shows a payment, but we are waiting for the secure callback. Do not pay again; if the status does not update, contact us with code ${trackingCode || orderId.slice(0, 8)}.`
+          : georgian
+            ? `წინა სესიის საბოლოო საბანკო სტატუსს ველოდებით. ხელახლა ნუ გადაიხდი; მოგვიანებით სცადე ან დაგვიკავშირდი კოდით ${trackingCode || orderId.slice(0, 8)}.`
+            : `We are waiting for the previous session's final bank status. Do not pay again; retry later or contact us with code ${trackingCode || orderId.slice(0, 8)}.`,
+      };
+    } catch (error) {
+      console.error("BOG_STALE_CHECKOUT_RECONCILIATION_FAILED", {
+        attemptId,
+        retryable: error instanceof BogPaymentError ? error.retryable : null,
+      });
+    }
+    return {
+      ok: false,
+      message: georgian
+        ? `წინა გადახდის სესიის უსაფრთხოდ დახურვა ვერ მოხერხდა. ხელახლა ნუ გადაიხდი; მოგვიანებით სცადე ან დაგვიკავშირდი კოდით ${trackingCode || orderId.slice(0, 8)}.`
+        : `The previous payment session could not be closed safely. Do not pay again; retry later or contact us with code ${trackingCode || orderId.slice(0, 8)}.`,
+    };
+  }
   if (["created", "pending"].includes(attemptStatus) && isTrustedBogRedirect(storedResponse?.redirect_url)) {
     return {
       ok: true,
@@ -386,6 +569,8 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
       externalOrderId: attemptId,
       totalMinor,
       basket: safeBasket,
+      deliveryMinor,
+      ttlMinutes,
       successUrl: urls.successUrl,
       failUrl: urls.failUrl,
       paymentMethods: getBogPaymentMethods(),
