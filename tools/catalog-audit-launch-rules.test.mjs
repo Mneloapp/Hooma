@@ -22,15 +22,20 @@ const fastBulkDraftMigrationPath = new URL(
   "../supabase/migrations/20260729000600_fast_bulk_draft_catalog.sql",
   import.meta.url,
 );
+const batchedBulkDraftMigrationPath = new URL(
+  "../supabase/migrations/20260729000700_batched_bulk_draft_catalog.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, adminProductsPage, adminPermissions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, adminProductsPage, adminPermissions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
   readFile(adminCatalogPerformanceMigrationPath, "utf8"),
   readFile(fastBulkDraftMigrationPath, "utf8"),
+  readFile(batchedBulkDraftMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
 ]);
@@ -222,4 +227,12 @@ test("bulk Draft reset skips row refresh work and cleans storefront state in set
     fastBulkDraftMigration,
     /set[\s\S]{0,300}catalog_audit_(?:attempted|completed|applied)_[a-z_]+\s*=\s*null/,
   );
+});
+
+test("whole-catalog Draft reset is split into bounded transactions", () => {
+  assert.match(batchedBulkDraftMigration, /requested_batch_size integer default 2000/);
+  assert.match(batchedBulkDraftMigration, /limit resolved_batch_size[\s\S]*for update skip locked/);
+  assert.match(batchedBulkDraftMigration, /status is distinct from 'draft'/);
+  assert.match(batchedBulkDraftMigration, /'remaining_count', remaining_total/);
+  assert.match(batchedBulkDraftMigration, /delete from public\.storefront_product_cards[\s\S]*product_id = any\(selected_product_ids\)/);
 });
