@@ -11,6 +11,7 @@ type AdminProductParams = {
   category?: string;
   subcategory?: string;
   status?: string;
+  audit?: string;
   page?: string;
 };
 
@@ -47,6 +48,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
   const category = params.category ?? "all";
   const subcategory = params.subcategory ?? "all";
   const status = productStatuses.includes(params.status as typeof productStatuses[number]) ? params.status! : "all";
+  const audit = ["approved", "ready", "pending"].includes(params.audit ?? "") ? params.audit! : "all";
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const profile = await requirePermission("catalog.manage");
   const supabase = (await createClient()) as any;
@@ -71,12 +73,15 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
 
   let productsQuery = supabase
     ?.from("products")
-    .select("id,slug,hooma_name,name_ka,status,production_status,estimated_print_minutes,material_grams,base_price,catalog_audit_completed_at,categories(slug,name_en,name_ka)", { count: "exact" })
+    .select("id,slug,hooma_name,name_ka,status,production_status,estimated_print_minutes,material_grams,base_price,catalog_audit_completed_at,catalog_audit_applied_at,categories(slug,name_en,name_ka)", { count: "exact" })
     .order("created_at", { ascending: false })
     .order("id", { ascending: true });
   if (q) productsQuery = productsQuery.or(`hooma_name.ilike.%${q}%,name_ka.ilike.%${q}%,slug.ilike.%${q}%`);
   if (status !== "all") productsQuery = productsQuery.eq("status", status);
   if (categoryIds.length) productsQuery = productsQuery.in("category_id", categoryIds);
+  if (audit === "approved") productsQuery = productsQuery.not("catalog_audit_applied_at", "is", null);
+  if (audit === "ready") productsQuery = productsQuery.not("catalog_audit_completed_at", "is", null).is("catalog_audit_applied_at", null);
+  if (audit === "pending") productsQuery = productsQuery.is("catalog_audit_completed_at", null);
 
   const safeRequestedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const firstFrom = (safeRequestedPage - 1) * ADMIN_PRODUCTS_PER_PAGE;
@@ -109,6 +114,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
       production: row.production_status,
       status: row.status,
       auditCompletedAt: row.catalog_audit_completed_at,
+      auditAppliedAt: row.catalog_audit_applied_at,
     };
   });
   const productLoadError = categoryError ?? counts.error ?? productResponse.error ?? null;
@@ -124,6 +130,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
     if (category !== "all") next.set("category", category);
     if (subcategory !== "all") next.set("subcategory", subcategory);
     if (status !== "all") next.set("status", status);
+    if (audit !== "all") next.set("audit", audit);
     next.set("page", String(nextPage));
     return `/admin/products?${next.toString()}`;
   };
@@ -132,11 +139,12 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Catalog</p><h1 className="mt-3 text-4xl font-medium">პროდუქტები</h1><p className="mt-2 text-sm text-hooma-muted">{`${counts.total} პროდუქტი · ${counts.draft} Draft · ${counts.active} Active · ${counts.archived} Archived`}</p></div><Link href="/admin/products/new" className="rounded-full bg-hooma-text px-5 py-3 text-sm font-medium text-white">ახალი პროდუქტი</Link></div>
     {productLoadError ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">პროდუქტების სრული სია ვერ ჩაიტვირთა. სცადე გვერდის განახლება.</div> : null}
 
-    <form className="grid gap-3 rounded-[1.5rem] bg-white/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_220px_260px_170px_auto]">
+    <form className="grid gap-3 rounded-[1.5rem] bg-white/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_190px_230px_150px_210px_auto]">
       <input name="q" defaultValue={params.q} placeholder="პროდუქტის ძიება" className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent" />
       <select name="category" defaultValue={category} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა კატეგორია</option>{catalogCategories.map((item) => <option key={item.slug} value={item.slug}>{item.nameKa}</option>)}</select>
       <select name="subcategory" defaultValue={subcategory} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა ქვეკატეგორია</option>{visibleSubcategories.map((item) => <optgroup key={item.slug} label={item.nameKa}>{item.subcategories.map((child) => <option key={child.slug} value={child.slug}>{child.nameKa}</option>)}</optgroup>)}</select>
       <select name="status" defaultValue={status} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა სტატუსი</option><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select>
+      <select name="audit" defaultValue={audit} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა აუდიტი</option><option value="approved">მენეჯერის მიერ დამტკიცებული</option><option value="ready">AI აუდიტი დასრულებული</option><option value="pending">აუდიტ-გაუვლელი</option></select>
       <div className="flex gap-2"><button className="min-h-11 flex-1 rounded-xl bg-hooma-text px-5 text-sm font-medium text-white">გაფილტვრა</button><Link href="/admin/products" className="grid min-h-11 place-items-center rounded-xl border border-hooma-text/10 px-4 text-sm">გასუფთავება</Link></div>
     </form>
 

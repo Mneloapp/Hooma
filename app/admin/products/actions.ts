@@ -50,6 +50,7 @@ const deletionRoles = ["owner", "admin", "catalog_manager"];
 const publicationRoles = ["owner", "admin"];
 
 function publicationError(message: string) {
+  if (message.includes("manager-approved catalog audit")) return "ჯერ Audit Agent-ის შედეგი გადაამოწმე და დაამტკიცე.";
   if (message.includes("Product source was not found")) return "პროდუქტს წყაროს რეფერენსი არ აქვს.";
   if (message.includes("rejected")) return "პროდუქტის წყარო უარყოფილ სტატუსშია.";
   if (message.includes("priced technical variant") || message.includes("priced variant")) return "ფასი ან ტექნიკური მონაცემები შესავსებია.";
@@ -178,17 +179,17 @@ export async function bulkPublishCatalogProductsAction(
     return { ok: false, completed: true, message: "ერთ ოპერაციაში მონიშნე 1-დან 1000-მდე პროდუქტი." };
   }
 
-  const products: Array<{ id: string; status: string; name_ka: string | null; hooma_name: string | null }> = [];
+  const products: Array<{ id: string; status: string; name_ka: string | null; hooma_name: string | null; catalog_audit_applied_at: string | null }> = [];
   for (let offset = 0; offset < requestedIds.length; offset += 100) {
     const { data: rows, error: readError } = await admin
       .from("products")
-      .select("id,status,name_ka,hooma_name")
+      .select("id,status,name_ka,hooma_name,catalog_audit_applied_at")
       .in("id", requestedIds.slice(offset, offset + 100));
     if (readError) return { ok: false, completed: true, message: "მონიშნული პროდუქტების წაკითხვა ვერ მოხერხდა." };
     products.push(...((rows ?? []) as typeof products));
   }
   const names = new Map(products.map((product) => [product.id, product.name_ka || product.hooma_name || product.id]));
-  const draftIds = products.filter((product) => product.status === "draft").map((product) => product.id);
+  const draftIds = products.filter((product) => product.status === "draft" && product.catalog_audit_applied_at).map((product) => product.id);
   const skippedCount = requestedIds.length - draftIds.length;
   if (!draftIds.length) {
     return {
@@ -197,7 +198,7 @@ export async function bulkPublishCatalogProductsAction(
       publishedCount: 0,
       skippedCount,
       failures: [],
-      message: "მონიშნულ პროდუქტებში გამოსაქვეყნებელი Draft არ არის.",
+      message: "მონიშნულ პროდუქტებში Audit Agent-ის მიერ დამტკიცებული გამოსაქვეყნებელი Draft არ არის.",
     };
   }
 
@@ -232,7 +233,7 @@ export async function bulkPublishCatalogProductsAction(
   revalidateStorefrontCatalog();
 
   const failureMessage = failures.length ? ` ${failures.length} პროდუქტს მონაცემების გასწორება სჭირდება.` : "";
-  const skippedMessage = skippedCount ? ` ${skippedCount} უკვე გამოქვეყნებული/არასამუშაო სტატუსის პროდუქტი გამოტოვებულია.` : "";
+  const skippedMessage = skippedCount ? ` ${skippedCount} აუდიტ-დაუმტკიცებელი, უკვე გამოქვეყნებული ან არასამუშაო სტატუსის პროდუქტი გამოტოვებულია.` : "";
   return {
     ok: publishedCount > 0 || failures.length === 0,
     completed: true,
@@ -387,6 +388,8 @@ export async function setProductPublicationAction(_state: PublicationState, form
     if (reviewError) {
       const message = reviewError.message.includes("schema cache") || reviewError.message.includes("confirm_and_publish_catalog_product")
         ? "ჯერ გაუშვი Catalog publication confirmation migration."
+        : reviewError.message.includes("manager-approved catalog audit")
+          ? "ჯერ Audit Agent-ის შედეგი გადაამოწმე და დაამტკიცე."
         : reviewError.message.includes("explicit confirmation")
           ? "გამოქვეყნებამდე მონიშნე Admin-ის დადასტურება."
           : reviewError.message.includes("rejected")
@@ -410,7 +413,9 @@ export async function setProductPublicationAction(_state: PublicationState, form
     actor_profile_id: context.profile.id,
   });
   if (error) {
-    const message = error.message.includes("commercial and media rights")
+    const message = error.message.includes("manager-approved catalog audit")
+        ? "ჯერ Audit Agent-ის შედეგი გადაამოწმე და დაამტკიცე."
+        : error.message.includes("commercial and media rights")
         ? "მონიშნე Admin publication confirmation და სცადე თავიდან."
         : error.message.includes("priced technical variant") || error.message.includes("priced variant")
           ? "პროდუქტს ფასი და შევსებული ტექნიკური მონაცემები სჭირდება."

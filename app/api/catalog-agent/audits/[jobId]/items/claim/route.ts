@@ -109,6 +109,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     }
     return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
   }
+  const categoryScopeIds = Array.isArray(job.category_scope_ids)
+    ? job.category_scope_ids.filter((value: unknown): value is string => typeof value === "string")
+    : [];
+  if (job.category_id && !categoryScopeIds.includes(product.category_id)) {
+    const { data: terminal, error: terminalError } = await finishUnsealedItem("Product moved outside the audit job category scope");
+    if (terminalError) return NextResponse.json({ ok: false, message: terminalError.message }, { status: 500 });
+    if (terminal?.status === "processing") {
+      return NextResponse.json({ ok: false, message: "Catalog audit attempt was already sealed" }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
+  }
+  if (!Array.isArray(job.product_statuses) || !job.product_statuses.includes(product.status)) {
+    const { data: terminal, error: terminalError } = await finishUnsealedItem("Product moved outside the audit job status scope");
+    if (terminalError) return NextResponse.json({ ok: false, message: terminalError.message }, { status: 500 });
+    if (terminal?.status === "processing") {
+      return NextResponse.json({ ok: false, message: "Catalog audit attempt was already sealed" }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, item: null, skipped: true, continueClaiming: true });
+  }
 
   const images = safeImages(product.hero_image, product.gallery_images);
   if (!images.length) {

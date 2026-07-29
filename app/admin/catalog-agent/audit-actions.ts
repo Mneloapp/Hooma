@@ -55,6 +55,8 @@ export async function createCatalogProductAuditJobAction(
   if (!context) return { message: "პროდუქტების აუდიტის შექმნის უფლება არ გაქვს." };
   const agentId = clean(formData.get("agent_id"), 36);
   if (!uuidPattern.test(agentId)) return { message: "აირჩიე აქტიური Catalog Agent." };
+  const categoryId = clean(formData.get("category_id"), 36);
+  if (!uuidPattern.test(categoryId)) return { message: "აირჩიე კატეგორია ან ქვეკატეგორია." };
 
   const allowedStatuses = new Set(["active", "draft", "archived", "coming_soon"]);
   const statuses = formData.getAll("product_statuses").map((value) => clean(value, 30)).filter((value) => allowedStatuses.has(value));
@@ -65,18 +67,40 @@ export async function createCatalogProductAuditJobAction(
     return { message: "პროდუქტების რაოდენობა მიუთითე 1-დან 100 000-მდე." };
   }
 
-  const { data, error } = await context.admin.rpc("create_catalog_product_audit_job_v2", {
+  const { data, error } = await context.admin.rpc("create_catalog_product_audit_job_v3", {
     actor_profile_id: context.actor.id,
     requested_agent_id: agentId,
     requested_product_statuses: Array.from(new Set(statuses)),
+    requested_category_id: categoryId,
     requested_max_products: requestedLimit,
   });
   if (error || !data?.id) {
     const migrationMissing = error?.message?.includes("function") || error?.message?.includes("schema cache");
-    return { message: migrationMissing ? "ჯერ გაუშვი Catalog Product Auditor-ის Supabase migration." : error?.message ?? "აუდიტის დავალება ვერ შეიქმნა." };
+    const overlappingJob = error?.message?.includes("overlaps an active catalog audit job");
+    const invalidCategory = error?.message?.includes("active catalog category");
+    const emptyCategory = error?.message?.includes("No unaudited products");
+    return {
+      message: migrationMissing
+        ? "ჯერ გაუშვი Audit Agent category scope-ის ბოლო Supabase migration."
+        : overlappingJob
+          ? "ამ კატეგორიაზე უკვე მიმდინარეობს ან რიგშია აუდიტი. ჯერ ის დაასრულე ან გააუქმე."
+          : invalidCategory
+            ? "არჩეული კატეგორია აღარ არის აქტიური. განაახლე გვერდი და სხვა კატეგორია აირჩიე."
+            : emptyCategory
+              ? "არჩეულ კატეგორიასა და სტატუსებში აუდიტ-გაუვლელი პროდუქტი აღარ არის."
+              : error?.message ?? "აუდიტის დავალება ვერ შეიქმნა.",
+    };
   }
   refreshAudit();
-  return { ok: true, message: `აუდიტის რიგში დაემატა ${Number(data.total_count ?? 0).toLocaleString("ka-GE")} პროდუქტი.` };
+  const requested = Number(data.requested_max_products ?? requestedLimit);
+  const queued = Number(data.total_count ?? 0);
+  const scope = clean(data.category_label_ka, 200) || "არჩეული კატეგორია";
+  return {
+    ok: true,
+    message: queued < requested
+      ? `${scope}: ხელმისაწვდომი იყო ${queued.toLocaleString("ka-GE")} აუდიტ-გაუვლელი პროდუქტი და ყველა დაემატა რიგში.`
+      : `${scope}: აუდიტის რიგში დაემატა ${queued.toLocaleString("ka-GE")} პროდუქტი.`,
+  };
 }
 
 export async function applyCatalogProductAuditItemAction(

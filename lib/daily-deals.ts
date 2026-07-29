@@ -71,28 +71,31 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
         slug,
         hooma_name,
         name_ka,
-        hero_image
+        hero_image,
+        base_price,
+        sale_price,
+        catalog_audit_applied_at
       ),
       product_variants!daily_deal_items_variant_id_fkey (
         sku,
         size_label,
-        image
+        image,
+        price,
+        is_active
       )
     `)
     .eq("deal_date", date)
     .order("position", { ascending: true });
 
-  let { data, error } = await loadToday();
-  let activationError: { message: string } | null = null;
-  if (!error && (data?.length ?? 0) === 0) {
-    const activation = await admin.rpc("activate_daily_deals", { target_date: date });
-    activationError = activation.error;
-    if (activationError) {
-      console.error("[daily-deals] Failed to activate today's deals.", activationError.message);
-    } else {
-      ({ data, error } = await loadToday());
-    }
+  // Reconcile before every customer-facing read. The database function is
+  // idempotent and removes hidden products, stale variants, and stale prices
+  // before refilling today's list.
+  const activation = await admin.rpc("activate_daily_deals", { target_date: date });
+  const activationError: { message: string } | null = activation.error;
+  if (activationError) {
+    console.error("[daily-deals] Failed to activate today's deals.", activationError.message);
   }
+  const { data, error } = await loadToday();
 
   if (error) {
     console.error("[daily-deals] Failed to load today's deals.", error.message);
@@ -100,10 +103,14 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
   }
   if (!data?.length) return { date, deals: [], isPreview: Boolean(activationError), discountPercent };
 
-  const deals = data.map((row: any) => {
+  const deals = data.flatMap((row: any) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
     const variant = Array.isArray(row.product_variants) ? row.product_variants[0] : row.product_variants;
-    return {
+    const currentPrice = Number(variant?.price ?? product?.sale_price ?? product?.base_price);
+    if (!product?.catalog_audit_applied_at || variant?.is_active !== true || !Number.isFinite(currentPrice) || currentPrice <= 0) {
+      return [];
+    }
+    return [{
       dealDate: row.deal_date,
       productId: row.product_id,
       variantId: row.variant_id,
@@ -117,8 +124,9 @@ export async function getDailyDeals(): Promise<{ date: string; deals: DailyDeal[
       dealPrice: Number(row.deal_price),
       discountPercent: validDiscountPercent(row.discount_percent),
       preview: false,
-    } satisfies DailyDeal;
+    } satisfies DailyDeal];
   });
 
+  if (!deals.length) return { date, deals: [], isPreview: Boolean(activationError), discountPercent };
   return { date, deals, isPreview: false, discountPercent: deals[0]?.discountPercent ?? discountPercent };
 }

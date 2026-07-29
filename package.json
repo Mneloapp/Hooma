@@ -10,7 +10,8 @@
     "db:push": "supabase db push --linked",
     "start": "next start",
     "lint": "next lint",
-    "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs"
+    "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs",
+    "test:audit-launch": "node --test tools/catalog-audit-launch-rules.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

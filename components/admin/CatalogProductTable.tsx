@@ -19,6 +19,7 @@ export type CatalogProductListItem = {
   production: string;
   status: string;
   auditCompletedAt: string | null;
+  auditAppliedAt: string | null;
 };
 
 export function CatalogProductTable({ products, canDelete, canPublish }: { products: CatalogProductListItem[]; canDelete: boolean; canPublish: boolean }) {
@@ -31,8 +32,9 @@ export function CatalogProductTable({ products, canDelete, canPublish }: { produ
   const canSelect = canDelete || canPublish;
   const allSelected = products.length > 0 && products.every((product) => selected.has(product.id));
   const selectedProducts = products.filter((product) => selected.has(product.id));
-  const selectedDrafts = selectedProducts.filter((product) => product.status === "draft");
-  const allDraftsSelected = products.some((product) => product.status === "draft") && products.filter((product) => product.status === "draft").every((product) => selected.has(product.id));
+  const selectedDrafts = selectedProducts.filter((product) => product.status === "draft" && product.auditAppliedAt);
+  const publishableDrafts = products.filter((product) => product.status === "draft" && product.auditAppliedAt);
+  const allDraftsSelected = publishableDrafts.length > 0 && publishableDrafts.every((product) => selected.has(product.id));
 
   useEffect(() => {
     if (!deleteState.ok) return;
@@ -64,7 +66,7 @@ export function CatalogProductTable({ products, canDelete, canPublish }: { produ
   function toggleAllDrafts() {
     setSelected((current) => {
       const next = new Set(current);
-      const draftIds = products.filter((product) => product.status === "draft").map((product) => product.id);
+      const draftIds = publishableDrafts.map((product) => product.id);
       if (allDraftsSelected) draftIds.forEach((id) => next.delete(id));
       else draftIds.forEach((id) => next.add(id));
       return next;
@@ -77,10 +79,10 @@ export function CatalogProductTable({ products, canDelete, canPublish }: { produ
     {canSelect ? <div className="flex min-h-12 flex-col justify-between gap-3 rounded-2xl border border-hooma-text/10 bg-white/70 px-4 py-3 xl:flex-row xl:items-center">
       <div>
         <p className="text-sm font-medium">{selected.size ? `${selected.size} პროდუქტი მონიშნულია` : "მონიშნე პროდუქტები ჯგუფური მოქმედებისთვის"}</p>
-        <p className="mt-1 text-xs text-hooma-muted">{selectedDrafts.length ? `${selectedDrafts.length} Draft მზადაა ჯგუფური გამოქვეყნებისთვის` : "გამოსაქვეყნებლად მონიშნე Draft სტატუსის პროდუქტები"}</p>
+        <p className="mt-1 text-xs text-hooma-muted">{selectedDrafts.length ? `${selectedDrafts.length} აუდიტ-დამტკიცებული Draft მზადაა ჯგუფური გამოქვეყნებისთვის` : "გამოსაქვეყნებლად მონიშნე მენეჯერის მიერ აუდიტ-დამტკიცებული Draft პროდუქტები"}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {canPublish ? <button type="button" disabled={busy || !products.some((product) => product.status === "draft")} onClick={toggleAllDrafts} className="rounded-xl border border-hooma-text/10 bg-white px-4 py-2.5 text-sm font-semibold disabled:opacity-40">{allDraftsSelected ? "Draft-ების მოხსნა" : "ამ გვერდის Draft-ების მონიშვნა"}</button> : null}
+        {canPublish ? <button type="button" disabled={busy || !publishableDrafts.length} onClick={toggleAllDrafts} className="rounded-xl border border-hooma-text/10 bg-white px-4 py-2.5 text-sm font-semibold disabled:opacity-40">{allDraftsSelected ? "Draft-ების მოხსნა" : "აუდიტ-დამტკიცებული Draft-ების მონიშვნა"}</button> : null}
         {canPublish ? <button type="button" disabled={busy || !selectedDrafts.length} onClick={() => { setConfirmingDelete(false); setConfirmingPublication(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-hooma-accent px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Globe2 size={16} />გამოქვეყნება ({selectedDrafts.length})</button> : null}
         {canDelete ? <button type="button" disabled={busy || !selected.size} onClick={() => { setConfirmingPublication(false); setConfirmingDelete(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={16} />მონიშნულების წაშლა</button> : null}
       </div>
@@ -88,7 +90,7 @@ export function CatalogProductTable({ products, canDelete, canPublish }: { produ
 
     {confirmingPublication && selectedDrafts.length ? <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
       <h2 className="font-semibold">გამოვაქვეყნოთ {selectedDrafts.length} Draft პროდუქტი?</h2>
-      <p className="mt-2 text-sm leading-6 text-emerald-900/75">მონიშნული Draft-ები დაუყოვნებლივ გამოჩნდება საჯარო კატალოგში. თითოეული წარმატებული გამოქვეყნება audit log-ში ჩაიწერება. არასრული ფასის ან ტექნიკური მონაცემის მქონე პროდუქტი გამოტოვდება და სიაში მონიშნული დარჩება.</p>
+      <p className="mt-2 text-sm leading-6 text-emerald-900/75">მხოლოდ მენეჯერის მიერ დამტკიცებული აუდიტის მქონე Draft-ები გამოჩნდება საჯარო კატალოგში. თითოეული წარმატებული გამოქვეყნება audit log-ში ჩაიწერება. არასრული ფასის ან ტექნიკური მონაცემის მქონე პროდუქტი გამოტოვდება და სიაში მონიშნული დარჩება.</p>
       {selectedProducts.length > selectedDrafts.length ? <p className="mt-2 text-xs text-emerald-900/65">{selectedProducts.length - selectedDrafts.length} უკვე გამოქვეყნებული ან სხვა სტატუსის პროდუქტი უცვლელი დარჩება.</p> : null}
       <p className="mt-3 text-xs leading-5 text-emerald-900/65">{selectedDrafts.slice(0, 4).map((product) => product.name).join(" · ")}{selectedDrafts.length > 4 ? ` · და კიდევ ${selectedDrafts.length - 4}` : ""}</p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -120,6 +122,6 @@ export function CatalogProductTable({ products, canDelete, canPublish }: { produ
       {(publicationState.failures?.length ?? 0) > 10 ? <p className="mt-2 text-xs">და კიდევ {(publicationState.failures?.length ?? 0) - 10} პროდუქტი.</p> : null}
     </section> : null}
 
-    <div className="overflow-hidden rounded-[1.5rem] bg-white/75 shadow-soft"><div className="overflow-x-auto"><table className="w-full min-w-[940px] text-left text-sm"><thead className="bg-hooma-panel text-xs uppercase tracking-[0.14em] text-hooma-muted"><tr>{canSelect ? <th className="w-14 px-5 py-4"><input type="checkbox" aria-label="ყველა პროდუქტის მონიშვნა" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-hooma-accent" /></th> : null}<th className="px-5 py-4">პროდუქტი</th><th className="px-5 py-4">კატეგორია</th><th className="px-5 py-4">ტექნიკური</th><th className="px-5 py-4">ფასი</th><th className="px-5 py-4">სტატუსი</th></tr></thead><tbody className="divide-y divide-hooma-text/10">{products.map((product) => <tr key={product.id} className={selected.has(product.id) ? "bg-hooma-accent/5" : undefined}>{canSelect ? <td className="px-5 py-4"><input type="checkbox" aria-label={`${product.name} მონიშვნა`} checked={selected.has(product.id)} onChange={() => toggleProduct(product.id)} className="h-4 w-4 accent-hooma-accent" /></td> : null}<td className="px-5 py-4"><div className="flex flex-wrap items-center gap-2"><Link href={`/admin/products/${product.id}`} className="font-medium hover:text-hooma-accent">{product.name}</Link>{product.auditCompletedAt ? <span title={`აუდიტი დასრულდა: ${new Date(product.auditCompletedAt).toLocaleString("ka-GE")}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-800"><CircleCheck size={12} />აუდიტი გავლილია</span> : null}</div><span className="block text-xs text-hooma-muted">{product.slug}</span></td><td className="px-5 py-4 text-hooma-muted">{product.category}<span className="block text-xs">{product.subcategory}</span></td><td className="px-5 py-4 text-hooma-muted">{product.printMinutes ? `${product.printMinutes} წუთი` : "დრო შესავსებია"}<span className="block text-xs">{product.grams ? `${product.grams} გ` : "წონა შესავსებია"}</span></td><td className="px-5 py-4 font-semibold">{product.price === null ? "—" : `₾${product.price.toFixed(2)}`}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs ${product.status === "active" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100"}`}>{product.status}</span></td></tr>)}</tbody></table></div></div>
+    <div className="overflow-hidden rounded-[1.5rem] bg-white/75 shadow-soft"><div className="overflow-x-auto"><table className="w-full min-w-[940px] text-left text-sm"><thead className="bg-hooma-panel text-xs uppercase tracking-[0.14em] text-hooma-muted"><tr>{canSelect ? <th className="w-14 px-5 py-4"><input type="checkbox" aria-label="ყველა პროდუქტის მონიშვნა" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-hooma-accent" /></th> : null}<th className="px-5 py-4">პროდუქტი</th><th className="px-5 py-4">კატეგორია</th><th className="px-5 py-4">ტექნიკური</th><th className="px-5 py-4">ფასი</th><th className="px-5 py-4">სტატუსი</th></tr></thead><tbody className="divide-y divide-hooma-text/10">{products.map((product) => <tr key={product.id} className={selected.has(product.id) ? "bg-hooma-accent/5" : undefined}>{canSelect ? <td className="px-5 py-4"><input type="checkbox" aria-label={`${product.name} მონიშვნა`} checked={selected.has(product.id)} onChange={() => toggleProduct(product.id)} className="h-4 w-4 accent-hooma-accent" /></td> : null}<td className="px-5 py-4"><div className="flex flex-wrap items-center gap-2"><Link href={`/admin/products/${product.id}`} className="font-medium hover:text-hooma-accent">{product.name}</Link>{product.auditAppliedAt ? <span title={`მენეჯერმა დაამტკიცა: ${new Date(product.auditAppliedAt).toLocaleString("ka-GE")}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-800"><CircleCheck size={12} />აუდიტი დამტკიცებულია</span> : product.auditCompletedAt ? <span title={`AI აუდიტი დასრულდა: ${new Date(product.auditCompletedAt).toLocaleString("ka-GE")}`} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900"><CircleCheck size={12} />აუდიტი დასამტკიცებელია</span> : null}</div><span className="block text-xs text-hooma-muted">{product.slug}</span></td><td className="px-5 py-4 text-hooma-muted">{product.category}<span className="block text-xs">{product.subcategory}</span></td><td className="px-5 py-4 text-hooma-muted">{product.printMinutes ? `${product.printMinutes} წუთი` : "დრო შესავსებია"}<span className="block text-xs">{product.grams ? `${product.grams} გ` : "წონა შესავსებია"}</span></td><td className="px-5 py-4 font-semibold">{product.price === null ? "—" : `₾${product.price.toFixed(2)}`}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs ${product.status === "active" ? product.auditAppliedAt ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900" : "bg-slate-100"}`}>{product.status === "active" && !product.auditAppliedAt ? "active · საჯაროდ დამალული" : product.status}</span></td></tr>)}</tbody></table></div></div>
   </div>;
 }
