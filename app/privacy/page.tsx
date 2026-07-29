@@ -17,6 +17,10 @@ const sections = [
     copy: "მონაცემები გამოიყენება ანგარიშის სამართავად, შეკვეთის მისაღებად და დასამზადებლად, მიწოდებისა და ტრეკინგისთვის, მომხმარებელთან კომუნიკაციისთვის, თაღლითობის პრევენციისთვის, სერვისის გასაუმჯობესებლად და კანონით გათვალისწინებული საბუღალტრო თუ საგადასახადო ვალდებულებების შესასრულებლად.",
   },
   {
+    title: "Hooma-ს AI ასისტენტი",
+    copy: "ჩატის გამოყენებისას მხოლოდ მიმდინარე კითხვა და უსაფრთხოებისთვის საჭირო შეზღუდული ტექნიკური მონაცემები შეიძლება დამუშავდეს ჩვენს AI მომსახურების მომწოდებელთან პასუხის შესაქმნელად და ბოროტად გამოყენების თავიდან ასაცილებლად. პასუხის შექმნის მოთხოვნა იგზავნება შენახვის გამორთული რეჟიმით, ხოლო Hooma ჩატის ტექსტს საკუთარ მონაცემთა ბაზაში არ ინახავს. ჩატში არ უნდა შეიყვანო პაროლი, საბანკო ბარათის მონაცემები, ტელეფონი, ელფოსტა ან სხვა მგრძნობიარე ინფორმაცია. ასისტენტს პირად შეკვეთებზე წვდომა არ აქვს.",
+  },
+  {
     title: "Google-ით ავტორიზაცია",
     copy: "Google-ით შესვლისას Hooma ითხოვს მხოლოდ ავტორიზაციისთვის აუცილებელ საბაზისო მონაცემებს: ანგარიშის იდენტიფიკატორს, სახელს, ელფოსტასა და პროფილის სურათს, თუ ის ხელმისაწვდომია. Hooma არ ითხოვს Gmail-ის, Google Drive-ის ან სხვა Google სერვისების შიგთავსზე წვდომას.",
   },
@@ -45,6 +49,7 @@ const sections = [
 const sectionsEn = [
   { title: "Data we process", copy: "To create an account and fulfill an order, we may process your name, email, phone number, delivery address, exact coordinates you select on the map, order and payment-status history, custom-order files, and technical records needed for platform security. Hooma does not store full payment-card details." },
   { title: "How we use data", copy: "We use data to manage accounts, receive and produce orders, provide delivery and tracking, communicate with customers, prevent fraud, improve the service, and meet legal accounting and tax obligations." },
+  { title: "Hooma AI assistant", copy: "When you use chat, only the current question and limited technical data needed for safety may be processed by our AI service provider to generate an answer and prevent abuse. The answer-generation request is sent with storage disabled, and Hooma does not retain chat text in its own database. Do not enter passwords, bank-card details, phone numbers, email addresses, or other sensitive information in chat. The assistant cannot access personal orders." },
   { title: "Google sign-in", copy: "When you sign in with Google, Hooma requests only the basic information needed for authentication: account identifier, name, email, and profile image when available. Hooma does not request access to Gmail, Google Drive, or content from other Google services." },
   { title: "Who may process data", copy: "Our technical providers may process data to operate hosting, databases, authentication, and transactional email. Information required to fulfill an order may be shared with payment or courier partners, and legally required information with an accountant or competent authority. We do not sell personal data." },
   { title: "Retention and security", copy: "We retain data for as long as needed to manage accounts, fulfill orders, and meet legal obligations. We use access controls, encrypted connections, and role-based permissions. No internet transmission method is entirely risk-free, so we continuously update our security measures." },
@@ -58,7 +63,7 @@ export default function PrivacyPage() {
     <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-hooma-accent"><LocalizedText ka="Hooma-ს კონფიდენციალურობა" en="Hooma privacy" /></p>
       <h1 className="mt-4 text-4xl font-medium tracking-tight sm:text-5xl"><LocalizedText ka="კონფიდენციალურობის პოლიტიკა" en="Privacy policy" /></h1>
-      <p className="mt-4 text-sm text-hooma-muted"><LocalizedText ka="ბოლო განახლება: 19 ივლისი, 2026" en="Last updated: July 19, 2026" /></p>
+      <p className="mt-4 text-sm text-hooma-muted"><LocalizedText ka="ბოლო განახლება: 29 ივლისი, 2026" en="Last updated: July 29, 2026" /></p>
       <p className="mt-8 text-lg leading-8 text-hooma-muted">
         <LocalizedText ka="ეს პოლიტიკა განმარტავს, როგორ ამუშავებს Hooma მომხმარებლის პერსონალურ მონაცემებს ონლაინ მაღაზიისა და მასთან დაკავშირებული სერვისების მუშაობისას." en="This policy explains how Hooma processes personal data while operating its online store and related services." />
       </p>
