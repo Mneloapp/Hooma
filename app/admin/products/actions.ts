@@ -81,13 +81,13 @@ export async function moveAllCatalogProductsToDraftAction(
   let movedCount = 0;
   let remainingCount = 1;
   for (let batch = 0; batch < 50 && remainingCount > 0; batch += 1) {
-    const { data, error } = await admin.rpc("move_catalog_products_to_draft_batch_v1", {
+    const { data, error } = await admin.rpc("move_catalog_products_to_draft_batch_v2", {
       actor_profile_id: profile.id,
       confirmation_token: "MOVE_ALL_PRODUCTS_TO_DRAFT",
       requested_batch_size: 500,
     });
     if (error) {
-      const migrationMissing = error.message.includes("move_catalog_products_to_draft_batch_v1")
+      const migrationMissing = error.message.includes("move_catalog_products_to_draft_batch_v2")
         || error.message.includes("schema cache")
         || error.message.includes("function");
       const diagnostic = [error.code, clean(error.message, 180)].filter(Boolean).join(" · ");

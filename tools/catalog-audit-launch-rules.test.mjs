@@ -30,10 +30,14 @@ const bulkDraftTimeoutMigrationPath = new URL(
   "../supabase/migrations/20260729000800_bulk_draft_batch_timeout.sql",
   import.meta.url,
 );
+const safeBulkDraftCleanupMigrationPath = new URL(
+  "../supabase/migrations/20260729000900_safe_bulk_draft_cleanup.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, adminProductsPage, adminPermissions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, adminProductsPage, adminPermissions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
@@ -41,6 +45,7 @@ const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogP
   readFile(fastBulkDraftMigrationPath, "utf8"),
   readFile(batchedBulkDraftMigrationPath, "utf8"),
   readFile(bulkDraftTimeoutMigrationPath, "utf8"),
+  readFile(safeBulkDraftCleanupMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
 ]);
@@ -248,4 +253,19 @@ test("bulk Draft batches have a scoped timeout override", () => {
     /alter function public\.move_catalog_products_to_draft_batch_v1\(uuid, text, integer\)/,
   );
   assert.match(bulkDraftTimeoutMigration, /set statement_timeout = '30s'/);
+});
+
+test("final Draft cleanup satisfies the safe-update WHERE requirement", () => {
+  assert.doesNotMatch(
+    safeBulkDraftCleanupMigration,
+    /delete from public\.storefront_product_cards\s*;/,
+  );
+  assert.match(
+    safeBulkDraftCleanupMigration,
+    /delete from public\.storefront_product_cards card[\s\S]*where exists \([\s\S]*product\.status = 'draft'/,
+  );
+  assert.match(
+    safeBulkDraftCleanupMigration,
+    /set statement_timeout = '30s'/,
+  );
 });
