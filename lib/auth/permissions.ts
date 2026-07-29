@@ -62,6 +62,7 @@ const routePermissions: Array<[string, Permission]> = [
   ["/admin/catalog-agent", "catalog.manage"],
   ["/admin/audit-agent", "catalog.manage"],
   ["/admin/imports", "catalog.manage"],
+  ["/admin/audited-products", "catalog.manage"],
   ["/admin/products", "catalog.manage"],
   ["/admin/inventory", "inventory.manage"],
   ["/admin/production", "production.manage"],
