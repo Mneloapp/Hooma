@@ -1,6 +1,7 @@
 -- Keep the large admin catalog responsive as products and audit results grow.
 
 create extension if not exists pg_trgm with schema extensions;
+set search_path = public, extensions;
 
 create index if not exists idx_products_admin_created
   on public.products(created_at desc, id);
@@ -21,13 +22,13 @@ create index if not exists idx_products_admin_audit_ready_created
     and catalog_audit_applied_at is null;
 
 create index if not exists idx_products_admin_hooma_name_search
-  on public.products using gin (hooma_name extensions.gin_trgm_ops);
+  on public.products using gin (hooma_name gin_trgm_ops);
 
 create index if not exists idx_products_admin_name_ka_search
-  on public.products using gin (name_ka extensions.gin_trgm_ops);
+  on public.products using gin (name_ka gin_trgm_ops);
 
 create index if not exists idx_products_admin_slug_search
-  on public.products using gin (slug extensions.gin_trgm_ops);
+  on public.products using gin (slug gin_trgm_ops);
 
 create or replace function public.get_admin_catalog_counts_v1()
 returns jsonb
