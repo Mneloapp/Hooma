@@ -14,11 +14,20 @@ const bulkDraftMigrationPath = new URL(
   "../supabase/migrations/20260729000400_bulk_draft_catalog.sql",
   import.meta.url,
 );
+const adminCatalogPerformanceMigrationPath = new URL(
+  "../supabase/migrations/20260729000500_admin_catalog_performance.sql",
+  import.meta.url,
+);
+const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
+const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, adminProductsPage, adminPermissions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
+  readFile(adminCatalogPerformanceMigrationPath, "utf8"),
+  readFile(adminProductsPagePath, "utf8"),
+  readFile(adminPermissionsPath, "utf8"),
 ]);
 
 test("category job creation and claim use the same persisted scope", () => {
@@ -169,5 +178,23 @@ test("bulk Draft reset is explicit, privileged, and preserves audit approval", (
   assert.match(
     bulkDraftMigration,
     /perform public\.activate_daily_deals/,
+  );
+});
+
+test("large admin catalog avoids unused counts and uses indexed compact pages", () => {
+  assert.match(adminProductsPage, /const ADMIN_PRODUCTS_PER_PAGE = 50/);
+  assert.match(adminProductsPage, /get_admin_catalog_counts_v1/);
+  assert.match(adminProductsPage, /approvedOnly \? Promise\.resolve\(emptyCounts\)/);
+  assert.match(adminCatalogPerformanceMigration, /count\(\*\) filter \(where status = 'draft'\)/);
+  assert.match(adminCatalogPerformanceMigration, /idx_products_admin_status_created/);
+  assert.match(adminCatalogPerformanceMigration, /idx_products_admin_category_created/);
+  assert.match(adminCatalogPerformanceMigration, /idx_products_admin_audit_applied_created/);
+  assert.match(adminCatalogPerformanceMigration, /gin_trgm_ops/);
+});
+
+test("audited products route is allowed by admin middleware permissions", () => {
+  assert.match(
+    adminPermissions,
+    /\["\/admin\/audited-products", "catalog\.manage"\]/,
   );
 });

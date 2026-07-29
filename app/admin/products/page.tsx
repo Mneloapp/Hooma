@@ -4,7 +4,7 @@ import { MoveAllProductsToDraft } from "@/components/admin/MoveAllProductsToDraf
 import { catalogCategories } from "@/data/catalog";
 import { createClient, requirePermission } from "@/lib/supabase/server";
 
-const ADMIN_PRODUCTS_PER_PAGE = 100;
+const ADMIN_PRODUCTS_PER_PAGE = 50;
 const productStatuses = ["draft", "active", "archived"] as const;
 
 export type AdminProductParams = {
@@ -23,6 +23,18 @@ function normalizedSearch(value: string | undefined) {
 }
 
 async function loadCatalogCounts(supabase: any) {
+  const { data: aggregate, error: aggregateError } = await supabase.rpc("get_admin_catalog_counts_v1");
+  if (!aggregateError && aggregate) {
+    return {
+      total: Number(aggregate.total ?? 0),
+      draft: Number(aggregate.draft ?? 0),
+      active: Number(aggregate.active ?? 0),
+      archived: Number(aggregate.archived ?? 0),
+      error: null,
+    };
+  }
+
+  // Keep the page usable while the performance migration is being deployed.
   const countStatus = (status?: string) => {
     let query = supabase.from("products").select("id", { count: "exact", head: true });
     if (status) query = query.eq("status", status);
@@ -62,10 +74,11 @@ export async function AdminProductCatalogPage({
   const profile = await requirePermission("catalog.manage");
   const supabase = (await createClient()) as any;
 
+  const emptyCounts = { total: 0, draft: 0, active: 0, archived: 0, error: null };
   const [{ data: categoryRows, error: categoryError }, counts] = supabase
     ? await Promise.all([
       supabase.from("categories").select("id,parent_id,slug").order("sort_order", { ascending: true }),
-      loadCatalogCounts(supabase),
+      approvedOnly ? Promise.resolve(emptyCounts) : loadCatalogCounts(supabase),
     ])
     : [{ data: [], error: new Error("Supabase is not configured") }, { total: 0, draft: 0, active: 0, archived: 0, error: new Error("Supabase is not configured") }];
 
