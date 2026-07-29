@@ -26,16 +26,21 @@ const batchedBulkDraftMigrationPath = new URL(
   "../supabase/migrations/20260729000700_batched_bulk_draft_catalog.sql",
   import.meta.url,
 );
+const bulkDraftTimeoutMigrationPath = new URL(
+  "../supabase/migrations/20260729000800_bulk_draft_batch_timeout.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, adminProductsPage, adminPermissions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, adminProductsPage, adminPermissions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
   readFile(adminCatalogPerformanceMigrationPath, "utf8"),
   readFile(fastBulkDraftMigrationPath, "utf8"),
   readFile(batchedBulkDraftMigrationPath, "utf8"),
+  readFile(bulkDraftTimeoutMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
 ]);
@@ -235,4 +240,12 @@ test("whole-catalog Draft reset is split into bounded transactions", () => {
   assert.match(batchedBulkDraftMigration, /status is distinct from 'draft'/);
   assert.match(batchedBulkDraftMigration, /'remaining_count', remaining_total/);
   assert.match(batchedBulkDraftMigration, /delete from public\.storefront_product_cards[\s\S]*product_id = any\(selected_product_ids\)/);
+});
+
+test("bulk Draft batches have a scoped timeout override", () => {
+  assert.match(
+    bulkDraftTimeoutMigration,
+    /alter function public\.move_catalog_products_to_draft_batch_v1\(uuid, text, integer\)/,
+  );
+  assert.match(bulkDraftTimeoutMigration, /set statement_timeout = '30s'/);
 });
