@@ -177,11 +177,11 @@ export function HoomaPlusPurchasePanel({
       <p className="rounded-2xl bg-hooma-panel/70 p-4 text-sm leading-6 text-hooma-muted">
         {summary.active
           ? (georgian
-            ? "ახლა შეძენილი პერიოდი მიმდინარე წევრობის ვადის შემდეგ დაემატება. წევრობის გარეშე 100₾-მდე ჩათვლით მიწოდება 5₾-ია, 100.01₾-დან კი უფასო."
-            : "A plan purchased now is appended after your current membership expires. Without membership, delivery is ₾5 through ₾100 and free from ₾100.01.")
+            ? "ახლა შეძენილი პერიოდი მიმდინარე წევრობის ვადის შემდეგ დაემატება. წევრობის გარეშე 100₾-ზე ნაკლებ შეკვეთაზე მიწოდება 5₾-ია, 100₾-დან კი უფასო."
+            : "A plan purchased now is appended after your current membership expires. Without membership, delivery is ₾5 below ₾100 and free from ₾100.")
           : (georgian
-            ? "წევრობის გარეშე 100₾-მდე ჩათვლით მიწოდება 5₾-ია, 100.01₾-დან კი უფასო."
-            : "Without membership, delivery is ₾5 through ₾100 and free from ₾100.01.")}
+            ? "წევრობის გარეშე 100₾-ზე ნაკლებ შეკვეთაზე მიწოდება 5₾-ია, 100₾-დან კი უფასო."
+            : "Without membership, delivery is ₾5 below ₾100 and free from ₾100.")}
       </p>
 
       <section className="grid gap-5 md:grid-cols-2">

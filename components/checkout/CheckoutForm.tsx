@@ -235,7 +235,7 @@ export function CheckoutForm({
                   {deliveryQuote.benefitCode === "hooma_plus"
                     ? (georgian ? "Hooma+ — უფასო მიწოდება" : "Hooma+ — free delivery")
                     : deliveryQuote.benefitCode === "subtotal_threshold"
-                      ? (georgian ? "100₾-ზე მეტი — უფასო მიწოდება" : "Over ₾100 — free delivery")
+                      ? (georgian ? "100₾-დან — უფასო მიწოდება" : "From ₾100 — free delivery")
                       : deliveryQuote.benefitCode === "welcome_units"
                         ? (georgian ? "ახალი მომხმარებლის უფასო მიწოდება" : "New-customer free delivery")
                         : (georgian ? "სტანდარტული მიწოდება — 5₾" : "Standard delivery — ₾5")}
@@ -251,11 +251,11 @@ export function CheckoutForm({
                         : `${deliverySummary.welcomeUnitsRemaining} free units remain, while this cart has ${unitCount}. The whole cart must fit within the remaining units.`)
                       : deliveryQuote.benefitCode === "standard_fee"
                         ? (georgian
-                          ? `${money.format(deliveryQuote.amountUntilFreeDeliveryMinor / 100)} დაამატე, რომ პროდუქტის ჯამმა 100₾-ს გადააჭარბოს და მიწოდება უფასო გახდეს.`
-                          : `Add ${money.format(deliveryQuote.amountUntilFreeDeliveryMinor / 100)} so the product subtotal exceeds ₾100 and delivery becomes free.`)
+                          ? `${money.format(deliveryQuote.amountUntilFreeDeliveryMinor / 100)} დაამატე, რომ პროდუქტის ჯამმა 100₾-ს მიაღწიოს და მიწოდება უფასო გახდეს.`
+                          : `Add ${money.format(deliveryQuote.amountUntilFreeDeliveryMinor / 100)} so the product subtotal reaches ₾100 and delivery becomes free.`)
                         : deliveryQuote.benefitCode === "hooma_plus"
                           ? (georgian ? "აქტიური წევრობა პირველ 10 უფასო ერთეულს არ ხარჯავს." : "Active membership does not use your first 10 free units.")
-                          : (georgian ? "პროდუქტის ჯამი 100₾-ზე მეტია." : "The product subtotal is over ₾100.")}
+                          : (georgian ? "პროდუქტის ჯამი მინიმუმ 100₾-ია." : "The product subtotal is at least ₾100.")}
                 </p>
               </div>
             </div>

@@ -49,7 +49,7 @@ export default async function HoomaPlusPage() {
               <div className="mt-6 space-y-4">
                 {[
                   ["Hooma+", "Hooma+", "0₾", "₾0", "აქტიური წევრობა", "Active membership"],
-                  ["100.01₾+", "₾100.01+", "0₾", "₾0", "პროდუქტების ჯამი 100₾-ზე მეტია", "Product subtotal over ₾100"],
+                  ["100₾-დან", "From ₾100", "0₾", "₾0", "პროდუქტების ჯამი მინიმუმ 100₾-ია", "Product subtotal is at least ₾100"],
                   [
                     "პირველი 10 პროდუქტის ერთეულის მიწოდება",
                     "Delivery for your first 10 product units",
@@ -81,7 +81,7 @@ export default async function HoomaPlusPage() {
           <article className="rounded-[2rem] bg-white/75 p-6 shadow-soft">
             <PackageCheck className="text-hooma-accent" />
             <h2 className="mt-5 text-xl font-semibold"><LocalizedText ka="დარჩენილი ბალანსი შენარჩუნდება" en="Keep your remaining balance" /></h2>
-            <p className="mt-3 text-sm leading-6 text-hooma-muted"><LocalizedText ka="Hooma+ ან 100₾-ზე მეტი კალათა პირველი 10 პროდუქტის ერთეულის მიწოდების დარჩენილ ბალანსს არ ხარჯავს." en="Hooma+ and carts over ₾100 do not consume your remaining first-10 product-unit delivery balance." /></p>
+            <p className="mt-3 text-sm leading-6 text-hooma-muted"><LocalizedText ka="Hooma+ ან მინიმუმ 100₾-იანი კალათა პირველი 10 პროდუქტის ერთეულის მიწოდების დარჩენილ ბალანსს არ ხარჯავს." en="Hooma+ and carts of at least ₾100 do not consume your remaining first-10 product-unit delivery balance." /></p>
           </article>
           <article className="rounded-[2rem] bg-white/75 p-6 shadow-soft">
             <Sparkles className="text-hooma-accent" />
@@ -108,8 +108,8 @@ export default async function HoomaPlusPage() {
         </div>
         <p className="mt-5 text-center text-xs leading-5 text-hooma-muted">
           <LocalizedText
-            ka="Hooma+ ვრცელდება კატალოგის სტანდარტულ მიწოდებაზე; ინდივიდუალური შეკვეთები ამ პროგრამაში არ შედის. წევრობის გარეშე 100₾-მდე ჩათვლით მიწოდება 5₾-ია, ხოლო 100.01₾-დან — უფასო."
-            en="Hooma+ applies to standard catalog delivery; custom orders are excluded. Without membership, delivery is ₾5 through a ₾100 subtotal and free from ₾100.01."
+            ka="Hooma+ ვრცელდება კატალოგის სტანდარტულ მიწოდებაზე; ინდივიდუალური შეკვეთები ამ პროგრამაში არ შედის. წევრობის გარეშე 100₾-ზე ნაკლებ შეკვეთაზე მიწოდება 5₾-ია, ხოლო 100₾-დან — უფასო."
+            en="Hooma+ applies to standard catalog delivery; custom orders are excluded. Without membership, delivery is ₾5 below a ₾100 subtotal and free from ₾100."
           />
         </p>
       </section>

@@ -14,7 +14,7 @@ export const HOOMA_PLUS_PLANS = {
 export type HoomaPlusPlanCode = keyof typeof HOOMA_PLUS_PLANS;
 
 export const DELIVERY_POLICY = {
-  version: "2026-07-29",
+  version: "2026-07-29-free-from-100",
   standardFeeMinor: 500,
   freeAboveSubtotalMinor: 10_000,
   welcomeUnits: 10,
@@ -79,7 +79,7 @@ export function quoteCatalogDelivery(input: {
   if (input.summary.active) {
     deliveryMinor = 0;
     benefitCode = "hooma_plus";
-  } else if (subtotalMinor > DELIVERY_POLICY.freeAboveSubtotalMinor) {
+  } else if (subtotalMinor >= DELIVERY_POLICY.freeAboveSubtotalMinor) {
     deliveryMinor = 0;
     benefitCode = "subtotal_threshold";
   } else if (unitCount > 0 && unitCount <= remaining) {
@@ -95,9 +95,9 @@ export function quoteCatalogDelivery(input: {
     benefitCode,
     welcomeUnitsToReserve,
     welcomeUnitsRemainingAfterPayment: Math.max(0, remaining - welcomeUnitsToReserve),
-    amountUntilFreeDeliveryMinor: subtotalMinor > DELIVERY_POLICY.freeAboveSubtotalMinor
+    amountUntilFreeDeliveryMinor: subtotalMinor >= DELIVERY_POLICY.freeAboveSubtotalMinor
       ? 0
-      : DELIVERY_POLICY.freeAboveSubtotalMinor + 1 - subtotalMinor,
+      : DELIVERY_POLICY.freeAboveSubtotalMinor - subtotalMinor,
   };
 }
 

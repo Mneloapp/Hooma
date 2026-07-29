@@ -128,8 +128,8 @@ export default async function AccountOrdersPage() {
                   <p><LocalizedText ka="პროდუქტები" en="Products" />: {money.format(Number(order.subtotal ?? 0))}</p>
                   <p><LocalizedText ka="მიწოდება" en="Delivery" />: {Number(order.delivery_fee ?? 0) === 0 ? <LocalizedText ka="უფასო" en="Free" /> : money.format(Number(order.delivery_fee))}</p>
                   <p className="font-medium text-hooma-text"><LocalizedText
-                    ka={order.delivery_benefit_code === "hooma_plus" ? "Hooma+ ბენეფიტი" : order.delivery_benefit_code === "subtotal_threshold" ? "100₾-ზე მეტი" : order.delivery_benefit_code === "welcome_units" ? "პირველი 10 ერთეული" : order.delivery_benefit_code === "standard_fee" ? "სტანდარტული ტარიფი" : "ძველი უფასო პირობა"}
-                    en={order.delivery_benefit_code === "hooma_plus" ? "Hooma+ benefit" : order.delivery_benefit_code === "subtotal_threshold" ? "Over ₾100" : order.delivery_benefit_code === "welcome_units" ? "First 10 units" : order.delivery_benefit_code === "standard_fee" ? "Standard rate" : "Legacy free condition"}
+                    ka={order.delivery_benefit_code === "hooma_plus" ? "Hooma+ ბენეფიტი" : order.delivery_benefit_code === "subtotal_threshold" ? "100₾-დან" : order.delivery_benefit_code === "welcome_units" ? "პირველი 10 ერთეული" : order.delivery_benefit_code === "standard_fee" ? "სტანდარტული ტარიფი" : "ძველი უფასო პირობა"}
+                    en={order.delivery_benefit_code === "hooma_plus" ? "Hooma+ benefit" : order.delivery_benefit_code === "subtotal_threshold" ? "From ₾100" : order.delivery_benefit_code === "welcome_units" ? "First 10 units" : order.delivery_benefit_code === "standard_fee" ? "Standard rate" : "Legacy free condition"}
                   /></p>
                 </div>
               </div>

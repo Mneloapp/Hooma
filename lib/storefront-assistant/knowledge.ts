@@ -34,8 +34,8 @@ export const storefrontFaqs: StorefrontFaq[] = [
       en: "When will I receive my order?",
     },
     answer: {
-      ka: "სტანდარტული კატალოგის პროდუქტებისთვის მიზანია, შეკვეთა 3 სამუშაო დღეში მომზადდეს ან გასაგზავნად გადაეცეს. მიწოდება უფასოა აქტიური Hooma+ წევრისთვის, ახალი მომხმარებლის პირველ 10 პროდუქტის ერთეულზე (თუ მთელი კალათა დარჩენილ ბალანსში ეტევა) ან როცა პროდუქტის ჯამი 100₾-ს აღემატება. სხვა შემთხვევაში ერთ შეკვეთაზე მიწოდება 5₾ ღირს. საბოლოო პირობას Checkout აჩვენებს.",
-      en: "For standard catalog products, the target is to prepare or dispatch the order within 3 business days. Delivery is free with active Hooma+, within a new customer's first 10 product units when the whole cart fits the remaining balance, or when the product subtotal exceeds ₾100. Otherwise delivery is ₾5 per order. Checkout shows the final condition.",
+      ka: "სტანდარტული კატალოგის პროდუქტებისთვის მიზანია, შეკვეთა 3 სამუშაო დღეში მომზადდეს ან გასაგზავნად გადაეცეს. მიწოდება უფასოა აქტიური Hooma+ წევრისთვის, ახალი მომხმარებლის პირველ 10 პროდუქტის ერთეულზე (თუ მთელი კალათა დარჩენილ ბალანსში ეტევა) ან როცა პროდუქტის ჯამი მინიმუმ 100₾-ია. სხვა შემთხვევაში ერთ შეკვეთაზე მიწოდება 5₾ ღირს. საბოლოო პირობას Checkout აჩვენებს.",
+      en: "For standard catalog products, the target is to prepare or dispatch the order within 3 business days. Delivery is free with active Hooma+, within a new customer's first 10 product units when the whole cart fits the remaining balance, or when the product subtotal is at least ₾100. Otherwise delivery is ₾5 per order. Checkout shows the final condition.",
     },
   },
   {
