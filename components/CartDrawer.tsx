@@ -62,7 +62,7 @@ export function CartDrawer() {
         {items.length ? (
           <div className="mt-6 rounded-2xl border border-hooma-text/10 bg-white/70 p-4 text-sm">
             <div className="flex justify-between gap-4"><span className="text-hooma-muted">{georgian ? "პროდუქტები" : "Products"}</span><strong>{pricesComplete ? money.format(subtotal) : "—"}</strong></div>
-            <p className="mt-3 text-xs leading-5 text-hooma-muted">{georgian ? "მიწოდება Checkout-ზე ითვლება: Hooma+ წევრისთვის ან 100₾-ზე მეტი პროდუქტის ჯამზე — უფასო. პირველი 10 პროდუქტის ერთეულის ბენეფიტისთვის მთელი კალათა დარჩენილ ბალანსში უნდა ჩაეტიოს; სხვა შემთხვევაში მიწოდება 5₾-ია." : "Delivery is calculated at checkout: free with Hooma+ or when products total over ₾100. For the first-10 product-unit benefit, the whole cart must fit the remaining balance; otherwise delivery is ₾5."}</p>
+            <p className="mt-3 text-xs leading-5 text-hooma-muted">{georgian ? "მიწოდება Checkout-ზე ითვლება: Hooma+ წევრისთვის ან მინიმუმ 100₾ პროდუქტის ჯამზე — უფასო. პირველი 10 პროდუქტის ერთეულის ბენეფიტისთვის მთელი კალათა დარჩენილ ბალანსში უნდა ჩაეტიოს; სხვა შემთხვევაში მიწოდება 5₾-ია." : "Delivery is calculated at checkout: free with Hooma+ or when products total at least ₾100. For the first-10 product-unit benefit, the whole cart must fit the remaining balance; otherwise delivery is ₾5."}</p>
             <Link href="/hooma-plus" onClick={closeCart} className="mt-3 inline-flex text-xs font-semibold text-hooma-accent hover:underline">{georgian ? "Hooma+ პირობები" : "Hooma+ details"}</Link>
           </div>
         ) : null}

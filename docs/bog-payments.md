@@ -90,7 +90,7 @@ current expiry.
 The database snapshots the rule and fee before BOG payment creation:
 
 1. Active Hooma+ member: free standard catalog delivery.
-2. Product subtotal strictly above GEL 100: free delivery.
+2. Product subtotal of at least GEL 100: free delivery.
 3. If the complete cart's unit count fits inside the customer's remaining first
    10 welcome units: free delivery and those units are reserved.
 4. Otherwise: GEL 5 per catalog order.

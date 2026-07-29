@@ -16,27 +16,30 @@ const summary = (overrides = {}) => ({
   ...overrides,
 });
 
-test("delivery rules use Hooma+, strict over-100 threshold, welcome units, then 5 GEL", () => {
+test("delivery rules use Hooma+, free from 100, welcome units, then 5 GEL", () => {
   assert.equal(quoteCatalogDelivery({
     subtotalMinor: 1_000,
     unitCount: 20,
     summary: summary({ active: true }),
   }).benefitCode, "hooma_plus");
 
-  assert.equal(quoteCatalogDelivery({
-    subtotalMinor: 10_001,
-    unitCount: 20,
-    summary: summary({ welcomeUnitsRemaining: 0 }),
-  }).benefitCode, "subtotal_threshold");
-
   const exactlyOneHundred = quoteCatalogDelivery({
     subtotalMinor: 10_000,
+    unitCount: 20,
+    summary: summary({ welcomeUnitsRemaining: 0 }),
+  });
+  assert.equal(exactlyOneHundred.benefitCode, "subtotal_threshold");
+  assert.equal(exactlyOneHundred.deliveryMinor, 0);
+  assert.equal(exactlyOneHundred.amountUntilFreeDeliveryMinor, 0);
+
+  const oneCentBelow = quoteCatalogDelivery({
+    subtotalMinor: 9_999,
     unitCount: 1,
     summary: summary({ welcomeUnitsRemaining: 0 }),
   });
-  assert.equal(exactlyOneHundred.benefitCode, "standard_fee");
-  assert.equal(exactlyOneHundred.deliveryMinor, 500);
-  assert.equal(exactlyOneHundred.amountUntilFreeDeliveryMinor, 1);
+  assert.equal(oneCentBelow.benefitCode, "standard_fee");
+  assert.equal(oneCentBelow.deliveryMinor, 500);
+  assert.equal(oneCentBelow.amountUntilFreeDeliveryMinor, 1);
 
   const welcome = quoteCatalogDelivery({
     subtotalMinor: 2_000,
@@ -63,7 +66,18 @@ test("migration keeps delivery and Hooma+ payment decisions server-authoritative
     new URL("../supabase/migrations/20260729001100_hooma_plus_delivery.sql", import.meta.url),
     "utf8",
   );
-  assert.match(migration, /created_order\.subtotal > settings_record\.free_above_subtotal/);
+  const inclusiveThresholdMigration = readFileSync(
+    new URL("../supabase/migrations/20260729001200_hooma_plus_free_from_100.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    inclusiveThresholdMigration,
+    /created_order\.subtotal >= settings_record\.free_above_subtotal/,
+  );
+  assert.match(
+    inclusiveThresholdMigration,
+    /free_above_subtotal = 100\.00/,
+  );
   assert.match(migration, /unit_count <= welcome_remaining/);
   assert.match(migration, /requested_expected_total/);
   assert.match(migration, /status = 'consumed'/);
