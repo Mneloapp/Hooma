@@ -6,7 +6,7 @@ import { canAccessAdminPath, defaultAdminPath, isStaffRole, isUserRole } from "@
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
-  const protectedPath = pathname.startsWith("/admin") || pathname.startsWith("/account") || pathname === "/checkout";
+  const protectedPath = pathname.startsWith("/admin") || pathname.startsWith("/account") || pathname.startsWith("/checkout");
   if (!protectedPath) return response;
 
   const redirectToLogin = () => {
@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
-  if (pathname === "/checkout" && isStaffRole(profile.role)) {
+  if (pathname.startsWith("/checkout") && isStaffRole(profile.role)) {
     const url = request.nextUrl.clone();
     url.pathname = defaultAdminPath(profile.role);
     url.search = "";
@@ -63,5 +63,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/account/:path*", "/checkout"],
+  matcher: ["/admin/:path*", "/account/:path*", "/checkout/:path*"],
 };

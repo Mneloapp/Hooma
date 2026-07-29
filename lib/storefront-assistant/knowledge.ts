@@ -23,8 +23,8 @@ export const storefrontFaqs: StorefrontFaq[] = [
       en: "How do I place an order?",
     },
     answer: {
-      ka: "კატალოგში აირჩიე პროდუქტი, შემდეგ მიუთითე ვერსია, მასალა, ფერი და რაოდენობა, დაამატე კალათაში და გააგრძელე შეკვეთის გაფორმება. ამ ეტაპზე გაფორმება სატესტოა: თანხა არ ჩამოგეჭრება და წარმოება ავტომატურად არ დაიწყება. მიმდინარე სტატუსს „შეკვეთების“ გვერდზე ნახავ.",
-      en: "Choose a product in the catalog, select its version, material, color, and quantity, add it to the cart, and continue to checkout. Checkout is currently in test mode: you will not be charged and production will not start automatically. You can follow the current status on the Orders page.",
+      ka: "კატალოგში აირჩიე პროდუქტი, მიუთითე ვერსია, მასალა, ფერი და რაოდენობა, დაამატე კალათაში და გააგრძელე შეკვეთის გაფორმება. სრული თანხა გადაიხდება BOG-ის უსაფრთხო გვერდზე. მხოლოდ ბანკის დაცული დადასტურების შემდეგ მოინიშნება შეკვეთა გადახდილად, ხოლო წარმოებას ოპერატორი ამოწმებს. მიმდინარე სტატუსს „შეკვეთების“ გვერდზე ნახავ.",
+      en: "Choose a product, select its version, material, color, and quantity, add it to the cart, and continue to checkout. The full amount is paid on BOG’s secure page. The order is marked paid only after the bank’s secure confirmation, and an operator reviews it before production. Follow the current status on the Orders page.",
     },
   },
   {
@@ -100,8 +100,8 @@ export const storefrontFaqs: StorefrontFaq[] = [
       en: "Is online payment available?",
     },
     answer: {
-      ka: "ონლაინ საბანკო გადახდა ჯერ არ არის ჩართული. სანამ გადახდის პარტნიორი სრულად გააქტიურდება, Hooma შეკვეთისას საბანკო ბარათიდან თანხას არ ჩამოგაჭრის.",
-      en: "Live online bank payment is not enabled yet. Until the payment partner is fully activated, Hooma will not charge a bank card when an order is placed.",
+      ka: "Hooma იყენებს BOG-ის უსაფრთხო გვერდზე სრულ გადახდას. განვადება და თანხის გაყოფა არ გამოიყენება. თუ checkout-ზე გადახდა დროებით მიუწვდომლად ჩანს, საბანკო კავშირი ჯერ არ არის გააქტიურებული და თანხა არ ჩამოგეჭრება.",
+      en: "Hooma uses full payment on BOG’s secure page. Installments and split payments are not used. If checkout shows payment as temporarily unavailable, the bank connection is not active yet and you will not be charged.",
     },
   },
   {

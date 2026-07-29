@@ -8,11 +8,11 @@
 4. The request appears in the customer account with `submitted` status.
 5. An operator reviews the files and publishes a unit price, lead time, and notes.
 6. The customer accepts the quote; the request moves to `payment_pending`.
-7. Live bank checkout will collect the delivery address and initiate TBC or Bank of Georgia payment.
+7. Online payment for custom quotes is deferred. Bank of Georgia checkout currently applies only to catalog orders; an operator confirms the next step for an accepted custom quote.
 
-## Payment and production boundary
+## Payment and production boundary (deferred)
 
-Only a signature-verified, idempotent bank webhook may mark a quote `paid`. Trusted server code then calls `queue_paid_custom_quote(uuid)`. The database function:
+When online custom-quote payment is enabled, only a signature-verified, idempotent bank webhook may mark a quote `paid`. Trusted server code then calls `queue_paid_custom_quote(uuid)`. The database function:
 
 - verifies paid status, price, delivery address, and operator file approval;
 - creates the normal Hooma order and order item;
