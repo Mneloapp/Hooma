@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const sections = [
   {
     title: "რა მონაცემებს ვამუშავებთ",
-    copy: "ანგარიშის შექმნისა და შეკვეთის შესრულებისთვის შესაძლოა დავამუშავოთ სახელი, ელფოსტა, ტელეფონი, მიწოდების მისამართი, მომხმარებლის მიერ რუკაზე მონიშნული ზუსტი კოორდინატები, შეკვეთებისა და გადახდის სტატუსის ისტორია, ინდივიდუალური შეკვეთის ფაილები და პლატფორმის უსაფრთხოებისთვის საჭირო ტექნიკური ჩანაწერები. Hooma არ ინახავს საბანკო ბარათის სრულ მონაცემებს.",
+    copy: "ანგარიშის შექმნისა და შეკვეთის შესრულებისთვის შესაძლოა დავამუშავოთ სახელი, ელფოსტა, ტელეფონი, მიწოდების მისამართი, მომხმარებლის მიერ რუკაზე მონიშნული ზუსტი კოორდინატები, შეკვეთებისა და გადახდის სტატუსის ისტორია, Hooma+ წევრობის პერიოდი და პირველი 10 ერთეულის გამოყენების ბალანსი, ინდივიდუალური შეკვეთის ფაილები და პლატფორმის უსაფრთხოებისთვის საჭირო ტექნიკური ჩანაწერები. Hooma არ ინახავს საბანკო ბარათის სრულ მონაცემებს.",
   },
   {
     title: "რისთვის ვიყენებთ მონაცემებს",
@@ -47,7 +47,7 @@ const sections = [
 ];
 
 const sectionsEn = [
-  { title: "Data we process", copy: "To create an account and fulfill an order, we may process your name, email, phone number, delivery address, exact coordinates you select on the map, order and payment-status history, custom-order files, and technical records needed for platform security. Hooma does not store full payment-card details." },
+  { title: "Data we process", copy: "To create an account and fulfill an order, we may process your name, email, phone number, delivery address, exact coordinates you select on the map, order and payment-status history, Hooma+ membership periods and first-10-unit usage balance, custom-order files, and technical records needed for platform security. Hooma does not store full payment-card details." },
   { title: "How we use data", copy: "We use data to manage accounts, receive and produce orders, provide delivery and tracking, communicate with customers, prevent fraud, improve the service, and meet legal accounting and tax obligations." },
   { title: "Hooma AI assistant", copy: "When you use chat, only the current question and limited technical data needed for safety may be processed by our AI service provider to generate an answer and prevent abuse. The answer-generation request is sent with storage disabled, and Hooma does not retain chat text in its own database. Do not enter passwords, bank-card details, phone numbers, email addresses, or other sensitive information in chat. The assistant cannot access personal orders." },
   { title: "Google sign-in", copy: "When you sign in with Google, Hooma requests only the basic information needed for authentication: account identifier, name, email, and profile image when available. Hooma does not request access to Gmail, Google Drive, or content from other Google services." },

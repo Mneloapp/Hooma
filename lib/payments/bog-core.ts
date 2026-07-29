@@ -25,6 +25,8 @@ export type BogCreateOrderInput = {
   externalOrderId: string;
   totalMinor: number;
   basket: BogBasketItem[];
+  deliveryMinor?: number;
+  ttlMinutes?: number;
   successUrl: string;
   failUrl: string;
   paymentMethods: BogPaymentMethod[];
@@ -80,6 +82,14 @@ export function buildBogCreateOrderPayload(input: BogCreateOrderInput) {
   if (!input.paymentMethods.length || input.paymentMethods.some((method) => !BOG_FULL_PAYMENT_METHODS.includes(method))) {
     throw new Error("BOG payment method is not allowed");
   }
+  const deliveryMinor = input.deliveryMinor ?? 0;
+  if (!Number.isSafeInteger(deliveryMinor) || deliveryMinor < 0) {
+    throw new Error("Invalid BOG delivery amount");
+  }
+  const ttlMinutes = input.ttlMinutes ?? 15;
+  if (!Number.isInteger(ttlMinutes) || ttlMinutes < 2 || ttlMinutes > 1_440) {
+    throw new Error("Invalid BOG payment lifespan");
+  }
 
   const basketTotal = input.basket.reduce((sum, item) => {
     if (!item.productId || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 20) {
@@ -90,7 +100,9 @@ export function buildBogCreateOrderPayload(input: BogCreateOrderInput) {
     }
     return sum + item.unitPriceMinor * item.quantity;
   }, 0);
-  if (basketTotal !== input.totalMinor) throw new Error("BOG basket total does not match the order total");
+  if (basketTotal + deliveryMinor !== input.totalMinor) {
+    throw new Error("BOG basket and delivery total does not match the order total");
+  }
 
   return {
     application_type: "web" as const,
@@ -106,11 +118,15 @@ export function buildBogCreateOrderPayload(input: BogCreateOrderInput) {
         quantity: item.quantity,
         unit_price: minorToAmount(item.unitPriceMinor),
       })),
+      ...(deliveryMinor > 0
+        ? { delivery: { amount: minorToAmount(deliveryMinor) } }
+        : {}),
     },
     redirect_urls: {
       success: input.successUrl,
       fail: input.failUrl,
     },
+    ttl: ttlMinutes,
     payment_method: [...new Set(input.paymentMethods)],
   };
 }

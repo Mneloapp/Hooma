@@ -34,8 +34,8 @@ export const storefrontFaqs: StorefrontFaq[] = [
       en: "When will I receive my order?",
     },
     answer: {
-      ka: "სტანდარტული კატალოგის პროდუქტებისთვის მიზანია, შეკვეთა 3 სამუშაო დღეში მომზადდეს ან გასაგზავნად გადაეცეს. ეს არ არის სახლში მიღების უპირობო გარანტია: ინდივიდუალური, რთული ან დიდი მოცულობის შეკვეთის რეალურ ვადას ოპერატორი დადასტურებისას გაცნობებს.",
-      en: "For standard catalog products, the target is to prepare or dispatch the order within 3 business days. This is not an unconditional arrival guarantee; an operator confirms the actual timing for custom, complex, or high-volume orders.",
+      ka: "სტანდარტული კატალოგის პროდუქტებისთვის მიზანია, შეკვეთა 3 სამუშაო დღეში მომზადდეს ან გასაგზავნად გადაეცეს. მიწოდება უფასოა აქტიური Hooma+ წევრისთვის, ახალი მომხმარებლის პირველ 10 პროდუქტის ერთეულზე (თუ მთელი კალათა დარჩენილ ბალანსში ეტევა) ან როცა პროდუქტის ჯამი 100₾-ს აღემატება. სხვა შემთხვევაში ერთ შეკვეთაზე მიწოდება 5₾ ღირს. საბოლოო პირობას Checkout აჩვენებს.",
+      en: "For standard catalog products, the target is to prepare or dispatch the order within 3 business days. Delivery is free with active Hooma+, within a new customer's first 10 product units when the whole cart fits the remaining balance, or when the product subtotal exceeds ₾100. Otherwise delivery is ₾5 per order. Checkout shows the final condition.",
     },
   },
   {
@@ -102,6 +102,17 @@ export const storefrontFaqs: StorefrontFaq[] = [
     answer: {
       ka: "Hooma იყენებს BOG-ის უსაფრთხო გვერდზე სრულ გადახდას. განვადება და თანხის გაყოფა არ გამოიყენება. თუ checkout-ზე გადახდა დროებით მიუწვდომლად ჩანს, საბანკო კავშირი ჯერ არ არის გააქტიურებული და თანხა არ ჩამოგეჭრება.",
       en: "Hooma uses full payment on BOG’s secure page. Installments and split payments are not used. If checkout shows payment as temporarily unavailable, the bank connection is not active yet and you will not be charged.",
+    },
+  },
+  {
+    id: "hooma-plus",
+    question: {
+      ka: "რა არის Hooma+?",
+      en: "What is Hooma+?",
+    },
+    answer: {
+      ka: "Hooma+ არის კატალოგის სტანდარტული მიწოდების წინასწარ გადახდილი წევრობა: 35₾ ერთი კალენდარული თვით ან 350₾ ერთი კალენდარული წლით. წევრობა ავტომატურად არ განახლდება და განმეორებითი თანხა არ ჩამოიჭრება. მხოლოდ BOG-ის დაცული დადასტურების შემდეგ აქტიურდება. პირადი სტატუსი და პირველი 10 ერთეულის ბალანსი ჩანს ანგარიშის Hooma+ გვერდზე, ჩატს მათზე წვდომა არ აქვს.",
+      en: "Hooma+ is prepaid membership for standard catalog delivery: ₾35 for one calendar month or ₾350 for one calendar year. It does not auto-renew or charge again automatically and activates only after BOG's secure confirmation. Your personal status and first-10-unit balance appear on the account Hooma+ page; chat cannot access them.",
     },
   },
   {
@@ -174,12 +185,24 @@ const rules: KnowledgeRule[] = [
     ],
   },
   {
+    faqId: "hooma-plus",
+    keywords: [
+      "hooma+", "hooma plus", "უფასო მიწოდება", "წევრობა", "აბონემენტი",
+      "membership", "free delivery", "monthly plan", "annual plan",
+    ],
+    actions: ["hooma_plus"],
+    suggestions: [
+      { ka: "როგორ ითვლება პირველი 10 ერთეული?", en: "How are the first 10 units counted?" },
+      { ka: "რა ღირს სტანდარტული მიწოდება?", en: "What does standard delivery cost?" },
+    ],
+  },
+  {
     faqId: "payment",
     keywords: [
       "გადახდ", "ბარათით გადახდ", "payment", "pay online", "pay by card",
       "credit card payment", "bank card payment",
     ],
-    actions: ["how_it_works"],
+    actions: ["how_it_works", "hooma_plus"],
     suggestions: [
       { ka: "როგორ შევუკვეთო?", en: "How do I place an order?" },
       { ka: "სად ვნახო შეკვეთის სტატუსი?", en: "Where can I see order status?" },
@@ -191,7 +214,7 @@ const rules: KnowledgeRule[] = [
       "მიწოდ", "რამდენ დღ", "როდის მივიღ", "კურიერ", "delivery", "how many days", "when will",
       "courier", "shipping",
     ],
-    actions: ["how_it_works"],
+    actions: ["how_it_works", "hooma_plus"],
     suggestions: [
       { ka: "როგორ შევუკვეთო?", en: "How do I place an order?" },
       { ka: "ყველა პროდუქტი მზად გაქვთ?", en: "Are products kept in stock?" },

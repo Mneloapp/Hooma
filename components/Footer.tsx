@@ -16,6 +16,7 @@ export function Footer() {
         </div>
         <div className="grid gap-3 text-sm text-white/65">
           <Link href="/shop">{t.footer.shop}</Link>
+          <Link href="/hooma-plus">Hooma+</Link>
           <Link href="/how-it-works">{t.footer.howItWorks}</Link>
           <Link href="/faq">{t.footer.faq}</Link>
         </div>

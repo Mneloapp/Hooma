@@ -25,6 +25,10 @@ const sections = [
     copy: "საბოლოო ფასი და მიწოდების საფასური ნაჩვენებია გადახდამდე. ონლაინ გადახდას BOG-ის დაცულ გვერდზე მომხმარებელი სრული თანხით ასრულებს; განვადება და თანხის გაყოფა არ გამოიყენება. Hooma არ იღებს და არ ინახავს საბანკო ბარათის სრულ მონაცემებს. შეკვეთა გადახდილად ითვლება მხოლოდ ბანკის დაცული დადასტურების შემდეგ.",
   },
   {
+    title: "მიწოდების საფასური და Hooma+",
+    copy: "კატალოგის სტანდარტული მიწოდება უფასოა აქტიური Hooma+ წევრისთვის, თითო რეგისტრირებული მომხმარებლის ანგარიშის პირველ 10 პროდუქტის ერთეულზე — თუ მთელი კალათა დარჩენილ ბალანსში ეტევა — ან როცა პროდუქტის ჯამი 100 ლარს აღემატება. სხვა შემთხვევაში ერთ შეკვეთაზე მიწოდება 5 ლარია. პირველი 10 ერთეულის აქციისთვის დამატებითი ან დუბლირებული ანგარიშების გამოყენება დაუშვებელია. Hooma+ წინასწარ გადაიხდება 35 ლარად ერთი კალენდარული თვით ან 350 ლარად ერთი კალენდარული წლით, ავტომატური განახლებისა და განმეორებითი ჩამოჭრის გარეშე. Hooma+ კატალოგის შეკვეთებზე ვრცელდება; ინდივიდუალური შეკვეთები პროგრამაში არ შედის.",
+  },
+  {
     title: "ინდივიდუალური შეკვეთები",
     copy: "ფაილის ან სხვა მასალის ატვირთვით მომხმარებელი ადასტურებს, რომ აქვს მისი გამოყენებისა და დამზადებისთვის გადაცემის უფლება. Hooma-ს შეუძლია უარი თქვას მოთხოვნაზე, რომლის წარმოება ტექნიკურად შეუძლებელი, სახიფათო ან უკანონოა.",
   },
@@ -47,6 +51,7 @@ const sectionsEn = [
   { title: "Orders and production", copy: "Products are made to order. Production begins after the relevant order and payment status is confirmed. The three-business-day target may change because of product complexity, material availability, order volume, or delivery conditions; we will notify you of material changes." },
   { title: "Product characteristics", copy: "Minor differences in color, surface texture, or natural production details may occur between digital images and the finished item. Follow the usage and safety instructions shown on the product page." },
   { title: "Prices and payment", copy: "The final price and delivery fee are shown before payment. The customer pays the full amount on BOG’s secure page; installments and split payments are not used. Hooma does not receive or store full payment-card details. An order is considered paid only after the bank’s secure confirmation." },
+  { title: "Delivery fees and Hooma+", copy: "Standard catalog delivery is free with active Hooma+, for the first 10 product units of each registered customer account when the whole cart fits the remaining balance, or when the product subtotal exceeds GEL 100. Otherwise delivery is GEL 5 per order. Using additional or duplicate accounts for the first-10 promotion is prohibited. Hooma+ is prepaid at GEL 35 for one calendar month or GEL 350 for one calendar year, without automatic renewal or recurring charges. Hooma+ applies to catalog orders; custom orders are excluded." },
   { title: "Custom orders", copy: "By uploading a file or other material, you confirm that you have the right to provide it for use and production. Hooma may reject requests that are technically impossible, unsafe, or illegal to produce." },
   { title: "Returns and complaints", copy: "For defects, damage, or mismatch with an order, contact us within a reasonable period and provide the order details. Each case is reviewed according to the product type and mandatory consumer-protection rules. These terms do not limit your statutory rights." },
   { title: "Liability and availability", copy: "We work to keep platform information accurate and the service available, but temporary interruptions may occur during testing or maintenance. Any limitation of liability applies only to the extent permitted by law." },

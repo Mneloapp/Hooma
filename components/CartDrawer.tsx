@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { X } from "lucide-react";
 import { Button } from "./Button";
 import { useCart } from "./CartContext";
@@ -10,6 +11,17 @@ export function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, keyFor } = useCart();
   const { language } = useLanguage();
   const georgian = language === "ka";
+  const pricesComplete = items.length > 0 && items.every(
+    (item) => typeof item.price === "number" && Number.isFinite(item.price),
+  );
+  const subtotal = pricesComplete
+    ? items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
+    : 0;
+  const money = new Intl.NumberFormat(georgian ? "ka-GE" : "en-GB", {
+    style: "currency",
+    currency: "GEL",
+    currencyDisplay: "narrowSymbol",
+  });
 
   return (
     <div className={`fixed inset-0 z-50 ${isOpen ? "" : "pointer-events-none"}`}>
@@ -35,7 +47,7 @@ export function CartDrawer() {
               <div>
                 <div className="flex justify-between gap-3">
                   <h3 className="font-medium">{georgian ? item.name : item.product_name}</h3>
-                  <span className="text-sm text-hooma-muted">{item.price ?? item.pricePlaceholder}</span>
+                  <span className="text-sm text-hooma-muted">{typeof item.price === "number" ? money.format(item.price * item.quantity) : item.pricePlaceholder}</span>
                 </div>
                 <p className="mt-1 text-xs text-hooma-muted">{item.size_label} / {item.material} / {item.color}</p>
                 <div className="mt-3 flex items-center gap-3">
@@ -47,6 +59,13 @@ export function CartDrawer() {
             </div>
           ))}
         </div>
+        {items.length ? (
+          <div className="mt-6 rounded-2xl border border-hooma-text/10 bg-white/70 p-4 text-sm">
+            <div className="flex justify-between gap-4"><span className="text-hooma-muted">{georgian ? "პროდუქტები" : "Products"}</span><strong>{pricesComplete ? money.format(subtotal) : "—"}</strong></div>
+            <p className="mt-3 text-xs leading-5 text-hooma-muted">{georgian ? "მიწოდება Checkout-ზე ითვლება: Hooma+ წევრისთვის ან 100₾-ზე მეტი პროდუქტის ჯამზე — უფასო. პირველი 10 პროდუქტის ერთეულის ბენეფიტისთვის მთელი კალათა დარჩენილ ბალანსში უნდა ჩაეტიოს; სხვა შემთხვევაში მიწოდება 5₾-ია." : "Delivery is calculated at checkout: free with Hooma+ or when products total over ₾100. For the first-10 product-unit benefit, the whole cart must fit the remaining balance; otherwise delivery is ₾5."}</p>
+            <Link href="/hooma-plus" onClick={closeCart} className="mt-3 inline-flex text-xs font-semibold text-hooma-accent hover:underline">{georgian ? "Hooma+ პირობები" : "Hooma+ details"}</Link>
+          </div>
+        ) : null}
         <Button href="/checkout" className="mt-8 w-full" onClick={closeCart}>
           {georgian ? "შეკვეთის გაგრძელება" : "Continue to checkout"}
         </Button>

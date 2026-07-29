@@ -46,6 +46,23 @@ test("BOG order payload rejects a mismatched basket amount", () => {
   }), /does not match/);
 });
 
+test("BOG delivery amount and TTL are included in the exact full charge", () => {
+  const payload = buildBogCreateOrderPayload({
+    callbackUrl: "https://hooma.ge/api/payments/bog/callback",
+    externalOrderId: "attempt",
+    totalMinor: 1_500,
+    basket: [{ productId: "product-1", description: "Product", quantity: 1, unitPriceMinor: 1_000 }],
+    deliveryMinor: 500,
+    ttlMinutes: 15,
+    successUrl: "https://hooma.ge/checkout/result",
+    failUrl: "https://hooma.ge/checkout/result",
+    paymentMethods: ["card"],
+  });
+  assert.equal(payload.purchase_units.total_amount, 15);
+  assert.deepEqual(payload.purchase_units.delivery, { amount: 5 });
+  assert.equal(payload.ttl, 15);
+});
+
 test("money conversion is exact to two decimal places", () => {
   assert.equal(moneyToMinor("100.50"), 10050);
   assert.equal(moneyToMinor(25.3), 2530);

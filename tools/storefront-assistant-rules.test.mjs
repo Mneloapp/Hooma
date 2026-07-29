@@ -39,6 +39,9 @@ test("known operational questions remain deterministic", () => {
     getDirectStorefrontAnswer("When will I receive my order?", "en")?.answer ?? "",
     /prepare or dispatch/,
   );
+  const membership = getDirectStorefrontAnswer("რა არის Hooma+?", "ka");
+  assert.match(membership?.answer ?? "", /35₾/);
+  assert.deepEqual(membership?.actions, ["hooma_plus"]);
 });
 
 test("product pages use authoritative product context for variable details", () => {
