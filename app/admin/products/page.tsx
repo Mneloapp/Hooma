@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { CatalogProductTable, type CatalogProductListItem } from "@/components/admin/CatalogProductTable";
+import { MoveAllProductsToDraft } from "@/components/admin/MoveAllProductsToDraft";
 import { catalogCategories } from "@/data/catalog";
 import { createClient, requirePermission } from "@/lib/supabase/server";
 
 const ADMIN_PRODUCTS_PER_PAGE = 100;
 const productStatuses = ["draft", "active", "archived"] as const;
 
-type AdminProductParams = {
+export type AdminProductParams = {
   q?: string;
   category?: string;
   subcategory?: string;
@@ -42,13 +43,21 @@ async function loadCatalogCounts(supabase: any) {
   };
 }
 
-export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<AdminProductParams> }) {
+export async function AdminProductCatalogPage({
+  searchParams,
+  approvedOnly = false,
+}: {
+  searchParams: Promise<AdminProductParams>;
+  approvedOnly?: boolean;
+}) {
   const params = await searchParams;
   const q = normalizedSearch(params.q);
   const category = params.category ?? "all";
   const subcategory = params.subcategory ?? "all";
   const status = productStatuses.includes(params.status as typeof productStatuses[number]) ? params.status! : "all";
-  const audit = ["approved", "ready", "pending"].includes(params.audit ?? "") ? params.audit! : "all";
+  const audit = approvedOnly
+    ? "approved"
+    : ["approved", "ready", "pending"].includes(params.audit ?? "") ? params.audit! : "all";
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const profile = await requirePermission("catalog.manage");
   const supabase = (await createClient()) as any;
@@ -120,6 +129,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
   const productLoadError = categoryError ?? counts.error ?? productResponse.error ?? null;
   const canDelete = Boolean(profile && ["owner", "admin", "catalog_manager"].includes(profile.role));
   const canPublish = Boolean(profile && ["owner", "admin"].includes(profile.role));
+  const canMoveAllToDraft = Boolean(profile && ["owner", "admin"].includes(profile.role));
   const visibleSubcategories = category === "all"
     ? catalogCategories
     : catalogCategories.filter((item) => item.slug === category);
@@ -130,22 +140,23 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
     if (category !== "all") next.set("category", category);
     if (subcategory !== "all") next.set("subcategory", subcategory);
     if (status !== "all") next.set("status", status);
-    if (audit !== "all") next.set("audit", audit);
+    if (!approvedOnly && audit !== "all") next.set("audit", audit);
     next.set("page", String(nextPage));
-    return `/admin/products?${next.toString()}`;
+    return `${approvedOnly ? "/admin/audited-products" : "/admin/products"}?${next.toString()}`;
   };
 
   return <div className="space-y-6">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Catalog</p><h1 className="mt-3 text-4xl font-medium">პროდუქტები</h1><p className="mt-2 text-sm text-hooma-muted">{`${counts.total} პროდუქტი · ${counts.draft} Draft · ${counts.active} Active · ${counts.archived} Archived`}</p></div><Link href="/admin/products/new" className="rounded-full bg-hooma-text px-5 py-3 text-sm font-medium text-white">ახალი პროდუქტი</Link></div>
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">{approvedOnly ? "Curated catalog" : "Catalog"}</p><h1 className="mt-3 text-4xl font-medium">{approvedOnly ? "აუდიტ-დამტკიცებული პროდუქტები" : "პროდუქტები"}</h1><p className="mt-2 text-sm text-hooma-muted">{approvedOnly ? "აქ ჩანს მხოლოდ მენეჯერის მიერ შემოწმებული და დამტკიცებული აუდიტის მქონე პროდუქტები." : `${counts.total} პროდუქტი · ${counts.draft} Draft · ${counts.active} Active · ${counts.archived} Archived`}</p></div><div className="flex flex-wrap gap-2">{approvedOnly ? <Link href="/admin/products" className="rounded-full border border-hooma-text/10 bg-white px-5 py-3 text-sm font-medium">ყველა პროდუქტი</Link> : null}<Link href="/admin/products/new" className="rounded-full bg-hooma-text px-5 py-3 text-sm font-medium text-white">ახალი პროდუქტი</Link></div></div>
     {productLoadError ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">პროდუქტების სრული სია ვერ ჩაიტვირთა. სცადე გვერდის განახლება.</div> : null}
+    {!approvedOnly && canMoveAllToDraft ? <MoveAllProductsToDraft nonDraftCount={Math.max(0, counts.total - counts.draft)} /> : null}
 
-    <form className="grid gap-3 rounded-[1.5rem] bg-white/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_190px_230px_150px_210px_auto]">
+    <form className={`grid gap-3 rounded-[1.5rem] bg-white/70 p-4 md:grid-cols-2 ${approvedOnly ? "xl:grid-cols-[minmax(220px,1fr)_190px_230px_150px_auto]" : "xl:grid-cols-[minmax(220px,1fr)_190px_230px_150px_210px_auto]"}`}>
       <input name="q" defaultValue={params.q} placeholder="პროდუქტის ძიება" className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent" />
       <select name="category" defaultValue={category} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა კატეგორია</option>{catalogCategories.map((item) => <option key={item.slug} value={item.slug}>{item.nameKa}</option>)}</select>
       <select name="subcategory" defaultValue={subcategory} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა ქვეკატეგორია</option>{visibleSubcategories.map((item) => <optgroup key={item.slug} label={item.nameKa}>{item.subcategories.map((child) => <option key={child.slug} value={child.slug}>{child.nameKa}</option>)}</optgroup>)}</select>
       <select name="status" defaultValue={status} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა სტატუსი</option><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select>
-      <select name="audit" defaultValue={audit} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა აუდიტი</option><option value="approved">მენეჯერის მიერ დამტკიცებული</option><option value="ready">AI აუდიტი დასრულებული</option><option value="pending">აუდიტ-გაუვლელი</option></select>
-      <div className="flex gap-2"><button className="min-h-11 flex-1 rounded-xl bg-hooma-text px-5 text-sm font-medium text-white">გაფილტვრა</button><Link href="/admin/products" className="grid min-h-11 place-items-center rounded-xl border border-hooma-text/10 px-4 text-sm">გასუფთავება</Link></div>
+      {!approvedOnly ? <select name="audit" defaultValue={audit} className="min-h-11 rounded-xl border border-hooma-text/10 px-4 outline-none focus:border-hooma-accent"><option value="all">ყველა აუდიტი</option><option value="approved">მენეჯერის მიერ დამტკიცებული</option><option value="ready">AI აუდიტი დასრულებული</option><option value="pending">აუდიტ-გაუვლელი</option></select> : null}
+      <div className="flex gap-2"><button className="min-h-11 flex-1 rounded-xl bg-hooma-text px-5 text-sm font-medium text-white">გაფილტვრა</button><Link href={approvedOnly ? "/admin/audited-products" : "/admin/products"} className="grid min-h-11 place-items-center rounded-xl border border-hooma-text/10 px-4 text-sm">გასუფთავება</Link></div>
     </form>
 
     <div className="flex flex-col gap-2 text-sm text-hooma-muted sm:flex-row sm:items-center sm:justify-between"><p><strong className="text-hooma-text">{filteredCount}</strong> შესაბამისი პროდუქტი</p><p>გვერდი {currentPage} / {totalPages} · გვერდზე მაქსიმუმ {ADMIN_PRODUCTS_PER_PAGE}</p></div>
@@ -153,4 +164,8 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
 
     {totalPages > 1 ? <nav aria-label="Admin catalog pages" className="flex items-center justify-center gap-3 border-t border-hooma-text/10 pt-5">{currentPage > 1 ? <Link href={buildHref(currentPage - 1)} className="rounded-full border border-hooma-text/10 bg-white px-4 py-2 text-sm font-medium">წინა</Link> : <span className="rounded-full border border-hooma-text/10 px-4 py-2 text-sm text-hooma-muted/40">წინა</span>}<span className="min-w-28 text-center text-sm text-hooma-muted">{currentPage} / {totalPages}</span>{currentPage < totalPages ? <Link href={buildHref(currentPage + 1)} className="rounded-full border border-hooma-text/10 bg-white px-4 py-2 text-sm font-medium">შემდეგი</Link> : <span className="rounded-full border border-hooma-text/10 px-4 py-2 text-sm text-hooma-muted/40">შემდეგი</span>}</nav> : null}
   </div>;
+}
+
+export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<AdminProductParams> }) {
+  return <AdminProductCatalogPage searchParams={searchParams} />;
 }
