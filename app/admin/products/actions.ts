@@ -78,23 +78,46 @@ export async function moveAllCatalogProductsToDraftAction(
     return { ok: false, message: "დასადასტურებლად ზუსტად ჩაწერე DRAFT." };
   }
 
-  const { data, error } = await admin.rpc("move_all_catalog_products_to_draft_v1", {
-    actor_profile_id: profile.id,
-    confirmation_token: "MOVE_ALL_PRODUCTS_TO_DRAFT",
-  });
-  if (error) {
-    const migrationMissing = error.message.includes("move_all_catalog_products_to_draft_v1")
-      || error.message.includes("schema cache")
-      || error.message.includes("function");
+  let movedCount = 0;
+  let remainingCount = 1;
+  for (let batch = 0; batch < 20 && remainingCount > 0; batch += 1) {
+    const { data, error } = await admin.rpc("move_catalog_products_to_draft_batch_v1", {
+      actor_profile_id: profile.id,
+      confirmation_token: "MOVE_ALL_PRODUCTS_TO_DRAFT",
+      requested_batch_size: 2000,
+    });
+    if (error) {
+      const migrationMissing = error.message.includes("move_catalog_products_to_draft_batch_v1")
+        || error.message.includes("schema cache")
+        || error.message.includes("function");
+      const diagnostic = [error.code, clean(error.message, 180)].filter(Boolean).join(" · ");
+      return {
+        ok: false,
+        movedCount,
+        message: migrationMissing
+          ? "ჯერ გაუშვი ყველა პროდუქტის Draft-ზე გადაყვანის ბოლო Supabase migration."
+          : `პროდუქტების Draft-ზე გადაყვანა ვერ დასრულდა${diagnostic ? ` (${diagnostic})` : "."}`,
+      };
+    }
+    const batchMovedCount = Number(data?.moved_count ?? 0);
+    movedCount += batchMovedCount;
+    remainingCount = Number(data?.remaining_count ?? 0);
+    if (remainingCount > 0 && batchMovedCount === 0) {
+      return {
+        ok: false,
+        movedCount,
+        message: `ოპერაცია გაჩერდა: ${remainingCount.toLocaleString("ka-GE")} პროდუქტი კვლავ არა-Draft სტატუსზეა.`,
+      };
+    }
+  }
+  if (remainingCount > 0) {
     return {
       ok: false,
-      message: migrationMissing
-        ? "ჯერ გაუშვი ყველა პროდუქტის Draft-ზე გადაყვანის ბოლო Supabase migration."
-        : "პროდუქტების Draft-ზე გადაყვანა ვერ დასრულდა.",
+      movedCount,
+      message: `${movedCount.toLocaleString("ka-GE")} პროდუქტი გადავიდა Draft-ზე; დარჩა ${remainingCount.toLocaleString("ka-GE")}. მოქმედება თავიდან გაუშვი გასაგრძელებლად.`,
     };
   }
 
-  const movedCount = Number(data?.moved_count ?? 0);
   revalidatePath("/");
   revalidatePath("/shop");
   revalidatePath("/deals");
