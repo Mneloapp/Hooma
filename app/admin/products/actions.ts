@@ -18,6 +18,11 @@ export type BulkPublicationState = {
   skippedCount?: number;
   failures?: BulkPublicationFailure[];
 };
+export type BulkDraftState = {
+  ok?: boolean;
+  message?: string;
+  movedCount?: number;
+};
 export type PublicationState = {
   ok?: boolean;
   message?: string;
@@ -58,6 +63,53 @@ function publicationError(message: string) {
   if (message.includes("Product was not found")) return "პროდუქტი ვერ მოიძებნა.";
   if (message.includes("Only Draft")) return "მხოლოდ Draft პროდუქტის ჯგუფურად გამოქვეყნება შეიძლება.";
   return "გამოქვეყნება ვერ დასრულდა.";
+}
+
+export async function moveAllCatalogProductsToDraftAction(
+  _state: BulkDraftState,
+  formData: FormData,
+): Promise<BulkDraftState> {
+  const profile = await requirePermission("catalog.manage");
+  const admin = createAdminClient() as any;
+  if (!profile || !admin || !publicationRoles.includes(profile.role)) {
+    return { ok: false, message: "ყველა პროდუქტის Draft-ზე გადაყვანა მხოლოდ Owner-ს ან Admin-ს შეუძლია." };
+  }
+  if (clean(formData.get("confirmation"), 20).toUpperCase() !== "DRAFT") {
+    return { ok: false, message: "დასადასტურებლად ზუსტად ჩაწერე DRAFT." };
+  }
+
+  const { data, error } = await admin.rpc("move_all_catalog_products_to_draft_v1", {
+    actor_profile_id: profile.id,
+    confirmation_token: "MOVE_ALL_PRODUCTS_TO_DRAFT",
+  });
+  if (error) {
+    const migrationMissing = error.message.includes("move_all_catalog_products_to_draft_v1")
+      || error.message.includes("schema cache")
+      || error.message.includes("function");
+    return {
+      ok: false,
+      message: migrationMissing
+        ? "ჯერ გაუშვი ყველა პროდუქტის Draft-ზე გადაყვანის ბოლო Supabase migration."
+        : "პროდუქტების Draft-ზე გადაყვანა ვერ დასრულდა.",
+    };
+  }
+
+  const movedCount = Number(data?.moved_count ?? 0);
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/deals");
+  revalidatePath("/product/[slug]", "page");
+  revalidatePath("/products/[slug]", "page");
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/audited-products");
+  revalidateStorefrontCatalog();
+  return {
+    ok: true,
+    movedCount,
+    message: movedCount
+      ? `${movedCount.toLocaleString("ka-GE")} პროდუქტი გადავიდა Draft სტატუსზე.`
+      : "ყველა პროდუქტი უკვე Draft სტატუსზე იყო.",
+  };
 }
 
 export async function deleteCatalogProducts(productIds: string[], options: { auditItemId?: string } = {}) {
@@ -113,6 +165,7 @@ export async function deleteCatalogProducts(productIds: string[], options: { aud
   revalidatePath("/deals");
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/admin/products");
+  revalidatePath("/admin/audited-products");
   revalidatePath("/admin/imports");
   revalidatePath("/admin/catalog-agent");
   revalidateStorefrontCatalog();
@@ -229,6 +282,7 @@ export async function bulkPublishCatalogProductsAction(
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
+  revalidatePath("/admin/audited-products");
   for (const productId of draftIds) revalidatePath(`/admin/products/${productId}`);
   revalidateStorefrontCatalog();
 
@@ -285,6 +339,7 @@ function refreshCatalog(productId: string) {
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
+  revalidatePath("/admin/audited-products");
   revalidatePath(`/admin/products/${productId}`);
   revalidateStorefrontCatalog();
 }

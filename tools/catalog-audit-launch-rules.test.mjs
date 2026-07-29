@@ -10,10 +10,15 @@ const storefrontMigrationPath = new URL(
   "../supabase/migrations/20260729000300_manager_approved_storefront_gate.sql",
   import.meta.url,
 );
+const bulkDraftMigrationPath = new URL(
+  "../supabase/migrations/20260729000400_bulk_draft_catalog.sql",
+  import.meta.url,
+);
 
-const [categoryMigration, storefrontMigration] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
+  readFile(bulkDraftMigrationPath, "utf8"),
 ]);
 
 test("category job creation and claim use the same persisted scope", () => {
@@ -137,5 +142,32 @@ test("post-approval catalog changes invalidate approval and delete the public ca
   assert.match(
     storefrontMigration,
     /if coalesce\(new\.is_active, false\)[\s\S]*not coalesce\(old\.is_active, false\)[\s\S]*new_product_id is distinct from old_product_id/,
+  );
+});
+
+test("bulk Draft reset is explicit, privileged, and preserves audit approval", () => {
+  assert.match(
+    bulkDraftMigration,
+    /role in \('owner', 'admin'\)/,
+  );
+  assert.match(
+    bulkDraftMigration,
+    /confirmation_token is distinct from 'MOVE_ALL_PRODUCTS_TO_DRAFT'/,
+  );
+  assert.match(
+    bulkDraftMigration,
+    /update public\.products[\s\S]*set status = 'draft'/,
+  );
+  assert.doesNotMatch(
+    bulkDraftMigration,
+    /set[\s\S]{0,300}catalog_audit_(?:attempted|completed|applied)_[a-z_]+\s*=\s*null/,
+  );
+  assert.match(
+    bulkDraftMigration,
+    /'audit_markers_preserved', true/,
+  );
+  assert.match(
+    bulkDraftMigration,
+    /perform public\.activate_daily_deals/,
   );
 });
