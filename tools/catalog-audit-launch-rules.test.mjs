@@ -18,14 +18,19 @@ const adminCatalogPerformanceMigrationPath = new URL(
   "../supabase/migrations/20260729000500_admin_catalog_performance.sql",
   import.meta.url,
 );
+const fastBulkDraftMigrationPath = new URL(
+  "../supabase/migrations/20260729000600_fast_bulk_draft_catalog.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, adminProductsPage, adminPermissions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, adminProductsPage, adminPermissions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
   readFile(adminCatalogPerformanceMigrationPath, "utf8"),
+  readFile(fastBulkDraftMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
 ]);
@@ -196,5 +201,25 @@ test("audited products route is allowed by admin middleware permissions", () => 
   assert.match(
     adminPermissions,
     /\["\/admin\/audited-products", "catalog\.manage"\]/,
+  );
+});
+
+test("bulk Draft reset skips row refresh work and cleans storefront state in sets", () => {
+  assert.match(
+    fastBulkDraftMigration,
+    /current_setting\('hooma\.bulk_catalog_draft_reset', true\) = 'on'/,
+  );
+  assert.match(
+    fastBulkDraftMigration,
+    /set_config\('hooma\.bulk_catalog_draft_reset', 'on', true\)/,
+  );
+  assert.match(fastBulkDraftMigration, /delete from public\.storefront_product_cards;/);
+  assert.match(
+    fastBulkDraftMigration,
+    /delete from public\.daily_deal_items[\s\S]*where deal_date = current_deal_date;/,
+  );
+  assert.doesNotMatch(
+    fastBulkDraftMigration,
+    /set[\s\S]{0,300}catalog_audit_(?:attempted|completed|applied)_[a-z_]+\s*=\s*null/,
   );
 });
