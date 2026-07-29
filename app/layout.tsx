@@ -5,6 +5,7 @@ import { Footer } from "@/components/Footer";
 import { CartProvider } from "@/components/CartContext";
 import { CartDrawer } from "@/components/CartDrawer";
 import { LanguageProvider } from "@/components/LanguageProvider";
+import { HoomaAssistant } from "@/components/assistant/HoomaAssistant";
 
 export const metadata: Metadata = {
   title: "Hooma | სასარგებლო ნივთები ყოველდღიურობისთვის",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <main>{children}</main>
             <Footer />
             <CartDrawer />
+            <HoomaAssistant />
           </CartProvider>
         </LanguageProvider>
       </body>
