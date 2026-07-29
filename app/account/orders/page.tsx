@@ -52,6 +52,7 @@ const eventLabelsEn: Record<string, string> = {
   order_received: "Order received", confirmed: "Order confirmed", production_queued: "Queued for production",
   production_started: "Production started", in_production: "In production", quality_check: "Quality check",
   ready_for_delivery: "Ready for courier", out_for_delivery: "Out for delivery", delivered: "Delivered", cancelled: "Order cancelled",
+  payment_confirmed: "Payment confirmed", payment_refunded: "Payment refunded",
 };
 
 const stageByStatus: Record<string, number> = {
@@ -106,14 +107,21 @@ export default async function AccountOrdersPage() {
         const orderItems = itemsByOrder.get(order.id) ?? [];
         const events = eventsByOrder.get(order.id) ?? [];
         const cancelled = order.fulfillment_status === "cancelled";
+        const paymentReady = order.test_mode || order.payment_status === "paid";
+        const reviewRequired = order.payment_status === "review_required";
+        const paymentTitle = reviewRequired
+          ? ["გადახდას შემოწმება სჭირდება", "Payment needs review"]
+          : order.payment_status === "failed"
+            ? ["გადახდა ვერ დასრულდა", "Payment was not completed"]
+            : ["გადახდას ელოდება", "Awaiting payment"];
         return (
           <article key={order.id} className="overflow-hidden rounded-[2rem] border border-hooma-text/10 bg-white/75 shadow-soft">
             <div className="flex flex-col justify-between gap-4 border-b border-hooma-text/10 p-5 sm:flex-row sm:items-start lg:p-6">
-              <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={cancelled ? "შეკვეთა გაუქმებულია" : stages[currentStage][0]} en={cancelled ? "Order cancelled" : stages[currentStage][1]} /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
-              <div className="text-left sm:text-right"><p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p><p className="mt-1 text-xs text-hooma-muted"><LocalizedText ka={order.test_mode ? "სატესტო შეკვეთა — თანხა არ ჩამოგეჭრება" : order.payment_status === "paid" ? "გადახდილია" : "გადახდას ელოდება"} en={order.test_mode ? "Test order — you will not be charged" : order.payment_status === "paid" ? "Paid" : "Awaiting payment"} /></p></div>
+              <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={cancelled ? "შეკვეთა გაუქმებულია" : !paymentReady ? paymentTitle[0] : stages[currentStage][0]} en={cancelled ? "Order cancelled" : !paymentReady ? paymentTitle[1] : stages[currentStage][1]} /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
+              <div className="text-left sm:text-right"><p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p><p className="mt-1 text-xs text-hooma-muted"><LocalizedText ka={order.test_mode ? "სატესტო შეკვეთა — თანხა არ ჩამოგეჭრება" : order.payment_status === "paid" ? "გადახდილია" : order.payment_status === "failed" ? "გადახდა ვერ დასრულდა" : reviewRequired ? "დამატებითი შემოწმება მიმდინარეობს" : order.payment_status === "refunded" ? "თანხა დაბრუნებულია" : "გადახდას ელოდება"} en={order.test_mode ? "Test order — you will not be charged" : order.payment_status === "paid" ? "Paid" : order.payment_status === "failed" ? "Payment failed" : reviewRequired ? "Additional review in progress" : order.payment_status === "refunded" ? "Refunded" : "Awaiting payment"} /></p></div>
             </div>
 
-            {!cancelled ? (
+            {!cancelled && paymentReady ? (
               <div className="border-b border-hooma-text/10 bg-hooma-background/65 p-5 lg:p-6">
                 <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
                   {stages.map(([stageKa, stageEn], index) => {
@@ -128,6 +136,15 @@ export default async function AccountOrdersPage() {
                   })}
                 </div>
               </div>
+            ) : !cancelled ? (
+              <div className={`border-b p-5 text-sm leading-6 lg:p-6 ${reviewRequired ? "border-orange-200 bg-orange-50 text-orange-950" : order.payment_status === "failed" ? "border-red-200 bg-red-50 text-red-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+                <p className="font-semibold"><LocalizedText ka={paymentTitle[0]} en={paymentTitle[1]} /></p>
+                <p className="mt-1"><LocalizedText
+                  ka={reviewRequired ? "ხელახლა ნუ გადაიხდი. შეკვეთა უსაფრთხოდ შეჩერებულია, სანამ ჩვენი გუნდი ბანკის ჩანაწერს გადაამოწმებს." : order.payment_status === "failed" ? "წარმოება არ დაწყებულა და თანხა დადასტურებული არ არის. შეგიძლია იგივე კალათით ახალი უსაფრთხო გადახდა სცადო." : "წარმოება დაიწყება მხოლოდ საქართველოს ბანკის დაცული დადასტურებისა და ოპერატორის შემოწმების შემდეგ."}
+                  en={reviewRequired ? "Do not pay again. The order is safely on hold while our team reviews the bank record." : order.payment_status === "failed" ? "Production has not started and payment is not confirmed. You can retry a new secure payment with the same cart." : "Production starts only after Bank of Georgia’s secure confirmation and an operator review."}
+                /></p>
+                {order.payment_status === "failed" ? <Link href="/checkout" className="mt-3 inline-flex rounded-full bg-red-950 px-4 py-2 text-xs font-semibold text-white"><LocalizedText ka="გადახდის ხელახლა ცდა" en="Try payment again" /></Link> : null}
+              </div>
             ) : null}
 
             <div className="grid gap-6 p-5 lg:grid-cols-[1.35fr_0.65fr] lg:p-6">
@@ -139,10 +156,10 @@ export default async function AccountOrdersPage() {
                   ); })}
                   {!orderItems.length ? <p className="p-4 text-sm text-hooma-muted"><LocalizedText ka="პროდუქტის მონაცემები ვერ ჩაიტვირთა." en="Product details could not be loaded." /></p> : null}
                 </div>
-                <div className="mt-4 flex flex-wrap gap-3 text-xs text-hooma-muted">
-                  <span className="inline-flex items-center gap-1.5"><Clock3 size={14} /><LocalizedText ka={order.promised_at ? `სავარაუდო მიწოდება: ${dateFormat.format(new Date(order.promised_at))}` : "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"} en={order.promised_at ? `Estimated delivery: ${dateFormat.format(new Date(order.promised_at))}` : "3 business days from order to delivery"} /></span>
+                {paymentReady ? <div className="mt-4 flex flex-wrap gap-3 text-xs text-hooma-muted">
+                  <span className="inline-flex items-center gap-1.5"><Clock3 size={14} /><LocalizedText ka={order.promised_at ? `სავარაუდო მომზადება/კურიერზე გადაცემა: ${dateFormat.format(new Date(order.promised_at))}` : "მომზადება ან კურიერზე გადაცემა 3 სამუშაო დღეში"} en={order.promised_at ? `Estimated preparation/courier handoff: ${dateFormat.format(new Date(order.promised_at))}` : "Prepared or handed to the courier within 3 business days"} /></span>
                   {order.fulfillment_status === "out_for_delivery" ? <span className="inline-flex items-center gap-1.5 font-semibold text-hooma-text"><Truck size={14} /><LocalizedText ka="საკურიერო მომსახურებასთანაა" en="With the courier" /></span> : null}
-                </div>
+                </div> : null}
               </div>
 
               <div>
@@ -151,7 +168,7 @@ export default async function AccountOrdersPage() {
                   {events.slice().reverse().map((event) => (
                     <li key={event.id} className="border-l-2 border-hooma-accent/35 pl-3"><p className="text-sm font-medium"><LocalizedText ka={event.customer_label_ka} en={eventLabelsEn[event.event_type] ?? "Order updated"} /></p><time className="mt-1 block text-xs text-hooma-muted">{dateFormat.format(new Date(event.created_at))}</time></li>
                   ))}
-                  {!events.length ? <li className="text-sm text-hooma-muted"><LocalizedText ka="შეკვეთა მიღებულია." en="Order received." /></li> : null}
+                  {!events.length ? <li className="text-sm text-hooma-muted"><LocalizedText ka={paymentReady ? "შეკვეთა მიღებულია." : "გადახდის შედეგს ველოდებით."} en={paymentReady ? "Order received." : "Waiting for the payment result."} /></li> : null}
                 </ol>
               </div>
             </div>

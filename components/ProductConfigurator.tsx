@@ -43,7 +43,7 @@ export function ProductConfigurator({ product, compact = false, dailyDeal }: { p
       ["SKU", variant.sku],
       [georgian ? "ზომები" : "Dimensions", variant.productDimensionsCm],
       [georgian ? "მასალა" : "Material", material],
-      [georgian ? "ვადა" : "Lead time", georgian ? `${product.leadTimeDays} სამუშაო დღე შეკვეთიდან მიწოდებამდე` : `${product.leadTimeDays} business days from order to delivery`],
+      [georgian ? "ვადა" : "Lead time", georgian ? `${product.leadTimeDays} სამუშაო დღეში მომზადება ან საკურიეროსთვის გადაცემა` : `Prepared or handed to the courier within ${product.leadTimeDays} business days`],
     ],
     [georgian, material, product.leadTimeDays, variant],
   );
@@ -107,9 +107,9 @@ export function ProductConfigurator({ product, compact = false, dailyDeal }: { p
         >
           {orderable ? (georgian ? "კალათაში დამატება" : "Add to cart") : (georgian ? "მიუწვდომელია დამტკიცებამდე" : "Unavailable until approved")}
         </Button>
-        {!compact && orderable ? <button type="button" onClick={() => { addConfiguredItem(); openCart(); }} className="h-12 w-full rounded-full border border-hooma-text/15 bg-[#d9e6d2] text-sm font-semibold text-hooma-text transition hover:bg-[#cbdcc2]">{georgian ? "შეუკვეთე ახლა — სატესტო" : "Order now — test mode"}</button> : null}
-        {!compact ? <div className="grid gap-2 border-t border-hooma-text/10 pt-4 text-xs text-hooma-muted">{(georgian ? [[Clock3, "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე"], [PackageCheck, "შეკვეთის სტატუსის ტრეკინგი"], [ShieldCheck, "ოპერატორის ხარისხის კონტროლი"]] : [[Clock3, "3 business days from order to delivery"], [PackageCheck, "Order status tracking"], [ShieldCheck, "Operator quality control"]]).map(([Icon, label]) => { const TrustIcon = Icon as typeof Clock3; return <p key={String(label)} className="flex items-center gap-2"><TrustIcon size={14} className="text-hooma-accent" />{String(label)}</p>; })}</div> : null}
-        <p className="text-center text-xs leading-5 text-hooma-muted">{orderable ? (georgian ? "სატესტო რეჟიმში შეკვეთა არ ითვლება გადახდილად და ბეჭდვა ავტომატურად არ დაიწყება." : "In test mode, the order is not considered paid and printing does not start automatically.") : (georgian ? "ეს სატესტო Preview შეკვეთაში ვერ დაემატება და ანონიმურ მომხმარებელს არ უჩანს." : "This test preview cannot be added to an order and is hidden from anonymous users.")}</p>
+        {!compact && orderable ? <button type="button" onClick={() => { addConfiguredItem(); openCart(); }} className="h-12 w-full rounded-full border border-hooma-text/15 bg-[#d9e6d2] text-sm font-semibold text-hooma-text transition hover:bg-[#cbdcc2]">{georgian ? "შეუკვეთე ახლა" : "Order now"}</button> : null}
+        {!compact ? <div className="grid gap-2 border-t border-hooma-text/10 pt-4 text-xs text-hooma-muted">{(georgian ? [[Clock3, "3 სამუშაო დღეში მომზადება ან საკურიეროსთვის გადაცემა"], [PackageCheck, "შეკვეთის სტატუსის ტრეკინგი"], [ShieldCheck, "ოპერატორის ხარისხის კონტროლი"]] : [[Clock3, "Prepared or handed to the courier within 3 business days"], [PackageCheck, "Order status tracking"], [ShieldCheck, "Operator quality control"]]).map(([Icon, label]) => { const TrustIcon = Icon as typeof Clock3; return <p key={String(label)} className="flex items-center gap-2"><TrustIcon size={14} className="text-hooma-accent" />{String(label)}</p>; })}</div> : null}
+        <p className="text-center text-xs leading-5 text-hooma-muted">{orderable ? (georgian ? "სრული თანხა გადაიხდება საქართველოს ბანკის უსაფრთხო გვერდზე; წარმოება მხოლოდ გადახდის დადასტურებისა და ოპერატორის შემოწმების შემდეგ დაიწყება." : "The full amount is paid on Bank of Georgia’s secure page; production starts only after payment confirmation and operator review.") : (georgian ? "ეს სატესტო Preview შეკვეთაში ვერ დაემატება და ანონიმურ მომხმარებელს არ უჩანს." : "This test preview cannot be added to an order and is hidden from anonymous users.")}</p>
       </div>
     </div>
   );

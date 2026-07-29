@@ -11,7 +11,7 @@ The dedicated Windows PC does not need a separate Hooma desktop application in V
 
 ## Successful order flow
 
-1. `order_received`: the authenticated customer submits a test order.
+1. `order_received`: the authenticated customer creates a catalog order and BOG confirms the exact full payment through the signed callback. Payment alone does not start a printer.
 2. `production_queued`: an operator validates the configuration and confirms production. Hooma creates one job per quantity × plate. The customer sees **წარმოება დაწყებულია**.
 3. `in_production`: the operator first atomically reserves a free printer in Hooma. Only the winning operator then opens the reviewed MakerWorld page, starts the correct profile/material/color on that reserved printer in Bambu Studio, and records the physical start as a separate action.
 4. `quality_check`: every required physical print is complete.
@@ -25,8 +25,8 @@ Printer state is explicitly operator-reported in V1. A future Windows gateway ca
 
 ## Safety and concurrency rules
 
-- Unpaid production is possible only for `test_mode=true` orders.
-- A future live order requires both `orders.payment_status='paid'` and a matching signed, paid `payment_attempt`.
+- Unpaid production is possible only for legacy `test_mode=true` orders.
+- Every live order requires both `orders.payment_status='paid'` and a matching signature-verified, exact-amount BOG/TBC `payment_attempt`.
 - Operator actions are service-role-only transactional RPCs. Browser roles cannot mutate orders, jobs, printers, events, payments, or audit history directly.
 - Every action has an idempotency UUID, row locks, an expected job `lock_version`, a customer event where relevant, and an audit entry in the same transaction.
 - One printer can have at most one active job. One logical unit/plate can have at most one active attempt.

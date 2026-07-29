@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, GripVertical, MapPin, Package, Printer, Truck, X } from "lucide-react";
-import { moveOrderKanbanAction, type KanbanMoveInput } from "@/app/admin/orders/actions";
+import {
+  moveOrderKanbanAction,
+  reconcileBogPaymentAction,
+  type KanbanMoveInput,
+} from "@/app/admin/orders/actions";
 
 export type OperationsKanbanCard = {
   id: string;
@@ -17,6 +21,8 @@ export type OperationsKanbanCard = {
   address: string;
   mapUrl: string | null;
   paymentReady: boolean;
+  paymentStatus: string;
+  canReconcile: boolean;
   testMode: boolean;
   items: Array<{ id: string; name: string; configuration: string; quantity: number }>;
   jobs: { total: number; queued: number; preparing: number; active: number; completed: number; failed: number };
@@ -101,6 +107,17 @@ export function OrderOperationsKanban({ cards, canMove }: { cards: OperationsKan
     });
   };
 
+  const reconcilePayment = (card: OperationsKanbanCard) => {
+    startTransition(async () => {
+      const result = await reconcileBogPaymentAction({
+        orderId: card.id,
+        operationKey: crypto.randomUUID(),
+      });
+      setMessage({ ok: result.ok, text: result.message });
+      if (result.ok) router.refresh();
+    });
+  };
+
   return (
     <div className="space-y-4">
       {message ? <div className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${message.ok ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-red-200 bg-red-50 text-red-950"}`}><span className="flex items-center gap-2">{message.ok ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}{message.text}</span><button onClick={() => setMessage(null)} aria-label="დახურვა"><X size={17} /></button></div> : null}
@@ -135,7 +152,8 @@ export function OrderOperationsKanban({ cards, canMove }: { cards: OperationsKan
                         <div className="mt-3 space-y-2 border-t border-hooma-text/10 pt-3">{card.items.slice(0, 3).map((item) => <div key={item.id} className="text-xs"><p className="font-semibold">{item.name} ×{item.quantity}</p><p className="mt-0.5 truncate text-hooma-muted">{item.configuration}</p></div>)}{card.items.length > 3 ? <p className="text-xs font-semibold text-hooma-accent">+ კიდევ {card.items.length - 3}</p> : null}</div>
                         <div className="mt-3 rounded-xl bg-hooma-background p-3 text-xs"><p className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0 text-hooma-accent" /><span>{card.address}</span></p>{card.mapUrl ? <a href={card.mapUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block font-semibold text-hooma-accent">რუკის გახსნა</a> : null}</div>
                         {card.jobs.total ? <div className="mt-3 rounded-xl border border-hooma-text/10 p-3 text-xs"><p className="flex items-center gap-2 font-semibold"><Printer size={14} />წარმოება: {card.jobs.completed}/{card.jobs.total} დასრულებული</p><p className="mt-2 text-hooma-muted">რიგი {card.jobs.queued} · მზადება {card.jobs.preparing} · აქტიური {card.jobs.active}{card.jobs.failed ? ` · failure ${card.jobs.failed}` : ""}</p></div> : null}
-                        <div className="mt-3 flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${card.paymentReady ? "bg-emerald-100 text-emerald-900" : "bg-red-100 text-red-900"}`}>{card.testMode ? "TEST" : card.paymentReady ? "გადახდილია" : "გადახდას ელოდება"}</span>{productionLocked || card.fulfillmentStatus === "quality_check" ? <Link href={`/admin/production?order=${card.id}`} className="rounded-full bg-hooma-text px-3 py-1 text-[10px] font-semibold text-white">ამ შეკვეთის წარმოება</Link> : null}</div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${card.paymentReady ? "bg-emerald-100 text-emerald-900" : card.paymentStatus === "review_required" ? "bg-orange-100 text-orange-900" : "bg-red-100 text-red-900"}`}>{card.testMode ? "TEST" : card.paymentReady ? "გადახდილია" : card.paymentStatus === "review_required" ? "გადახდის შემოწმება" : card.paymentStatus === "failed" ? "გადახდა ვერ დასრულდა" : "გადახდას ელოდება"}</span>{productionLocked || card.fulfillmentStatus === "quality_check" ? <Link href={`/admin/production?order=${card.id}`} className="rounded-full bg-hooma-text px-3 py-1 text-[10px] font-semibold text-white">ამ შეკვეთის წარმოება</Link> : null}</div>
+                        {card.canReconcile ? <button type="button" onClick={() => reconcilePayment(card)} disabled={isPending} className="mt-3 w-full rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">BOG receipt-ის შემოწმება</button> : null}
                         {target ? <button onClick={() => requestMove(card, target)} className="mt-3 w-full rounded-xl border border-hooma-text/10 px-3 py-2 text-xs font-semibold transition hover:bg-hooma-text hover:text-white">შემდეგ ეტაპზე გადატანა →</button> : productionLocked ? <p className="mt-3 text-[11px] leading-5 text-hooma-muted">სტატუსი ავტომატურად შეიცვლება print job-ის რეალური მოქმედებით.</p> : null}
                       </article>
                     );

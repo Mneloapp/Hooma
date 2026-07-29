@@ -1,24 +1,26 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, ClipboardCheck, PackageCheck, Printer, Truck } from "lucide-react";
+import { ArrowRight, CheckCircle2, ClipboardCheck, CreditCard, PackageCheck, Printer, Truck } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Reveal } from "@/components/Reveal";
 import { useLanguage } from "@/components/LanguageProvider";
 
 const stepsKa = [
   ["01", "აირჩიე პროდუქტი", "მოძებნე კატეგორიებით, აირჩიე ვერსია, მასალა, ფერი და რაოდენობა.", ClipboardCheck],
-  ["02", "ოპერატორი ამოწმებს", "ვამოწმებთ წარმოების პროფილს, მასალას, მისამართსა და სამდღიან შესაძლებლობას.", CheckCircle2],
-  ["03", "ვამზადებთ", "დადასტურებული შეკვეთა გადადის წარმოების რიგში და იწყება მისი დამზადება.", Printer],
-  ["04", "ხარისხის კონტროლი", "ვამოწმებთ ზომას, ზედაპირს, მოძრაობით ნაწილებსა და შეკვეთილ ფერს.", PackageCheck],
-  ["05", "მიწოდება", "შეკვეთა გადაეცემა კურიერს და მომხმარებელი ხედავს განახლებულ სტატუსს.", Truck],
+  ["02", "გადაიხადე უსაფრთხოდ", "სრული თანხა გადაიხადე BOG-ის დაცულ გვერდზე — განვადებისა და თანხის გაყოფის გარეშე.", CreditCard],
+  ["03", "ოპერატორი ამოწმებს", "ვამოწმებთ გადახდას, წარმოების პროფილს, მასალას, მისამართსა და სამდღიან შესაძლებლობას.", CheckCircle2],
+  ["04", "ვამზადებთ", "დადასტურებული შეკვეთა გადადის წარმოების რიგში და იწყება მისი დამზადება.", Printer],
+  ["05", "ხარისხის კონტროლი", "ვამოწმებთ ზომას, ზედაპირს, მოძრაობით ნაწილებსა და შეკვეთილ ფერს.", PackageCheck],
+  ["06", "მიწოდება", "შეკვეთა გადაეცემა კურიერს და მომხმარებელი ხედავს განახლებულ სტატუსს.", Truck],
 ] as const;
 
 const stepsEn = [
   ["01", "Choose a product", "Browse categories and choose the version, material, color, and quantity.", ClipboardCheck],
-  ["02", "Operator review", "We check the production profile, material, address, and three-day feasibility.", CheckCircle2],
-  ["03", "We make it", "The confirmed order enters the production queue and manufacturing begins.", Printer],
-  ["04", "Quality control", "We check dimensions, surface, moving parts, and the selected color.", PackageCheck],
-  ["05", "Delivery", "The order is handed to the courier and you see its updated status.", Truck],
+  ["02", "Pay securely", "Pay the full amount on BOG’s secure page, without installments or split payment.", CreditCard],
+  ["03", "Operator review", "We verify payment, the production profile, material, address, and three-day feasibility.", CheckCircle2],
+  ["04", "We make it", "The confirmed order enters the production queue and manufacturing begins.", Printer],
+  ["05", "Quality control", "We check dimensions, surface, moving parts, and the selected color.", PackageCheck],
+  ["06", "Delivery", "The order is handed to the courier and you see its updated status.", Truck],
 ] as const;
 
 export default function HowItWorks() {

@@ -33,7 +33,7 @@ test("product discovery is not swallowed by broad FAQ words", () => {
 test("known operational questions remain deterministic", () => {
   assert.match(
     getDirectStorefrontAnswer("როგორ შევუკვეთო?", "ka")?.answer ?? "",
-    /სატესტოა/,
+    /BOG-ის უსაფრთხო გვერდზე/,
   );
   assert.match(
     getDirectStorefrontAnswer("When will I receive my order?", "en")?.answer ?? "",

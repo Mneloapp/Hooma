@@ -2,14 +2,14 @@
 
 ## Outcome
 
-Build a Georgian-first online store where a customer finds a useful product by category, chooses an available variation, places a test order, and tracks it through production and delivery. Hooma's operator manages catalog, licensing, production, quality control, and fulfillment from one admin panel.
+Build a Georgian-first online store where a customer finds a useful product by category, chooses an available variation, pays the full amount through BOG hosted checkout, and tracks it through production and delivery. Hooma's operator manages catalog, licensing, production, quality control, and fulfillment from one admin panel.
 
 ## Customer flow
 
 1. Browse category and subcategory.
 2. Open a product and choose variation, material, and color.
-3. Add to cart and submit a test order.
-4. Receive an order number and tracking link.
+3. Add to cart and pay the full amount on BOG's secure hosted page.
+4. Return to the order-number/status page; only the signed bank callback confirms payment.
 5. Follow customer-friendly order events until delivery.
 
 ## Admin flow
@@ -46,6 +46,9 @@ flowchart TD
     Store["Hooma storefront"] --> API["Server actions / API"]
     Admin["Hooma admin"] --> API
     API --> DB["Supabase"]
+    API --> BOG["BOG hosted checkout"]
+    BOG --> Callback["Signed callback + receipt check"]
+    Callback --> DB
     DB --> Queue["Production queue"]
     Queue --> Operator["Operator approval"]
     Operator --> Adapter["Bambu adapter"]
@@ -54,10 +57,11 @@ flowchart TD
 
 ## Automation stages
 
-### Stage 1 — operator-led
+### Stage 1 — operator-led production with verified payment
 
 - Manual product entry and source review
-- Test checkout, no bank API
+- BOG automatic full-payment hosted checkout
+- Signed, idempotent callback plus receipt reconciliation
 - Operator confirms and starts print
 - Manual tracking events
 
@@ -68,9 +72,8 @@ flowchart TD
 - Suggested category, copy, and price
 - Prepared Bambu print job requiring one operator approval
 
-### Stage 3 — controlled automation
+### Stage 3 — controlled production automation
 
-- Signed bank webhooks
 - Automatic production reservation after verified payment
 - Printer selection and plate scheduling
 - Live status and customer notifications
@@ -89,7 +92,8 @@ flowchart TD
 
 ## Deliberately deferred
 
-- Live TBC/Bank of Georgia integration
+- Installments, BNPL, split payment, saved cards, and preauthorization
+- Online payment for custom quotes
 - Fully automatic MakerWorld ingestion
 - Automatic print start without operator approval
 - Customer-visible printer camera stream

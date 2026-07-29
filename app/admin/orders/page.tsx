@@ -31,6 +31,7 @@ type OrderItem = {
 };
 type Customer = { id: string; email: string | null; full_name: string | null; phone: string | null };
 type PrintJob = { order_item_id: string; status: string };
+type PaymentAttempt = { order_id: string; provider_payment_id: string | null };
 
 const dateFormat = new Intl.DateTimeFormat("ka-GE", { dateStyle: "medium", timeStyle: "short" });
 
@@ -61,10 +62,11 @@ export default async function AdminOrdersPage() {
   const orderIds = orders.map((order) => order.id);
   const customerIds = orders.map((order) => order.customer_id).filter((id): id is string => Boolean(id));
 
-  const [{ data: itemRows }, { data: customerRows }] = admin ? await Promise.all([
+  const [{ data: itemRows }, { data: customerRows }, { data: attemptRows }] = admin ? await Promise.all([
     orderIds.length ? admin.from("order_items").select("id,order_id,product_name,sku,size_label,material,color,quantity").in("order_id", orderIds).order("created_at") : Promise.resolve({ data: [] }),
     customerIds.length ? admin.from("customers").select("id,email,full_name,phone").in("id", customerIds) : Promise.resolve({ data: [] }),
-  ]) : [{ data: [] }, { data: [] }];
+    orderIds.length ? admin.from("payment_attempts").select("order_id,provider_payment_id").in("order_id", orderIds).eq("provider", "bog").order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+  ]) : [{ data: [] }, { data: [] }, { data: [] }];
   const items = (itemRows ?? []) as OrderItem[];
   const itemIds = items.map((item) => item.id);
   const { data: jobRows } = admin && itemIds.length ? await admin.from("print_jobs").select("order_item_id,status").in("order_item_id", itemIds).limit(5000) : { data: [] };
@@ -78,6 +80,10 @@ export default async function AdminOrdersPage() {
   for (const job of jobs) {
     const orderId = itemOrder.get(job.order_item_id);
     if (orderId) jobsByOrder.set(orderId, [...(jobsByOrder.get(orderId) ?? []), job]);
+  }
+  const attemptByOrder = new Map<string, PaymentAttempt>();
+  for (const attempt of (attemptRows ?? []) as PaymentAttempt[]) {
+    if (!attemptByOrder.has(attempt.order_id)) attemptByOrder.set(attempt.order_id, attempt);
   }
 
   const cards: OperationsKanbanCard[] = orders.map((order) => {
@@ -95,6 +101,10 @@ export default async function AdminOrdersPage() {
       address: addressText(order.delivery_address),
       mapUrl: addressMapUrl(order.delivery_address),
       paymentReady: order.test_mode || order.payment_status === "paid",
+      paymentStatus: order.payment_status,
+      canReconcile: !order.test_mode
+        && order.payment_status !== "refunded"
+        && Boolean(attemptByOrder.get(order.id)?.provider_payment_id),
       testMode: order.test_mode,
       items: orderItems.map((item) => ({
         id: item.id,

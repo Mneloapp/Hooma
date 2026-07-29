@@ -22,7 +22,7 @@ const sections = [
   },
   {
     title: "ფასი და გადახდა",
-    copy: "საბოლოო ფასი და მიწოდების საფასური ნაჩვენებია შეკვეთის დადასტურებამდე. რეალური ონლაინ გადახდის ჩართვის შემდეგ გადახდას დაამუშავებს ავტორიზებული საგადახდო პარტნიორი; Hooma არ შეინახავს საბანკო ბარათის სრულ მონაცემებს.",
+    copy: "საბოლოო ფასი და მიწოდების საფასური ნაჩვენებია გადახდამდე. ონლაინ გადახდას BOG-ის დაცულ გვერდზე მომხმარებელი სრული თანხით ასრულებს; განვადება და თანხის გაყოფა არ გამოიყენება. Hooma არ იღებს და არ ინახავს საბანკო ბარათის სრულ მონაცემებს. შეკვეთა გადახდილად ითვლება მხოლოდ ბანკის დაცული დადასტურების შემდეგ.",
   },
   {
     title: "ინდივიდუალური შეკვეთები",
@@ -46,7 +46,7 @@ const sectionsEn = [
   { title: "Using the platform", copy: "When using Hooma, you must provide accurate contact and delivery information, protect your account, and not use the platform for illegal, fraudulent, or rights-infringing activity." },
   { title: "Orders and production", copy: "Products are made to order. Production begins after the relevant order and payment status is confirmed. The three-business-day target may change because of product complexity, material availability, order volume, or delivery conditions; we will notify you of material changes." },
   { title: "Product characteristics", copy: "Minor differences in color, surface texture, or natural production details may occur between digital images and the finished item. Follow the usage and safety instructions shown on the product page." },
-  { title: "Prices and payment", copy: "The final price and delivery fee are shown before order confirmation. Once live online payments are enabled, an authorized payment partner will process them; Hooma will not store full payment-card details." },
+  { title: "Prices and payment", copy: "The final price and delivery fee are shown before payment. The customer pays the full amount on BOG’s secure page; installments and split payments are not used. Hooma does not receive or store full payment-card details. An order is considered paid only after the bank’s secure confirmation." },
   { title: "Custom orders", copy: "By uploading a file or other material, you confirm that you have the right to provide it for use and production. Hooma may reject requests that are technically impossible, unsafe, or illegal to produce." },
   { title: "Returns and complaints", copy: "For defects, damage, or mismatch with an order, contact us within a reasonable period and provide the order details. Each case is reviewed according to the product type and mandatory consumer-protection rules. These terms do not limit your statutory rights." },
   { title: "Liability and availability", copy: "We work to keep platform information accurate and the service available, but temporary interruptions may occur during testing or maintenance. Any limitation of liability applies only to the extent permitted by law." },
@@ -58,7 +58,7 @@ export default function TermsPage() {
     <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-hooma-accent"><LocalizedText ka="Hooma-ს პირობები" en="Hooma terms" /></p>
       <h1 className="mt-4 text-4xl font-medium tracking-tight sm:text-5xl"><LocalizedText ka="გამოყენების პირობები" en="Terms of use" /></h1>
-      <p className="mt-4 text-sm text-hooma-muted"><LocalizedText ka="ბოლო განახლება: 16 ივლისი, 2026" en="Last updated: July 16, 2026" /></p>
+      <p className="mt-4 text-sm text-hooma-muted"><LocalizedText ka="ბოლო განახლება: 29 ივლისი, 2026" en="Last updated: July 29, 2026" /></p>
       <p className="mt-8 text-lg leading-8 text-hooma-muted">
         <LocalizedText ka="ეს პირობები არეგულირებს Hooma-ს ონლაინ პლატფორმითა და შეკვეთით დამზადების სერვისით სარგებლობას." en="These terms govern the use of Hooma’s online platform and made-to-order service." />
       </p>

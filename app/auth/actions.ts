@@ -6,10 +6,25 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { products } from "@/data/products";
+import {
+  BogPaymentError,
+  createBogOrder,
+  getBogCheckoutAvailability,
+  getBogPaymentMethods,
+  getBogReturnUrls,
+} from "@/lib/payments/bog";
+import { isTrustedBogRedirect, moneyToMinor } from "@/lib/payments/bog-core";
 
 type AuthState = {
   ok?: boolean;
   message?: string;
+};
+
+type CreateOrderResult = {
+  ok: boolean;
+  message: string;
+  redirectUrl?: string;
+  resetCheckout?: boolean;
 };
 
 export type ProfileActionState = AuthState & { savedAt?: string };
@@ -128,7 +143,7 @@ export async function updateProfileAction(_state: ProfileActionState, formData: 
   return { ok: true, message: georgian ? "მონაცემები წარმატებით შეინახა." : "Your profile was saved successfully.", savedAt: updatedAt };
 }
 
-export async function createOrderAction(formData: FormData) {
+export async function createOrderAction(formData: FormData): Promise<CreateOrderResult> {
   const supabase = (await createClient()) as any;
   const admin = createAdminClient() as any;
   let payload: {
@@ -143,6 +158,8 @@ export async function createOrderAction(formData: FormData) {
     longitude?: string;
     notes?: string;
     language?: "ka" | "en";
+    checkout_key?: string;
+    expected_total_minor?: number | null;
     items?: Array<{
       product_id: string;
       variant_id: string;
@@ -166,11 +183,23 @@ export async function createOrderAction(formData: FormData) {
   const deliveryMapsUrl = deliveryCoordinates ? `https://www.google.com/maps/search/?api=1&query=${deliveryCoordinates.latitude.toFixed(7)}%2C${deliveryCoordinates.longitude.toFixed(7)}` : null;
 
   if (!payload.items?.length) return { ok: false, message: georgian ? "კალათა ცარიელია." : "Your cart is empty." };
+  if (payload.items.length > 100) return { ok: false, message: georgian ? "ერთ შეკვეთაში ზედმეტად ბევრი პოზიციაა." : "There are too many items in one order." };
   if (!payload.guest_phone?.trim() || !payload.full_name?.trim() || !payload.city?.trim() || !payload.address_line_1?.trim()) {
     return { ok: false, message: georgian ? "შეავსე აუცილებელი საკონტაქტო და მიწოდების ველები." : "Please complete the required contact and delivery fields." };
   }
-  if (!admin) return { ok: false, message: georgian ? "სატესტო შეკვეთების საცავი ჯერ არ არის დაკავშირებული." : "Test order storage is not connected yet." };
+  if (!payload.checkout_key || !uuidPattern.test(payload.checkout_key)) {
+    return { ok: false, message: georgian ? "გადახდის სესია არასწორია. განაახლე გვერდი და სცადე თავიდან." : "The payment session is invalid. Refresh the page and try again." };
+  }
+  if (!admin) return { ok: false, message: georgian ? "შეკვეთების საცავი ჯერ არ არის დაკავშირებული." : "Order storage is not connected yet." };
   if (!supabase) return { ok: false, message: georgian ? "შეკვეთის გასაფორმებლად ანგარიშში შესვლაა საჭირო." : "Sign in to place an order." };
+  if (!getBogCheckoutAvailability().available) {
+    return {
+      ok: false,
+      message: georgian
+        ? "BOG ონლაინ გადახდა დროებით მიუწვდომელია. თანხა არ ჩამოგეჭრება."
+        : "BOG online payment is temporarily unavailable. You will not be charged.",
+    };
+  }
 
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -228,7 +257,34 @@ export async function createOrderAction(formData: FormData) {
   if (authoritativeItems.some((item) => item === null)) return { ok: false, message: georgian ? "კალათაში ერთი ან მეტი პროდუქტი არასწორია." : "One or more cart items are invalid." };
 
   const safeItems = authoritativeItems.filter((item): item is NonNullable<typeof item> => item !== null);
-  const subtotal = safeItems.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
+  const basket = safeItems.map((item) => {
+    const unitPriceMinor = moneyToMinor(item.unitPrice);
+    return unitPriceMinor === null ? null : {
+      productId: item.productId,
+      description: item.productName,
+      quantity: item.quantity,
+      unitPriceMinor,
+    };
+  });
+  if (basket.some((item) => item === null)) {
+    return { ok: false, message: georgian ? "პროდუქტის ფასი არასწორია." : "A product price is invalid." };
+  }
+  const safeBasket = basket.filter((item): item is NonNullable<typeof item> => item !== null);
+  const basketTotalMinor = safeBasket.reduce(
+    (sum, item) => sum + item.unitPriceMinor * item.quantity,
+    0,
+  );
+  if (
+    !Number.isSafeInteger(payload.expected_total_minor)
+    || payload.expected_total_minor !== basketTotalMinor
+  ) {
+    return {
+      ok: false,
+      message: georgian
+        ? "კალათის ფასი შეიცვალა. განაახლე გვერდი და გადაამოწმე შეკვეთა."
+        : "A cart price changed. Refresh the page and review the order.",
+    };
+  }
 
   const promisedAt = new Date();
   let businessDays = 0;
@@ -238,67 +294,154 @@ export async function createOrderAction(formData: FormData) {
     if (weekday !== 0 && weekday !== 6) businessDays += 1;
   }
 
-  const orderInsert = {
-    customer_id: customerId,
-    guest_email: user.email ?? payload.guest_email ?? null,
-    guest_phone: payload.guest_phone ?? null,
-    status: "pending",
-    payment_status: "unpaid",
-    subtotal,
-    delivery_fee: 0,
-    total: subtotal,
-    delivery_address: {
-      full_name: payload.full_name,
-      phone: payload.guest_phone,
-      email: user.email ?? payload.guest_email ?? null,
-      city: payload.city,
-      address_line_1: payload.address_line_1,
-      address_line_2: payload.address_line_2 || null,
-      postal_code: payload.postal_code || null,
-      latitude: deliveryCoordinates?.latitude ?? null,
-      longitude: deliveryCoordinates?.longitude ?? null,
-      google_maps_url: deliveryMapsUrl,
-    },
-    notes: payload.notes ?? null,
-    fulfillment_status: "order_received",
-    promised_at: promisedAt.toISOString(),
-    test_mode: true,
+  const deliveryAddress = {
+    full_name: payload.full_name.trim(),
+    phone: payload.guest_phone.trim(),
+    email: user.email ?? payload.guest_email?.trim() ?? null,
+    city: payload.city.trim(),
+    address_line_1: payload.address_line_1.trim(),
+    address_line_2: payload.address_line_2?.trim() || null,
+    postal_code: payload.postal_code?.trim() || null,
+    latitude: deliveryCoordinates?.latitude ?? null,
+    longitude: deliveryCoordinates?.longitude ?? null,
+    google_maps_url: deliveryMapsUrl,
   };
-
-  const { data: order, error } = await admin.from("orders").insert(orderInsert).select("id, tracking_code").single();
-  if (error || !order) return { ok: false, message: georgian ? "შეკვეთის შექმნა ვერ მოხერხდა." : "Could not create order." };
-
-  const items = safeItems.map(({ productId, variantId, productName, variant, unitPrice, quantity, material, color }) => ({
-    order_id: order.id,
-    product_id: productId,
-    variant_id: variantId,
-    inventory_id: null,
-    product_name: productName,
-    sku: variant.sku,
-    size_label: variant.sizeLabel,
-    material,
-    color,
-    quantity,
-    unit_price: unitPrice,
-    total_price: unitPrice === null ? null : unitPrice * quantity,
+  const checkoutItems = safeItems.map((item) => ({
+    product_id: item.productId,
+    variant_id: item.variantId,
+    material: item.material,
+    color: item.color,
+    quantity: item.quantity,
   }));
 
-  const { error: itemError } = await admin.from("order_items").insert(items);
-  if (itemError) {
-    await admin.from("orders").delete().eq("id", order.id);
-    return { ok: false, message: itemError.message };
+  const { data: checkoutData, error: checkoutError } = await admin.rpc("begin_bog_checkout_v1", {
+    requested_customer_id: customerId,
+    requested_guest_email: user.email ?? payload.guest_email ?? null,
+    requested_guest_phone: payload.guest_phone,
+    requested_delivery_address: deliveryAddress,
+    requested_notes: payload.notes ?? null,
+    requested_promised_at: promisedAt.toISOString(),
+    requested_idempotency_key: payload.checkout_key,
+    requested_items: checkoutItems,
+  });
+  const checkout = checkoutData && typeof checkoutData === "object"
+    ? checkoutData as Record<string, unknown>
+    : null;
+  const orderId = typeof checkout?.order_id === "string" ? checkout.order_id : "";
+  const attemptId = typeof checkout?.attempt_id === "string" ? checkout.attempt_id : "";
+  const trackingCode = typeof checkout?.tracking_code === "string" ? checkout.tracking_code : "";
+  const attemptStatus = typeof checkout?.attempt_status === "string" ? checkout.attempt_status : "";
+  const totalMinor = moneyToMinor(checkout?.amount);
+  if (checkoutError || !uuidPattern.test(orderId) || !uuidPattern.test(attemptId) || !attemptStatus || totalMinor === null || totalMinor <= 0) {
+    console.error("BOG_CHECKOUT_PREPARATION_FAILED", { code: checkoutError?.code ?? null });
+    return {
+      ok: false,
+      message: georgian
+        ? "შეკვეთის უსაფრთხოდ მომზადება ვერ მოხერხდა. თანხა არ ჩამოგეჭრება."
+        : "The order could not be prepared safely. You will not be charged.",
+    };
   }
 
-  await admin.from("order_events").insert({
-    order_id: order.id,
-    event_type: "order_received",
-    customer_label_en: "Order received",
-    customer_label_ka: "შეკვეთა მიღებულია",
-    details: { test_mode: true },
-    is_customer_visible: true,
-  });
+  if (basketTotalMinor !== totalMinor) {
+    return {
+      ok: false,
+      message: georgian
+        ? "კალათის ფასი შეიცვალა. განაახლე გვერდი და გადაამოწმე შეკვეთა."
+        : "A cart price changed. Refresh the page and review the order.",
+    };
+  }
 
-  revalidatePath("/admin/orders");
-  revalidatePath("/account/orders");
-  return { ok: true, message: georgian ? `სატესტო შეკვეთა მიღებულია. ტრეკინგის კოდი: ${order.tracking_code}` : `Test order received. Tracking code: ${order.tracking_code}` };
+  const storedResponse = checkout?.response_payload && typeof checkout.response_payload === "object"
+    ? checkout.response_payload as Record<string, unknown>
+    : null;
+  if (attemptStatus === "paid" || attemptStatus === "refunded" || attemptStatus === "review_required") {
+    return {
+      ok: false,
+      message: georgian
+        ? `ამ შეკვეთის გადახდის სტატუსი უკვე დაფიქსირებულია. გადაამოწმე „ჩემი შეკვეთები“ — კოდი ${trackingCode || orderId.slice(0, 8)}.`
+        : `This order already has a recorded payment status. Check My Orders — code ${trackingCode || orderId.slice(0, 8)}.`,
+    };
+  }
+  if (attemptStatus === "failed" || attemptStatus === "cancelled") {
+    return {
+      ok: false,
+      resetCheckout: true,
+      message: georgian
+        ? "წინა გადახდის სესია დასრულებულია. ხელახლა დააჭირე გადახდის ღილაკს ახალი უსაფრთხო სესიისთვის."
+        : "The previous payment session has ended. Press the payment button again to start a new secure session.",
+    };
+  }
+  if (["created", "pending"].includes(attemptStatus) && isTrustedBogRedirect(storedResponse?.redirect_url)) {
+    return {
+      ok: true,
+      redirectUrl: storedResponse.redirect_url,
+      message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
+    };
+  }
+
+  try {
+    const urls = getBogReturnUrls(orderId);
+    const payment = await createBogOrder({
+      callbackUrl: urls.callbackUrl,
+      externalOrderId: attemptId,
+      totalMinor,
+      basket: safeBasket,
+      successUrl: urls.successUrl,
+      failUrl: urls.failUrl,
+      paymentMethods: getBogPaymentMethods(),
+    }, payload.checkout_key, georgian ? "ka" : "en");
+
+    const { error: bindError } = await admin.rpc("bind_bog_payment_attempt_v1", {
+      requested_attempt_id: attemptId,
+      requested_provider_payment_id: payment.providerOrderId,
+      requested_response: payment.safeResponse,
+    });
+    if (bindError) {
+      console.error("BOG_CHECKOUT_BIND_FAILED", {
+        attemptId,
+        providerOrderId: payment.providerOrderId,
+        code: bindError.code ?? null,
+      });
+      if (!bindError.message?.includes("BOG_PROVIDER_ID_CONFLICT")) {
+        // The signed callback can bind this provider order by the pre-created
+        // external attempt ID even if this response write was interrupted.
+        return {
+          ok: true,
+          redirectUrl: payment.redirectUrl,
+          message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
+        };
+      }
+      return {
+        ok: false,
+        message: georgian
+          ? `გადახდის სესია შეიქმნა, მაგრამ დადასტურება ვერ დასრულდა. დაგვიკავშირდი კოდით ${trackingCode || orderId.slice(0, 8)}; ხელახლა ნუ გადაიხდი.`
+          : `The payment session was created but could not be confirmed. Contact us with code ${trackingCode || orderId.slice(0, 8)}; do not pay again.`,
+      };
+    }
+
+    revalidatePath("/admin/orders");
+    revalidatePath("/account/orders");
+    return {
+      ok: true,
+      redirectUrl: payment.redirectUrl,
+      message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
+    };
+  } catch (error) {
+    const retryable = error instanceof BogPaymentError && error.retryable;
+    console.error("BOG_CHECKOUT_INITIALIZATION_FAILED", {
+      attemptId,
+      retryable,
+      status: error instanceof BogPaymentError ? error.status : null,
+    });
+    return {
+      ok: false,
+      message: georgian
+        ? retryable
+          ? "BOG დროებით მიუწვდომელია. თანხა არ ჩამოგეჭრება; რამდენიმე წუთში იგივე გვერდიდან სცადე."
+          : "BOG გადახდის შექმნა ვერ მოხერხდა. თანხა არ ჩამოგეჭრება."
+        : retryable
+          ? "BOG is temporarily unavailable. You will not be charged; retry from this page in a few minutes."
+          : "BOG could not create the payment. You will not be charged.",
+    };
+  }
 }
