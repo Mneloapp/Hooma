@@ -253,10 +253,11 @@ export async function getStorefrontProductBySlug(slug: string): Promise<Product 
   const [{ data: row }, { data: variantRows }, { data: sourceRows }] = await Promise.all([
     admin
       .from("products")
-      .select("id,slug,hooma_name,name_ka,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,sale_price,delivery_estimate,lead_time_business_days,estimated_print_minutes")
+      .select("id,slug,hooma_name,name_ka,short_description,short_description_ka,long_description,hero_image,gallery_images,video_url,tags,is_featured,price_placeholder,currency,base_price,sale_price,delivery_estimate,lead_time_business_days,estimated_print_minutes,catalog_audit_applied_at")
       .eq("id", card.id)
       .eq("status", "active")
       .eq("production_status", "approved")
+      .not("catalog_audit_applied_at", "is", null)
       .maybeSingle(),
     admin
       .from("product_variants")

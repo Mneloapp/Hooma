@@ -193,7 +193,7 @@ export async function createOrderAction(formData: FormData) {
     if (!uuidPattern.test(item.product_id) || !uuidPattern.test(item.variant_id)) return null;
     const { data: variant, error: variantError } = await admin
       .from("product_variants")
-      .select("id, product_id, sku, size_label, material, available_colors, is_active, products!inner(hooma_name, status, production_status)")
+      .select("id, product_id, sku, size_label, material, available_colors, is_active, products!inner(hooma_name, status, production_status, catalog_audit_applied_at)")
       .eq("id", item.variant_id)
       .eq("product_id", item.product_id)
       .eq("is_active", true)
@@ -209,6 +209,7 @@ export async function createOrderAction(formData: FormData) {
     if (priceError || typeof resolvedPrice !== "number" || resolvedPrice <= 0) return null;
 
     const joinedProduct = Array.isArray(variant.products) ? variant.products[0] : variant.products;
+    if (!joinedProduct?.catalog_audit_applied_at) return null;
     const availableColors = Array.isArray(variant.available_colors) && variant.available_colors.length ? variant.available_colors : ["სტანდარტული"];
     const availableMaterials = variant.material ? [variant.material] : ["სტანდარტული"];
     const material = availableMaterials.includes(item.material ?? "") ? item.material! : availableMaterials[0];
