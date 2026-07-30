@@ -8,6 +8,7 @@ import { LocalizedText } from "@/components/LocalizedText";
 const errorMessages: Record<string, { ka: string; en: string }> = {
   google: { ka: "Google-ით შესვლა ვერ დაიწყო. სცადე ხელახლა.", en: "Google sign-in could not start. Please try again." },
   oauth: { ka: "Google ავტორიზაცია ვერ დასრულდა. სცადე ხელახლა.", en: "Google authorization could not be completed. Please try again." },
+  confirmation: { ka: "ელფოსტის დადასტურების ბმული ვერ დამუშავდა. სცადე ანგარიშში შესვლა ან მოითხოვე ახალი ბმული.", en: "The email confirmation link could not be processed. Try signing in or request a new link." },
   disabled: { ka: "ეს ანგარიში გათიშულია. დაუკავშირდი Hooma-ს Owner-ს.", en: "This account is disabled. Contact the Hooma owner." },
   config: { ka: "ავტორიზაციის სერვისი ჯერ არ არის დაკავშირებული.", en: "The authentication service is not connected yet." },
 };

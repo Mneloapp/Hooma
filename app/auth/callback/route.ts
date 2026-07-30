@@ -11,18 +11,19 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const requestedNext = safeNextPath(requestUrl.searchParams.get("next"));
+  const failureCode = requestUrl.searchParams.get("flow") === "email" ? "confirmation" : "oauth";
   const forwardedHost = request.headers.get("x-forwarded-host");
   const forwardedProtocol = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = forwardedHost ? `${forwardedProtocol}://${forwardedHost}` : requestUrl.origin;
   const supabase = await createClient();
 
-  if (!code || !supabase) return NextResponse.redirect(new URL("/login?error=oauth", origin));
+  if (!code || !supabase) return NextResponse.redirect(new URL(`/login?error=${failureCode}`, origin));
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) return NextResponse.redirect(new URL("/login?error=oauth", origin));
+  if (error) return NextResponse.redirect(new URL(`/login?error=${failureCode}`, origin));
 
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return NextResponse.redirect(new URL("/login?error=oauth", origin));
+  if (!userData.user) return NextResponse.redirect(new URL(`/login?error=${failureCode}`, origin));
 
   const { data: profile } = await (supabase as any).from("profiles").select("role,is_active").eq("id", userData.user.id).single();
   if (!profile?.is_active || !isUserRole(profile.role)) {

@@ -99,6 +99,7 @@ export async function signupAction(_state: AuthState, formData: FormData): Promi
   const phone = getString(formData, "phone");
   const callback = new URL("/auth/callback", await siteOrigin());
   callback.searchParams.set("next", "/account");
+  callback.searchParams.set("flow", "email");
 
   const { error } = await supabase.auth.signUp({
     email,
