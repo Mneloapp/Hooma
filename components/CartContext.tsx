@@ -1,23 +1,39 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { usePathname } from "next/navigation";
+import {
+  clearCheckoutPaymentSession,
+  clearLegacyCheckoutPaymentSession,
+} from "@/components/checkout/payment-session-storage";
+import { createClient } from "@/lib/supabase/client";
+import {
+  ACTIVE_CART_SCOPE_SESSION_KEY,
+  GUEST_CART_STORAGE_KEY,
+  LEGACY_CART_STORAGE_KEY,
+  MAX_STORED_CART_ITEMS,
+  cartItemKey,
+  cartStorageKeyForUser,
+  isCartStorageEventForScope,
+  mergeCartItems,
+  parseStoredCartSnapshot,
+  resolveCartScope,
+  serializeStoredCart,
+  type CartItem,
+  type CartStorageSnapshot,
+  type PendingCartMode,
+} from "@/lib/cart-storage";
 
-export type CartItem = {
-  product_id: string;
-  variant_id: string;
-  inventory_id?: string | null;
-  product_name: string;
-  name: string;
-  image: string;
-  sku: string;
-  size_label: string;
-  material: string;
-  color: string;
-  quantity: number;
-  price?: number | null;
-  pricePlaceholder: string;
-  price_placeholder?: string;
-};
+export type { CartItem } from "@/lib/cart-storage";
 
 type CartContextValue = {
   items: CartItem[];
@@ -31,101 +47,258 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
-const CART_STORAGE_KEY = "hooma-cart";
-const CART_STORAGE_VERSION = 1;
-const MAX_STORED_CART_ITEMS = 100;
 
-type StoredCart = {
-  version: typeof CART_STORAGE_VERSION;
+type ScopedCart = {
+  storageKey: string | null;
   items: CartItem[];
+  cartId: string | null;
+  consumedGuestCartIds: string[];
+  pendingMode: PendingCartMode;
 };
 
-const keyFor = (item: Pick<CartItem, "product_id" | "variant_id" | "material" | "color">) =>
-  [item.product_id, item.variant_id, item.material, item.color].join("|");
+const emptyCartSnapshot = (): CartStorageSnapshot => ({
+  items: [],
+  cartId: null,
+  consumedGuestCartIds: [],
+});
 
-const isShortString = (value: unknown, maxLength = 500) =>
-  typeof value === "string" && value.length <= maxLength;
-
-function parseStoredCart(value: string | null): CartItem[] {
-  if (!value) return [];
+function readCart(storageKey: string): CartStorageSnapshot {
   try {
-    const stored = JSON.parse(value) as Partial<StoredCart> | null;
-    if (stored?.version !== CART_STORAGE_VERSION || !Array.isArray(stored.items)) return [];
-    return stored.items.slice(0, MAX_STORED_CART_ITEMS).filter((item): item is CartItem => (
-      item !== null
-      && typeof item === "object"
-      && isShortString(item.product_id, 128)
-      && isShortString(item.variant_id, 128)
-      && (item.inventory_id === undefined || item.inventory_id === null || isShortString(item.inventory_id, 128))
-      && isShortString(item.product_name)
-      && isShortString(item.name)
-      && isShortString(item.image, 2_000)
-      && isShortString(item.sku, 128)
-      && isShortString(item.size_label, 128)
-      && isShortString(item.material, 128)
-      && isShortString(item.color, 128)
-      && Number.isInteger(item.quantity)
-      && item.quantity > 0
-      && item.quantity <= 100
-      && (item.price === undefined || item.price === null || (Number.isFinite(item.price) && item.price >= 0))
-      && isShortString(item.pricePlaceholder, 200)
-      && (item.price_placeholder === undefined || isShortString(item.price_placeholder, 200))
-    ));
+    return parseStoredCartSnapshot(window.localStorage.getItem(storageKey));
   } catch {
-    return [];
+    return emptyCartSnapshot();
   }
 }
 
-export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [storageReady, setStorageReady] = useState(false);
+function writeCart(
+  storageKey: string,
+  {
+    items,
+    cartId,
+    consumedGuestCartIds,
+  }: CartStorageSnapshot,
+) {
+  try {
+    window.localStorage.setItem(storageKey, serializeStoredCart(items, {
+      cartId,
+      consumedGuestCartIds,
+    }));
+    return true;
+  } catch {
+    // Checkout remains usable in memory when storage is unavailable or full.
+    return false;
+  }
+}
 
-  useEffect(() => {
-    setItems(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY)));
-    setStorageReady(true);
+function createCartId() {
+  return window.crypto.randomUUID();
+}
+
+export function CartProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const [cart, setCart] = useState<ScopedCart>({
+    storageKey: null,
+    items: [],
+    cartId: null,
+    consumedGuestCartIds: [],
+    pendingMode: "none",
+  });
+  const cartRef = useRef(cart);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const replaceCart = useCallback((next: ScopedCart) => {
+    cartRef.current = next;
+    setCart(next);
   }, []);
 
+  const updateItems = useCallback((
+    updater: (items: CartItem[]) => CartItem[],
+    unresolvedMode: Exclude<PendingCartMode, "none"> = "merge",
+  ) => {
+    const current = cartRef.current;
+    const items = updater(current.items);
+    const cartId = current.storageKey === GUEST_CART_STORAGE_KEY
+      ? items.length
+        ? current.cartId ?? createCartId()
+        : null
+      : current.cartId;
+    const next = {
+      ...current,
+      items,
+      cartId,
+      pendingMode: current.storageKey
+        ? "none" as const
+        : current.pendingMode === "replace"
+          ? "replace" as const
+          : unresolvedMode,
+    };
+    if (current.storageKey) writeCart(current.storageKey, next);
+    replaceCart({
+      ...next,
+    });
+  }, [replaceCart]);
+
   useEffect(() => {
-    if (!storageReady) return;
-    const stored: StoredCart = { version: CART_STORAGE_VERSION, items };
+    clearLegacyCheckoutPaymentSession();
     try {
-      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(stored));
+      window.localStorage.removeItem(LEGACY_CART_STORAGE_KEY);
     } catch {
-      // Checkout remains usable in memory when storage is unavailable or full.
+      // A blocked storage API still leaves the in-memory scoped cart usable.
     }
-  }, [items, storageReady]);
+
+    const activateScope = (userId: string | null) => {
+      const previous = cartRef.current;
+      const nextStorageKey = cartStorageKeyForUser(userId);
+      if (previous.storageKey === nextStorageKey) return;
+
+      const scopedCart = readCart(nextStorageKey);
+      const storedGuestCart = userId
+        ? readCart(GUEST_CART_STORAGE_KEY)
+        : emptyCartSnapshot();
+      const guestCart = previous.storageKey === GUEST_CART_STORAGE_KEY
+        ? {
+          items: previous.items,
+          cartId: previous.cartId,
+          consumedGuestCartIds: [],
+        }
+        : storedGuestCart;
+      if (userId && guestCart.items.length && !guestCart.cartId) {
+        guestCart.cartId = createCartId();
+      }
+
+      const resolved = resolveCartScope({
+        userId,
+        previousStorageKey: previous.storageKey,
+        pendingItems: previous.items,
+        pendingMode: previous.pendingMode,
+        scopedItems: scopedCart.items,
+        scopedConsumedGuestCartIds: scopedCart.consumedGuestCartIds,
+        guestItems: guestCart.items,
+        guestCartId: guestCart.cartId,
+      });
+
+      const cartId = userId
+        ? null
+        : resolved.items.length
+          ? scopedCart.cartId ?? createCartId()
+          : null;
+      const nextCart: ScopedCart = {
+        storageKey: resolved.storageKey,
+        items: resolved.items,
+        cartId,
+        consumedGuestCartIds: userId ? resolved.consumedGuestCartIds : [],
+        pendingMode: "none",
+      };
+      const persisted = writeCart(resolved.storageKey, nextCart);
+      if (resolved.consumeGuest && persisted) {
+        try {
+          window.localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+        } catch {
+          // The transfer ID stored with the user cart prevents a repeated merge.
+        }
+      }
+
+      try {
+        const previousSessionScope = window.sessionStorage.getItem(
+          ACTIVE_CART_SCOPE_SESSION_KEY,
+        );
+        if (previousSessionScope && previousSessionScope !== resolved.storageKey) {
+          clearCheckoutPaymentSession();
+        }
+        window.sessionStorage.setItem(
+          ACTIVE_CART_SCOPE_SESSION_KEY,
+          resolved.storageKey,
+        );
+      } catch {
+        // Identity isolation still works when session storage is unavailable.
+      }
+
+      replaceCart({
+        storageKey: resolved.storageKey,
+        items: resolved.items,
+        cartId: nextCart.cartId,
+        consumedGuestCartIds: nextCart.consumedGuestCartIds,
+        pendingMode: "none",
+      });
+      setIsOpen(false);
+    };
+
+    const supabase = createClient();
+    if (!supabase) {
+      activateScope(null);
+      return;
+    }
+
+    let active = true;
+    let authEventVersion = 0;
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      authEventVersion += 1;
+      activateScope(session?.user?.id ?? null);
+    });
+    const getUserVersion = authEventVersion;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (active && authEventVersion === getUserVersion) {
+        activateScope(data.user?.id ?? null);
+      }
+    });
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, [pathname, replaceCart]);
 
   useEffect(() => {
     const syncCart = (event: StorageEvent) => {
-      if (event.key === CART_STORAGE_KEY) setItems(parseStoredCart(event.newValue));
+      const current = cartRef.current;
+      if (!isCartStorageEventForScope(current.storageKey, event.key)) return;
+      replaceCart({
+        storageKey: current.storageKey,
+        ...parseStoredCartSnapshot(event.newValue),
+        pendingMode: "none",
+      });
     };
     window.addEventListener("storage", syncCart);
     return () => window.removeEventListener("storage", syncCart);
-  }, []);
+  }, [replaceCart]);
 
   const value = useMemo<CartContextValue>(
     () => ({
-      items,
+      items: cart.items,
       isOpen,
       openCart: () => setIsOpen(true),
       closeCart: () => setIsOpen(false),
       addItem: (item) => {
-        setItems((current) => {
-          const next = [...current];
-          const index = next.findIndex((existing) => keyFor(existing) === keyFor(item));
-          if (index >= 0) next[index] = { ...next[index], quantity: next[index].quantity + item.quantity };
-          else next.push(item);
-          return next;
+        updateItems((current) => {
+          const index = current.findIndex(
+            (existing) => cartItemKey(existing) === cartItemKey(item),
+          );
+          if (index >= 0) {
+            const next = [...current];
+            next[index] = {
+              ...next[index],
+              quantity: Math.min(100, next[index].quantity + Math.max(1, item.quantity)),
+            };
+            return next;
+          }
+          if (current.length >= MAX_STORED_CART_ITEMS) return current;
+          return mergeCartItems(current, [item]);
         });
         setIsOpen(true);
       },
       updateQuantity: (key, quantity) =>
-        setItems((current) => current.map((item) => (keyFor(item) === key ? { ...item, quantity } : item)).filter((item) => item.quantity > 0)),
-      clearCart: () => setItems([]),
-      count: items.reduce((sum, item) => sum + item.quantity, 0),
+        updateItems((current) => current
+          .map((item) => (
+            cartItemKey(item) === key
+              ? { ...item, quantity: Math.min(100, Math.trunc(quantity)) }
+              : item
+          ))
+          .filter((item) => item.quantity > 0)),
+      clearCart: () => updateItems(() => [], "replace"),
+      count: cart.items.reduce((sum, item) => sum + item.quantity, 0),
     }),
-    [items, isOpen],
+    [cart.items, isOpen, updateItems],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -134,5 +307,5 @@ export function CartProvider({ children }: { children: ReactNode }) {
 export function useCart() {
   const context = useContext(CartContext);
   if (!context) throw new Error("useCart must be used inside CartProvider");
-  return { ...context, keyFor };
+  return { ...context, keyFor: cartItemKey };
 }

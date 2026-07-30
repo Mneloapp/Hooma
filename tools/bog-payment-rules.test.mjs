@@ -173,3 +173,18 @@ test("admin receipt recovery can hold anomalies but cannot mark paid", () => {
   assert.match(recovery, /pg_advisory_xact_lock/);
   assert.match(recovery, /existing_event\.processing_status = 'manual_review'/);
 });
+
+test("browser payment idempotency stores only a SHA-256 fingerprint", () => {
+  const storage = readFileSync(
+    new URL("../components/checkout/payment-session-storage.ts", import.meta.url),
+    "utf8",
+  );
+  const checkout = readFileSync(
+    new URL("../components/checkout/CheckoutForm.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(storage, /subtle\.digest\("SHA-256"/);
+  assert.match(storage, /fingerprintSha256/);
+  assert.doesNotMatch(storage, /\bfingerprint:\s*string/);
+  assert.match(checkout, /sha256CheckoutFingerprint\(JSON\.stringify\(/);
+});
