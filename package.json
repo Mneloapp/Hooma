@@ -10,6 +10,7 @@
     "db:push": "supabase db push --linked",
     "start": "next start",
     "lint": "next lint",
+    "test:auth": "node --test tools/auth-confirmation-rules.test.mjs",
     "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs",
     "test:audit-launch": "node --test tools/catalog-audit-launch-rules.test.mjs",
     "test:payments": "node --experimental-strip-types --test tools/bog-payment-rules.test.mjs",

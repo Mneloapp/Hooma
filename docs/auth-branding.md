@@ -58,9 +58,13 @@ Recommended first-stage setup:
 5. In **Authentication > URL Configuration**, set Site URL to the canonical
    Hooma domain and keep the production, preview, and localhost auth callback
    URLs in the redirect allow list.
-6. Disable link/open tracking for authentication messages so the provider does
+6. Keep the confirmation button pointed at
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/account`.
+   This dedicated token-hash route does not depend on a PKCE verifier cookie
+   being present in the browser that opens the email.
+7. Disable link/open tracking for authentication messages so the provider does
    not rewrite Supabase's one-time verification link.
-7. Send a new test registration to a non-team email and verify sender name,
+8. Send a new test registration to a non-team email and verify sender name,
    logo, button, confirmation, and final redirect.
 
 The hosted template is configured in the Dashboard, not through a database
