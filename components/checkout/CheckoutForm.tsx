@@ -13,6 +13,7 @@ import {
 import {
   clearCheckoutPaymentSession,
   getOrCreateCheckoutKey,
+  sha256CheckoutFingerprint,
 } from "@/components/checkout/payment-session-storage";
 
 const deliveryCityLabels: Record<string, { ka: string; en: string }> = {
@@ -94,7 +95,7 @@ export function CheckoutForm({
     setLongitude(null);
   }
 
-  function submit(formData: FormData) {
+  async function submit(formData: FormData) {
     if (!checkoutAvailable) {
       setMessage(!deliveryRulesReady
         ? georgian
@@ -120,7 +121,7 @@ export function CheckoutForm({
       expected_total_minor: pricesComplete ? deliveryQuote.totalMinor : null,
       items,
     };
-    const paymentFingerprint = JSON.stringify({
+    const paymentFingerprint = await sha256CheckoutFingerprint(JSON.stringify({
       guest_email: payloadWithoutKey.guest_email,
       guest_phone: payloadWithoutKey.guest_phone,
       full_name: payloadWithoutKey.full_name,
@@ -138,7 +139,7 @@ export function CheckoutForm({
         color: item.color,
         quantity: item.quantity,
       })),
-    });
+    }));
     if (!checkoutKey.current || checkoutFingerprint.current !== paymentFingerprint) {
       checkoutKey.current = getOrCreateCheckoutKey(paymentFingerprint);
       checkoutFingerprint.current = paymentFingerprint;
