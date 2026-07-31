@@ -70,6 +70,7 @@ function refreshProductMedia(productId: string) {
   revalidatePath("/product/[slug]", "page");
   revalidatePath("/products/[slug]", "page");
   revalidatePath("/admin/products");
+  revalidatePath("/admin/audited-products");
   revalidatePath(`/admin/products/${productId}`);
   revalidateStorefrontCatalog();
 }
@@ -149,7 +150,6 @@ export async function updateProductMediaAction(formData: FormData): Promise<Prod
   if (!Array.isArray(uploaded) || uploaded.length > 13 || uploaded.some((file) => !validMediaDescriptor(file))) {
     return { ok: false, message: "ატვირთული მედიის მონაცემები არასწორია." };
   }
-  const uploadedImages = uploaded.filter((file) => file.kind === "image");
   const uploadedVideos = uploaded.filter((file) => file.kind === "video");
   if (uploadedVideos.length > 1 || (retainedVideo && uploadedVideos.length)) {
     return { ok: false, message: "პროდუქტზე მაქსიმუმ ერთი ვიდეო შეიძლება." };
@@ -198,16 +198,20 @@ export async function updateProductMediaAction(formData: FormData): Promise<Prod
   const heroImage = finalImages[heroIndex];
   const orderedImages = [heroImage, ...finalImages.filter((_, index) => index !== heroIndex)];
 
-  const { error: updateError } = await context.admin.from("products").update({
-    hero_image: heroImage,
-    gallery_images: orderedImages,
-    video_url: finalVideo,
-  }).eq("id", context.productId);
+  const { data: updateResult, error: updateError } = await context.admin.rpc(
+    "update_manager_reviewed_product_media_v1",
+    {
+      actor_profile_id: context.profile.id,
+      requested_product_id: context.productId,
+      requested_hero_image: heroImage,
+      requested_gallery_images: orderedImages,
+      requested_video_url: finalVideo,
+    },
+  );
   if (updateError) {
     if (paths.length) await context.admin.storage.from("product-media").remove(paths);
     return { ok: false, message: "პროდუქტის მედია ვერ განახლდა." };
   }
-  await context.admin.from("product_variants").update({ image: heroImage }).eq("product_id", context.productId);
 
   const removedUrls = [
     ...currentImages.filter((url) => !retainedImages.includes(url)),
@@ -215,24 +219,25 @@ export async function updateProductMediaAction(formData: FormData): Promise<Prod
   ];
   const removedPaths = Array.from(new Set(removedUrls.map(productMediaPath).filter((value): value is string => Boolean(value))));
   const removal = removedPaths.length ? await context.admin.storage.from("product-media").remove(removedPaths) : { error: null };
-  await context.admin.from("audit_log").insert({
-    actor_id: context.profile.id,
-    action: "product_media_updated",
-    entity_type: "product",
-    entity_id: context.productId,
-    metadata: {
-      previous_image_count: currentImages.length,
-      image_count: orderedImages.length,
-      uploaded_image_count: uploadedImages.length,
-      removed_image_count: currentImages.length - retainedImages.length,
-      previous_video_present: Boolean(product.video_url),
-      video_present: Boolean(finalVideo),
-      storage_cleanup_failed: Boolean(removal.error),
-    },
-  });
+  if (removal.error) {
+    await context.admin.from("audit_log").insert({
+      actor_id: context.profile.id,
+      action: "product_media_storage_cleanup_failed",
+      entity_type: "product",
+      entity_id: context.productId,
+      metadata: { storage_object_count: removedPaths.length },
+    });
+  }
   refreshProductMedia(context.productId);
+  const approvalPreserved = Boolean(updateResult?.audit_preserved);
   return {
     ok: true,
-    message: removal.error ? "მედია განახლდა, თუმცა ძველი Storage ფაილის გასუფთავება ვერ დასრულდა." : "პროდუქტის ფოტოები და ვიდეო განახლებულია.",
+    message: removal.error
+      ? approvalPreserved
+        ? "მედია განახლდა და აუდიტის დამტკიცება შენარჩუნდა, თუმცა ძველი Storage ფაილის გასუფთავება ვერ დასრულდა."
+        : "მედია განახლდა, თუმცა ძველი Storage ფაილის გასუფთავება ვერ დასრულდა."
+      : approvalPreserved
+        ? "პროდუქტის მედია განახლდა და აუდიტის დამტკიცება შენარჩუნდა."
+        : "პროდუქტის ფოტოები და ვიდეო განახლებულია.",
   };
 }

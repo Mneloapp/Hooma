@@ -34,10 +34,15 @@ const safeBulkDraftCleanupMigrationPath = new URL(
   "../supabase/migrations/20260729000900_safe_bulk_draft_cleanup.sql",
   import.meta.url,
 );
+const managerMediaMigrationPath = new URL(
+  "../supabase/migrations/20260731000100_manager_media_preserves_audit.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
+const productMediaActionsPath = new URL("../app/admin/products/media-actions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, adminProductsPage, adminPermissions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, adminProductsPage, adminPermissions, productMediaActions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
@@ -46,8 +51,10 @@ const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogP
   readFile(batchedBulkDraftMigrationPath, "utf8"),
   readFile(bulkDraftTimeoutMigrationPath, "utf8"),
   readFile(safeBulkDraftCleanupMigrationPath, "utf8"),
+  readFile(managerMediaMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
+  readFile(productMediaActionsPath, "utf8"),
 ]);
 
 test("category job creation and claim use the same persisted scope", () => {
@@ -172,6 +179,18 @@ test("post-approval catalog changes invalidate approval and delete the public ca
     storefrontMigration,
     /if coalesce\(new\.is_active, false\)[\s\S]*not coalesce\(old\.is_active, false\)[\s\S]*new_product_id is distinct from old_product_id/,
   );
+});
+
+test("manager media editor preserves approval and repairs media-only invalidations", () => {
+  assert.match(managerMediaMigration, /create or replace function public\.update_manager_reviewed_product_media_v1/);
+  assert.match(managerMediaMigration, /set_config\([\s\S]*hooma\.catalog_audit_apply_product_id/);
+  assert.match(managerMediaMigration, /update public\.product_variants[\s\S]*set image = requested_hero_image/);
+  assert.match(managerMediaMigration, /grant execute on function public\.update_manager_reviewed_product_media_v1[\s\S]*to service_role/);
+  assert.match(managerMediaMigration, /latest_content_action\.action = 'product_media_updated'/);
+  assert.match(managerMediaMigration, /catalog_audit_restored_after_manager_media_edit/);
+  assert.match(productMediaActions, /\.rpc\([\s\S]*update_manager_reviewed_product_media_v1/);
+  assert.match(productMediaActions, /revalidatePath\("\/admin\/audited-products"\)/);
+  assert.doesNotMatch(productMediaActions, /from\("products"\)\.update\(\{\s*hero_image/);
 });
 
 test("bulk Draft reset is explicit, privileged, and preserves audit approval", () => {
