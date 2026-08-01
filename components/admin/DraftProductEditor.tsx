@@ -63,7 +63,7 @@ export function DraftProductEditor({
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-hooma-muted">{initial.status === "draft" ? "Draft editor" : "Catalog editor"}</p>
           <h2 className="mt-2 text-xl font-semibold">პროდუქტის მონაცემების რედაქტირება</h2>
-          <p className="mt-2 text-sm leading-6 text-hooma-muted">შეცვალე პროდუქტის ინფორმაცია. შენახვისას თვითღირებულება და გასაყიდი ფასი თავიდან დაითვლება, მიმდინარე სტატუსი კი შენარჩუნდება.</p>
+          <p className="mt-2 text-sm leading-6 text-hooma-muted">შეცვალე პროდუქტის ინფორმაცია. შენახვისას თვითღირებულება და გასაყიდი ფასი თავიდან დაითვლება, მიმდინარე სტატუსი და უკვე მიღებული აუდიტის დამტკიცება კი შენარჩუნდება.</p>
         </div>
         <button disabled={pending || price.loading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-hooma-text px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">
           {pending ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
