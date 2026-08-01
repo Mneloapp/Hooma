@@ -38,11 +38,15 @@ const managerMediaMigrationPath = new URL(
   "../supabase/migrations/20260731000100_manager_media_preserves_audit.sql",
   import.meta.url,
 );
+const managerCatalogEditMigrationPath = new URL(
+  "../supabase/migrations/20260801000100_manager_catalog_edits_preserve_audit.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 const productMediaActionsPath = new URL("../app/admin/products/media-actions.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, adminProductsPage, adminPermissions, productMediaActions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, managerCatalogEditMigration, adminProductsPage, adminPermissions, productMediaActions] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
@@ -52,6 +56,7 @@ const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogP
   readFile(bulkDraftTimeoutMigrationPath, "utf8"),
   readFile(safeBulkDraftCleanupMigrationPath, "utf8"),
   readFile(managerMediaMigrationPath, "utf8"),
+  readFile(managerCatalogEditMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
   readFile(productMediaActionsPath, "utf8"),
@@ -191,6 +196,17 @@ test("manager media editor preserves approval and repairs media-only invalidatio
   assert.match(productMediaActions, /\.rpc\([\s\S]*update_manager_reviewed_product_media_v1/);
   assert.match(productMediaActions, /revalidatePath\("\/admin\/audited-products"\)/);
   assert.doesNotMatch(productMediaActions, /from\("products"\)\.update\(\{\s*hero_image/);
+});
+
+test("manager catalog editor preserves approval and repairs editor invalidations", () => {
+  assert.match(managerCatalogEditMigration, /rename to update_catalog_product_v2_core_20260801/);
+  assert.match(managerCatalogEditMigration, /revoke all on function public\.update_catalog_product_v2_core_20260801[\s\S]*service_role/);
+  assert.match(managerCatalogEditMigration, /set_config\([\s\S]*hooma\.catalog_audit_apply_product_id/);
+  assert.match(managerCatalogEditMigration, /update_catalog_product_v2_core_20260801\(/);
+  assert.match(managerCatalogEditMigration, /exception when others then[\s\S]*coalesce\(previous_apply_product_id, ''\)/);
+  assert.match(managerCatalogEditMigration, /grant execute on function public\.update_catalog_product_v2[\s\S]*to service_role/);
+  assert.match(managerCatalogEditMigration, /latest_content_action\.action = 'catalog_product_updated'/);
+  assert.match(managerCatalogEditMigration, /catalog_audit_restored_after_manager_catalog_edit/);
 });
 
 test("bulk Draft reset is explicit, privileged, and preserves audit approval", () => {
