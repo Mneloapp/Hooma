@@ -4,6 +4,21 @@ import type {
   StorefrontAssistantReply,
 } from "./types";
 
+export const PRODUCT_SUPPLY_POLICY = {
+  title: {
+    ka: "კომპლექტაციის მნიშვნელოვანი წესი",
+    en: "Important package-contents notice",
+  },
+  question: {
+    ka: "რა შედის პროდუქტის კომპლექტაციაში?",
+    en: "What is included with a product?",
+  },
+  body: {
+    ka: "Hooma-ს შეკვეთაში შედის მხოლოდ პროდუქტის 3D პრინტერზე დაბეჭდილი ნაწილი ან ნაწილები. ფოტოებზე ნაჩვენები ლითონის რგოლები, საყურეს სამაგრები, ხრახნები, ძრავები, ელექტრონიკა და სხვა დამხმარე ან არადაბეჭდვადი კომპონენტები შეკვეთაში არ შედის. თუ პროდუქტის დასასრულებლად ასეთი დეტალი ან აწყობაა საჭირო, მომხმარებელი მას ცალკე იძენს და პროდუქტს თავად აწყობს.",
+    en: "A Hooma order includes only the product part or parts made with a 3D printer. Metal rings, earring hooks, screws, motors, electronics, and any other supporting or non-printed components shown in photos are not included. If the product requires such a component or assembly to be completed, the customer obtains it separately and assembles the product.",
+  },
+} as const;
+
 type LocalizedCopy = {
   ka: string;
   en: string;
@@ -48,6 +63,11 @@ export const storefrontFaqs: StorefrontFaq[] = [
       ka: "არა. პროდუქტების უმეტესობა მზადდება შეკვეთის შემდეგ. ამიტომ ხელმისაწვდომობა ნიშნავს, რომ პროდუქტის შეკვეთა და დამზადება შესაძლებელია — არა იმას, რომ მზა ერთეული უკვე საწყობშია.",
       en: "No. Most products are made after you order. Availability means the item can be ordered and produced, not that a finished unit is already waiting in stock.",
     },
+  },
+  {
+    id: "product-supply-scope",
+    question: PRODUCT_SUPPLY_POLICY.question,
+    answer: PRODUCT_SUPPLY_POLICY.body,
   },
   {
     id: "catalog-preview",
@@ -136,6 +156,22 @@ type KnowledgeRule = {
 };
 
 const rules: KnowledgeRule[] = [
+  {
+    faqId: "product-supply-scope",
+    keywords: [
+      "რა შედის კომპლექტ", "რა შედის პროდუქტ", "რა მოყვება", "ყველა დეტალი მოყვება",
+      "დამატებითი კომპონენტ", "დამხმარე დეტალ", "რგოლი მოყვება", "სამაგრი მოყვება",
+      "ხრახნები მოყვება", "ძრავა მოყვება", "ელექტრონიკა მოყვება", "აწყობა სჭირდება",
+      "what is included", "included in the box", "what comes with", "all parts included",
+      "accessories included", "extra components", "ring included", "hook included",
+      "screws included", "motor included", "electronics included", "assembly required",
+    ],
+    actions: ["faq", "shop"],
+    suggestions: [
+      { ka: "როგორ შევუკვეთო?", en: "How do I place an order?" },
+      { ka: "ინდივიდუალური დეტალი მინდა", en: "I want a custom part" },
+    ],
+  },
   {
     faqId: "how-to-order",
     keywords: [

@@ -15,6 +15,7 @@ import {
   getOrCreateCheckoutKey,
   sha256CheckoutFingerprint,
 } from "@/components/checkout/payment-session-storage";
+import { ProductSupplyNotice } from "@/components/ProductSupplyNotice";
 
 const deliveryCityLabels: Record<string, { ka: string; en: string }> = {
   tbilisi: { ka: "თბილისი", en: "Tbilisi" }, batumi: { ka: "ბათუმი", en: "Batumi" },
@@ -204,6 +205,7 @@ export function CheckoutForm({
           <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">{georgian ? "სადარბაზო, სართული, ბინა" : "Entrance, floor, apartment"}<input name="address_line_2" autoComplete="address-line2" defaultValue={initialValues.addressLine2} className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label><label className="block text-sm font-medium">{georgian ? "საფოსტო ინდექსი" : "Postal code"}<input name="postal_code" autoComplete="postal-code" defaultValue={initialValues.postalCode} className="mt-2 w-full rounded-full border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label></div>
           <label className="block text-sm font-medium">{georgian ? "შენიშვნა" : "Notes"}<textarea name="notes" rows={4} className="mt-2 w-full rounded-[1.5rem] border border-hooma-text/10 px-4 py-3 outline-none focus:border-hooma-accent" /></label>
         </fieldset>
+        <ProductSupplyNotice />
         {message ? <p role="alert" aria-live="polite" className="rounded-2xl bg-hooma-panel p-4 text-sm text-hooma-text">{message}</p> : null}
         <Button className="w-full" disabled={!items.length || !pricesComplete || isPending || !checkoutAvailable}>{isPending ? (georgian ? "გადახდა მზადდება..." : "Preparing payment...") : pricesComplete ? (georgian ? `${money.format(total)} — სრული თანხის გადახდა` : `Pay ${money.format(total)} in full`) : (georgian ? "ფასი გადასამოწმებელია" : "Price requires review")}</Button>
       </form>

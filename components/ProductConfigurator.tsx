@@ -10,6 +10,7 @@ import { VariantSelector } from "./VariantSelector";
 import { useCart } from "./CartContext";
 import { fixedMulticolorLabel } from "@/data/product-colors";
 import { useLanguage } from "./LanguageProvider";
+import { ProductSupplyNotice } from "./ProductSupplyNotice";
 
 type DailyDealPricing = {
   variantId: string;
@@ -100,6 +101,7 @@ export function ProductConfigurator({ product, compact = false, dailyDeal }: { p
           <div><p className="text-xs text-hooma-muted">{georgian ? "ფასი" : "Price"}</p><p className="mt-1 font-semibold">{displayPrice === null ? (georgian ? variant.pricePlaceholder : "Price after review") : `₾${displayPrice.toFixed(2)}`}</p></div>
           <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-800">Catalog preview</span>
         </div> : null}
+        {!compact ? <ProductSupplyNotice /> : null}
         <Button
           className="w-full"
           onClick={addConfiguredItem}
