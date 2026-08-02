@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { ProductShelf } from "@/components/ProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
 
-export function HomeStorefrontClient({ popularProducts, categoryProducts, dailyDealProducts, dailyDealDiscountPercent }: { popularProducts: ProductCardData[]; categoryProducts: Record<string, ProductCardData[]>; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
+export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dailyDealDiscountPercent }: { categoryProducts: Record<string, ProductCardData[]>; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
   const georgian = language === "ka";
 
@@ -22,8 +22,6 @@ export function HomeStorefrontClient({ popularProducts, categoryProducts, dailyD
             [ShieldCheck, georgian ? "შემოწმებული ოპერატორის მიერ" : "Operator checked", georgian ? "ხარისხის კონტროლი ყველა შეკვეთაზე" : "Quality control on every order"],
           ].map(([Icon, title, copy], index) => { const InfoIcon = Icon as typeof Clock3; return <div key={String(title)} className={`flex items-center gap-3 px-5 py-4 ${index ? "border-t border-hooma-text/10 sm:border-l sm:border-t-0" : ""}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-hooma-accent"><InfoIcon size={18} /></span><div><h2 className="text-sm font-semibold">{String(title)}</h2><p className="mt-0.5 text-xs text-hooma-muted">{String(copy)}</p></div></div>; })}
         </section>
-
-        <ProductShelf eyebrow={georgian ? "ახლა პოპულარულია" : "Popular now"} title={georgian ? "პოპულარული პროდუქტები" : "Popular products"} products={popularProducts} />
 
         <section className="grid gap-5 rounded-[1.25rem] bg-hooma-text p-6 text-white md:grid-cols-[1fr_auto] md:items-center lg:p-8">
           <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-hooma-secondary">{georgian ? "ინდივიდუალურად დამზადებული Hooma-სგან" : "Custom made by Hooma"}</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{georgian ? "ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ." : "Can’t find the part you need? We’ll make it."}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">{georgian ? "გამოგვიგზავნე ფოტო, ზომები ან არსებული მოდელი — ოპერატორი შეაფასებს დამზადების შესაძლებლობას და ვადას." : "Send a photo, dimensions, or an existing model and our operator will review feasibility and timing."}</p></div>
