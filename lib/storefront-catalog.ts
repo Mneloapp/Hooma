@@ -44,7 +44,6 @@ export type StorefrontCatalogPage = {
 };
 
 export type StorefrontHomeCards = {
-  popularProducts: ProductCardData[];
   categoryProducts: Record<string, ProductCardData[]>;
 };
 
@@ -192,27 +191,23 @@ export async function getStorefrontCatalogPage(options: StorefrontCatalogPageOpt
 
 export async function getStorefrontHomeCards(perSection = 12): Promise<StorefrontHomeCards> {
   const admin = createAdminClient() as any;
-  if (!admin) return { popularProducts: [], categoryProducts: {} };
+  if (!admin) return { categoryProducts: {} };
 
   const { data, error } = await admin.rpc("get_storefront_home_cards_v1", {
     requested_per_section: perSection,
   });
   if (error) {
     console.error("[storefront-catalog] Failed to load home catalog sections.", error.message);
-    return { popularProducts: [], categoryProducts: {} };
+    return { categoryProducts: {} };
   }
 
-  const popularProducts: ProductCardData[] = [];
   const categoryProducts: Record<string, ProductCardData[]> = {};
   for (const row of (data ?? []) as Array<StorefrontCardRow & { section_key: string }>) {
+    if (row.section_key === "popular") continue;
     const card = toStorefrontCard(row);
-    if (row.section_key === "popular") {
-      popularProducts.push(card);
-    } else {
-      categoryProducts[row.section_key] = [...(categoryProducts[row.section_key] ?? []), card];
-    }
+    categoryProducts[row.section_key] = [...(categoryProducts[row.section_key] ?? []), card];
   }
-  return { popularProducts, categoryProducts };
+  return { categoryProducts };
 }
 
 export async function getStorefrontProductCardsByIds(productIds: string[]): Promise<ProductCardData[]> {

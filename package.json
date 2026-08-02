@@ -14,6 +14,7 @@
     "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs",
     "test:audit-launch": "node --test tools/catalog-audit-launch-rules.test.mjs",
     "test:cart": "node --experimental-strip-types --test tools/cart-isolation-rules.test.mjs",
+    "test:storefront": "node --test tools/storefront-home-rules.test.mjs",
     "test:payments": "node --experimental-strip-types --test tools/bog-payment-rules.test.mjs",
     "test:hooma-plus": "node --experimental-strip-types --test tools/hooma-plus-rules.test.mjs"
   },
