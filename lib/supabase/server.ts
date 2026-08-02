@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { cache } from "react";
 import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "./config";
 import type { Database, Profile } from "./types";
 import { hasPermission, isStaffRole, type Permission } from "@/lib/auth/permissions";
@@ -32,7 +33,7 @@ export async function getSessionUser() {
   return data.user ?? null;
 }
 
-export async function getProfile(): Promise<Profile | null> {
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
   if (!supabase) return null;
   const { data: userData } = await supabase.auth.getUser();
@@ -40,7 +41,7 @@ export async function getProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
   return (data as Profile | null) ?? null;
-}
+});
 
 export async function requireRole(...roles: UserRole[]) {
   const profile = await getProfile();

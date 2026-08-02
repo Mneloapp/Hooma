@@ -42,11 +42,16 @@ const managerCatalogEditMigrationPath = new URL(
   "../supabase/migrations/20260801000100_manager_catalog_edits_preserve_audit.sql",
   import.meta.url,
 );
+const boundedAdminCatalogMigrationPath = new URL(
+  "../supabase/migrations/20260802000100_bounded_admin_catalog_search.sql",
+  import.meta.url,
+);
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 const productMediaActionsPath = new URL("../app/admin/products/media-actions.ts", import.meta.url);
+const supabaseServerPath = new URL("../lib/supabase/server.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, managerCatalogEditMigration, adminProductsPage, adminPermissions, productMediaActions] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, managerCatalogEditMigration, boundedAdminCatalogMigration, adminProductsPage, adminPermissions, productMediaActions, supabaseServer] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
@@ -57,9 +62,11 @@ const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogP
   readFile(safeBulkDraftCleanupMigrationPath, "utf8"),
   readFile(managerMediaMigrationPath, "utf8"),
   readFile(managerCatalogEditMigrationPath, "utf8"),
+  readFile(boundedAdminCatalogMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
   readFile(productMediaActionsPath, "utf8"),
+  readFile(supabaseServerPath, "utf8"),
 ]);
 
 test("category job creation and claim use the same persisted scope", () => {
@@ -240,11 +247,26 @@ test("large admin catalog avoids unused counts and uses indexed compact pages", 
   assert.match(adminProductsPage, /const ADMIN_PRODUCTS_PER_PAGE = 50/);
   assert.match(adminProductsPage, /get_admin_catalog_counts_v1/);
   assert.match(adminProductsPage, /approvedOnly \? Promise\.resolve\(emptyCounts\)/);
+  assert.match(adminProductsPage, /search_admin_catalog_products_v1/);
+  assert.match(adminProductsPage, /requested_limit: ADMIN_PRODUCTS_PER_PAGE/);
+  assert.doesNotMatch(adminProductsPage, /count: "exact"/);
+  assert.doesNotMatch(adminProductsPage, /const countStatus/);
+  assert.match(adminProductsPage, /const productLoadError = productResponse\.error/);
   assert.match(adminCatalogPerformanceMigration, /count\(\*\) filter \(where status = 'draft'\)/);
   assert.match(adminCatalogPerformanceMigration, /idx_products_admin_status_created/);
   assert.match(adminCatalogPerformanceMigration, /idx_products_admin_category_created/);
   assert.match(adminCatalogPerformanceMigration, /idx_products_admin_audit_applied_created/);
   assert.match(adminCatalogPerformanceMigration, /gin_trgm_ops/);
+  assert.match(boundedAdminCatalogMigration, /create or replace function public\.search_admin_catalog_products_v1/);
+  assert.match(boundedAdminCatalogMigration, /limit resolved_limit \+ 1/);
+  assert.match(boundedAdminCatalogMigration, /idx_products_admin_search_text_v2/);
+  assert.match(boundedAdminCatalogMigration, /idx_products_admin_search_terms_v2/);
+  assert.match(boundedAdminCatalogMigration, /coalesce\(product\.original_name, ''\)/);
+  assert.match(boundedAdminCatalogMigration, /plainto_tsquery\('simple', normalized_search\)/);
+  assert.match(boundedAdminCatalogMigration, /idx_products_admin_audit_approved_order_v2[\s\S]*created_at desc, id/);
+  assert.match(boundedAdminCatalogMigration, /profile\.id = auth\.uid\(\)/);
+  assert.match(boundedAdminCatalogMigration, /grant execute on function public\.search_admin_catalog_products_v1[\s\S]*to authenticated/);
+  assert.match(supabaseServer, /export const getProfile = cache\(/);
 });
 
 test("audited products route is allowed by admin middleware permissions", () => {
