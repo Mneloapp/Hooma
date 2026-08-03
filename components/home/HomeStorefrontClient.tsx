@@ -23,21 +23,22 @@ export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dail
           ].map(([Icon, title, copy], index) => { const InfoIcon = Icon as typeof Clock3; return <div key={String(title)} className={`flex items-center gap-3 px-5 py-4 ${index ? "border-t border-hooma-text/10 sm:border-l sm:border-t-0" : ""}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-hooma-accent"><InfoIcon size={18} /></span><div><h2 className="text-sm font-semibold">{String(title)}</h2><p className="mt-0.5 text-xs text-hooma-muted">{String(copy)}</p></div></div>; })}
         </section>
 
-        <section className="grid gap-5 rounded-[1.25rem] bg-hooma-text p-6 text-white md:grid-cols-[1fr_auto] md:items-center lg:p-8">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-hooma-secondary">{georgian ? "ინდივიდუალურად დამზადებული Hooma-სგან" : "Custom made by Hooma"}</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{georgian ? "ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ." : "Can’t find the part you need? We’ll make it."}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">{georgian ? "გამოგვიგზავნე ფოტო, ზომები ან არსებული მოდელი — ოპერატორი შეაფასებს დამზადების შესაძლებლობას და ვადას." : "Send a photo, dimensions, or an existing model and our operator will review feasibility and timing."}</p></div>
-          <Button href="/account/custom-orders" variant="secondary" className="border-white/15 bg-white text-hooma-text">{georgian ? "ინდივიდუალური შეკვეთა" : "Request a custom part"}<ArrowRight size={15} className="ml-2" /></Button>
-        </section>
-
         <div className="space-y-5">
           {catalogCategories.map((category) => (
             <Fragment key={category.slug}>
               <ProductShelf eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
-              {category.slug === "fashion" ? <ProductShelf
-                eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}
-                title={georgian ? "დღის შეთავაზებები" : "Daily deals"}
-                products={dailyDealProducts}
-                href="/deals"
-              /> : null}
+              {category.slug === "fashion" ? <>
+                <ProductShelf
+                  eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}
+                  title={georgian ? "დღის შეთავაზებები" : "Daily deals"}
+                  products={dailyDealProducts}
+                  href="/deals"
+                />
+                <section className="grid gap-5 rounded-[1.25rem] bg-hooma-text p-6 text-white md:grid-cols-[1fr_auto] md:items-center lg:p-8">
+                  <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-hooma-secondary">{georgian ? "ინდივიდუალურად დამზადებული Hooma-სგან" : "Custom made by Hooma"}</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{georgian ? "ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ." : "Can’t find the part you need? We’ll make it."}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">{georgian ? "გამოგვიგზავნე ფოტო, ზომები ან არსებული მოდელი — ოპერატორი შეაფასებს დამზადების შესაძლებლობას და ვადას." : "Send a photo, dimensions, or an existing model and our operator will review feasibility and timing."}</p></div>
+                  <Button href="/account/custom-orders" variant="secondary" className="border-white/15 bg-white text-hooma-text">{georgian ? "ინდივიდუალური შეკვეთა" : "Request a custom part"}<ArrowRight size={15} className="ml-2" /></Button>
+                </section>
+              </> : null}
             </Fragment>
           ))}
         </div>
