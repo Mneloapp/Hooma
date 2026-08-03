@@ -172,7 +172,7 @@ export async function getStorefrontCatalogPage(options: StorefrontCatalogPageOpt
     requested_subcategory: options.subcategory?.trim() || null,
     requested_query: options.query?.trim() || null,
     requested_material: options.material?.trim() || null,
-    requested_sort: options.sort || "featured",
+    requested_sort: options.sort || "newest",
     requested_page: options.page || 1,
     requested_page_size: options.pageSize || 36,
   });

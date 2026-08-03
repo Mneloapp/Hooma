@@ -17,7 +17,7 @@ const PRODUCTS_PER_PAGE = 36;
 
 export default async function Shop({ searchParams }: { searchParams: Promise<ShopParams> }) {
   const params = await searchParams;
-  const { category, subcategory, q = "", material, sort = "featured" } = params;
+  const { category, subcategory, q = "", material, sort = "newest" } = params;
   const selectedCategory = category ? getCategory(category) : undefined;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const safeRequestedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
