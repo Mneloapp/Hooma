@@ -41,3 +41,11 @@ test("newly manager-published products lead home and catalog results", () => {
   assert.match(newestMigration, /card\.storefront_published_at desc, card\.product_id asc/);
   assert.doesNotMatch(newestMigration, /order by card\.refreshed_at/);
 });
+
+test("custom-order CTA follows Daily Deals on the homepage", () => {
+  const dailyDealsIndex = homeClient.indexOf('title={georgian ? "დღის შეთავაზებები" : "Daily deals"}');
+  const customOrderIndex = homeClient.indexOf('"ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ."');
+  assert.ok(dailyDealsIndex >= 0);
+  assert.ok(customOrderIndex > dailyDealsIndex);
+  assert.equal(homeClient.match(/ვერ იპოვე საჭირო დეტალი\? დაგიმზადებთ\./g)?.length, 1);
+});
