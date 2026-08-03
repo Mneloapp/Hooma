@@ -47,11 +47,14 @@ const boundedAdminCatalogMigrationPath = new URL(
   import.meta.url,
 );
 const adminProductsPagePath = new URL("../app/admin/products/page.tsx", import.meta.url);
+const auditAgentPagePath = new URL("../app/admin/audit-agent/page.tsx", import.meta.url);
+const auditConsolePath = new URL("../components/admin/CatalogProductAuditConsole.tsx", import.meta.url);
+const auditActionsPath = new URL("../app/admin/catalog-agent/audit-actions.ts", import.meta.url);
 const adminPermissionsPath = new URL("../lib/auth/permissions.ts", import.meta.url);
 const productMediaActionsPath = new URL("../app/admin/products/media-actions.ts", import.meta.url);
 const supabaseServerPath = new URL("../lib/supabase/server.ts", import.meta.url);
 
-const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, managerCatalogEditMigration, boundedAdminCatalogMigration, adminProductsPage, adminPermissions, productMediaActions, supabaseServer] = await Promise.all([
+const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogPerformanceMigration, fastBulkDraftMigration, batchedBulkDraftMigration, bulkDraftTimeoutMigration, safeBulkDraftCleanupMigration, managerMediaMigration, managerCatalogEditMigration, boundedAdminCatalogMigration, adminProductsPage, auditAgentPage, auditConsole, auditActions, adminPermissions, productMediaActions, supabaseServer] = await Promise.all([
   readFile(categoryMigrationPath, "utf8"),
   readFile(storefrontMigrationPath, "utf8"),
   readFile(bulkDraftMigrationPath, "utf8"),
@@ -64,6 +67,9 @@ const [categoryMigration, storefrontMigration, bulkDraftMigration, adminCatalogP
   readFile(managerCatalogEditMigrationPath, "utf8"),
   readFile(boundedAdminCatalogMigrationPath, "utf8"),
   readFile(adminProductsPagePath, "utf8"),
+  readFile(auditAgentPagePath, "utf8"),
+  readFile(auditConsolePath, "utf8"),
+  readFile(auditActionsPath, "utf8"),
   readFile(adminPermissionsPath, "utf8"),
   readFile(productMediaActionsPath, "utf8"),
   readFile(supabaseServerPath, "utf8"),
@@ -122,6 +128,27 @@ test("job count and claim share snapshot and auditable-product prechecks", () =>
     categoryMigration,
     /No unaudited products are available in this category scope/,
   );
+});
+
+test("audit history and review queue are filtered, job-scoped, and bounded", () => {
+  assert.match(auditAgentPage, /const JOB_HISTORY_PAGE_SIZE = 25/);
+  assert.match(auditAgentPage, /const REVIEW_PAGE_SIZE = 12/);
+  assert.match(auditAgentPage, /category_scope_ids[\s\S]*claimed_at[\s\S]*completed_at/);
+  assert.match(auditAgentPage, /historyQuery[\s\S]*\.range\(historyOffset, historyOffset \+ JOB_HISTORY_PAGE_SIZE\)/);
+  assert.match(auditAgentPage, /reviewQuery[\s\S]*\.eq\("review_visible", true\)/);
+  assert.match(auditAgentPage, /reviewQuery[\s\S]*\.eq\("job_id", reviewJob\)/);
+  assert.match(auditAgentPage, /\.in\("products\.category_id", reviewScope\)/);
+  assert.match(auditAgentPage, /\.range\(reviewOffset, reviewOffset \+ REVIEW_PAGE_SIZE\)/);
+  assert.doesNotMatch(
+    auditAgentPage,
+    /eq\("review_visible", true\)\.eq\("status", "ready"\)[\s\S]{0,200}\.limit\(100\)/,
+  );
+  assert.match(auditConsole, /აუდიტის სრული ისტორია/);
+  assert.match(auditConsole, /შედეგების ნახვა/);
+  assert.match(auditConsole, /name="review_category"/);
+  assert.match(auditConsole, /name="review_status"/);
+  assert.match(auditConsole, /name="review_job"/);
+  assert.match(auditActions, /revalidatePath\("\/admin\/audited-products"\)/);
 });
 
 test("storefront visibility requires manager application, not AI completion alone", () => {
