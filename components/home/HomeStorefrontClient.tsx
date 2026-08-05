@@ -5,8 +5,13 @@ import { ArrowRight, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "
 import { catalogCategories } from "@/data/catalog";
 import type { ProductCardData } from "@/lib/product-card";
 import { Button } from "@/components/Button";
-import { ProductShelf } from "@/components/ProductShelf";
+import { HomeProductShelf } from "@/components/home/HomeProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
+
+const homepageCategories = [
+  ...catalogCategories.filter((category) => category.slug !== "3d-printer"),
+  ...catalogCategories.filter((category) => category.slug === "3d-printer"),
+];
 
 export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dailyDealDiscountPercent }: { categoryProducts: Record<string, ProductCardData[]>; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
@@ -24,15 +29,16 @@ export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dail
         </section>
 
         <div className="space-y-5">
-          {catalogCategories.map((category) => (
+          {homepageCategories.map((category) => (
             <Fragment key={category.slug}>
-              <ProductShelf eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
+              <HomeProductShelf title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
               {category.slug === "fashion" ? <>
-                <ProductShelf
+                <HomeProductShelf
                   eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}
                   title={georgian ? "დღის შეთავაზებები" : "Daily deals"}
                   products={dailyDealProducts}
                   href="/deals"
+                  showPrice
                 />
                 <section className="grid gap-5 rounded-[1.25rem] bg-hooma-text p-6 text-white md:grid-cols-[1fr_auto] md:items-center lg:p-8">
                   <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-hooma-secondary">{georgian ? "ინდივიდუალურად დამზადებული Hooma-სგან" : "Custom made by Hooma"}</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{georgian ? "ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ." : "Can’t find the part you need? We’ll make it."}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">{georgian ? "გამოგვიგზავნე ფოტო, ზომები ან არსებული მოდელი — ოპერატორი შეაფასებს დამზადების შესაძლებლობას და ვადას." : "Send a photo, dimensions, or an existing model and our operator will review feasibility and timing."}</p></div>
