@@ -142,7 +142,9 @@ export function OrderOperationsKanban({ cards, canMove }: { cards: OperationsKan
                 <div className="flex items-start justify-between gap-3 px-2 py-2"><div><h2 className="font-semibold">{column.title}</h2><p className="mt-1 text-xs text-hooma-muted">{column.caption}</p></div><span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold">{columnCards.length}</span></div>
                 <div className="mt-2 min-h-36 space-y-3">
                   {columnCards.map((card) => {
-                    const target = card.operationalRefundHold ? undefined : expectedTarget[card.fulfillmentStatus];
+                    const target = card.paymentReady && !card.operationalRefundHold
+                      ? expectedTarget[card.fulfillmentStatus]
+                      : undefined;
                     const productionLocked = ["production_queued", "in_production"].includes(card.fulfillmentStatus);
                     const refundProcessing = card.cancellationStatus === "processing" || card.cancellationStatus === "refund_submitted";
                     const refundNeedsReview = card.cancellationStatus === "submission_failed" || card.cancellationStatus === "review_required";

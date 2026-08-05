@@ -39,8 +39,8 @@ export function PaymentResultAutoRefresh({
       </p>
       <p className="mt-1">
         {language === "ka"
-          ? "ხელახლა ნუ გადაიხდი. შეგიძლია განაახლო სტატუსი ან მოგვიანებით გადაამოწმო „ჩემ შეკვეთებში“."
-          : "Do not pay again. Refresh the status or check My Orders later."}
+          ? "ხელახლა ნუ გადაიხდი. დატოვე ეს გვერდი გახსნილი და განაახლე სტატუსი; გადახდის დადასტურებამდე ან უსაფრთხოების შემოწმებაზე გადასვლამდე ჩანაწერი „ჩემ შეკვეთებში“ არ გამოჩნდება."
+          : "Do not pay again. Keep this page open and refresh the status; it will not appear in My Orders until payment is confirmed or placed under security review."}
       </p>
       <button
         type="button"

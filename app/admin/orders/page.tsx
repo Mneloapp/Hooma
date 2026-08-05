@@ -1,10 +1,18 @@
 import { Activity, ClipboardCheck, Factory, LayoutDashboard } from "lucide-react";
 import { redirect } from "next/navigation";
+import {
+  BogPaymentSessionsPanel,
+  type BogPaymentSessionCard,
+} from "@/components/admin/BogPaymentSessionsPanel";
 import { OrderOperationsKanban, type OperationsKanbanCard } from "@/components/admin/OrderOperationsKanban";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { requirePermission } from "@/lib/supabase/server";
+import {
+  isOrderVisibleInHistory,
+  ORDER_HISTORY_POSTGREST_FILTER,
+} from "@/lib/orders/visibility";
 
 type Order = {
   id: string;
@@ -21,6 +29,7 @@ type Order = {
   tracking_code: string | null;
   test_mode: boolean;
   created_at: string;
+  updated_at: string;
 };
 type OrderItem = {
   id: string;
@@ -41,7 +50,25 @@ type CancellationRefund = {
   refund_amount: number | string;
 };
 
-const dateFormat = new Intl.DateTimeFormat("ka-GE", { dateStyle: "medium", timeStyle: "short" });
+const OPEN_OPERATIONAL_STATUSES = [
+  "order_received",
+  "confirmed",
+  "production_queued",
+  "in_production",
+  "quality_check",
+  "ready_for_delivery",
+  "out_for_delivery",
+] as const;
+const CLOSED_OPERATIONAL_STATUSES = ["delivered", "cancelled"] as const;
+const PAYMENT_SESSION_STATUSES = ["unpaid", "failed"] as const;
+const CLOSED_OPERATIONAL_HISTORY_LIMIT = 150;
+const PAYMENT_SESSION_HISTORY_LIMIT = 100;
+
+const dateFormat = new Intl.DateTimeFormat("ka-GE", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Tbilisi",
+});
 
 function addressText(address: Record<string, unknown> | null) {
   if (!address) return "მისამართი არ არის მითითებული";
@@ -61,19 +88,62 @@ export default async function AdminOrdersPage() {
   const canMove = Boolean(profile && hasPermission(profile.role, "production.manage"));
   const admin = createAdminClient() as any;
 
-  const { data: orderRows, error: orderError } = admin ? await admin
-    .from("orders")
-    .select("id,customer_id,guest_email,guest_phone,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,delivery_address,fulfillment_status,tracking_code,test_mode,created_at")
-    .order("created_at", { ascending: false })
-    .limit(500) : { data: [], error: null };
-  const orders = (orderRows ?? []) as Order[];
+  const orderSelect = "id,customer_id,guest_email,guest_phone,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,delivery_address,fulfillment_status,tracking_code,test_mode,created_at,updated_at";
+  const [openOrderResult, closedOrderResult, paymentSessionResult] = admin
+    ? await Promise.all([
+      admin
+        .from("orders")
+        .select(orderSelect)
+        .or(ORDER_HISTORY_POSTGREST_FILTER)
+        .in("fulfillment_status", [...OPEN_OPERATIONAL_STATUSES])
+        .order("updated_at", { ascending: false }),
+      admin
+        .from("orders")
+        .select(orderSelect)
+        .or(ORDER_HISTORY_POSTGREST_FILTER)
+        .in("fulfillment_status", [...CLOSED_OPERATIONAL_STATUSES])
+        .order("updated_at", { ascending: false })
+        .limit(CLOSED_OPERATIONAL_HISTORY_LIMIT),
+      admin
+        .from("orders")
+        .select(orderSelect)
+        .eq("test_mode", false)
+        .in("payment_status", [...PAYMENT_SESSION_STATUSES])
+        .order("updated_at", { ascending: false })
+        .limit(PAYMENT_SESSION_HISTORY_LIMIT),
+    ])
+    : [
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+    ];
+  const operationalOrderMap = new Map<string, Order>();
+  for (const order of [
+    ...((openOrderResult.data ?? []) as Order[]),
+    ...((closedOrderResult.data ?? []) as Order[]),
+  ]) {
+    if (isOrderVisibleInHistory(order.payment_status, order.test_mode)) {
+      operationalOrderMap.set(order.id, order);
+    }
+  }
+  const orders = [...operationalOrderMap.values()];
+  const paymentSessionOrders = ((paymentSessionResult.data ?? []) as Order[])
+    .filter((order) => !order.test_mode && PAYMENT_SESSION_STATUSES.includes(
+      order.payment_status as (typeof PAYMENT_SESSION_STATUSES)[number],
+    ));
+  const orderError = openOrderResult.error ?? closedOrderResult.error;
+  const paymentSessionError = paymentSessionResult.error;
   const orderIds = orders.map((order) => order.id);
-  const customerIds = orders.map((order) => order.customer_id).filter((id): id is string => Boolean(id));
+  const allVisibleOrders = [...orders, ...paymentSessionOrders];
+  const allVisibleOrderIds = [...new Set(allVisibleOrders.map((order) => order.id))];
+  const customerIds = [...new Set(allVisibleOrders
+    .map((order) => order.customer_id)
+    .filter((id): id is string => Boolean(id)))];
 
   const [{ data: itemRows }, { data: customerRows }, { data: attemptRows }, { data: cancellationRows }] = admin ? await Promise.all([
     orderIds.length ? admin.from("order_items").select("id,order_id,product_name,sku,size_label,material,color,quantity").in("order_id", orderIds).order("created_at") : Promise.resolve({ data: [] }),
     customerIds.length ? admin.from("customers").select("id,email,full_name,phone").in("id", customerIds) : Promise.resolve({ data: [] }),
-    orderIds.length ? admin.from("payment_attempts").select("order_id,provider_payment_id").in("order_id", orderIds).eq("provider", "bog").order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+    allVisibleOrderIds.length ? admin.from("payment_attempts").select("order_id,provider_payment_id").in("order_id", allVisibleOrderIds).eq("provider", "bog").order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     orderIds.length ? admin.from("order_cancellation_refunds").select("order_id,status,refund_amount").in("order_id", orderIds) : Promise.resolve({ data: [] }),
   ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const items = (itemRows ?? []) as OrderItem[];
@@ -95,6 +165,21 @@ export default async function AdminOrdersPage() {
     if (!attemptByOrder.has(attempt.order_id)) attemptByOrder.set(attempt.order_id, attempt);
   }
   const cancellationByOrder = new Map(((cancellationRows ?? []) as CancellationRefund[]).map((refund) => [refund.order_id, refund]));
+
+  const paymentSessionCards: BogPaymentSessionCard[] = paymentSessionOrders.map((order) => {
+    const customer = order.customer_id ? customers.get(order.customer_id) : null;
+    return {
+      orderId: order.id,
+      label: `#${order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}`,
+      paymentStatus: order.payment_status as BogPaymentSessionCard["paymentStatus"],
+      total: Number(order.total ?? 0),
+      customerName: customer?.full_name || String(order.delivery_address?.full_name ?? "მომხმარებელი"),
+      customerContact: customer?.phone || order.guest_phone || customer?.email || order.guest_email || "კონტაქტი არ არის",
+      createdAtLabel: dateFormat.format(new Date(order.created_at)),
+      updatedAtLabel: dateFormat.format(new Date(order.updated_at)),
+      canReconcile: Boolean(attemptByOrder.get(order.id)?.provider_payment_id),
+    };
+  });
 
   const cards: OperationsKanbanCard[] = orders.map((order) => {
     const customer = order.customer_id ? customers.get(order.customer_id) : null;
@@ -156,7 +241,7 @@ export default async function AdminOrdersPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">Order & production operations</p>
           <h1 className="mt-3 text-4xl font-medium">შეკვეთების კანბანი</h1>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-hooma-muted">შეკვეთები მოძრაობს მარცხნიდან მარჯვნივ. ბარათის გადატანა და დადასტურება ქმნის პასუხისმგებელი ოპერატორის აუდიტირებად მოქმედებას; წარმოების ეტაპები კი რეალური print job-ების მდგომარეობას მიჰყვება.</p>
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-hooma-muted">აქ ჩანს მხოლოდ გადახდით დადასტურებული, საბანკო შემოწმებაზე მყოფი და თანხა დაბრუნებული შეკვეთები. დაუსრულებელი ან უარყოფილი გადახდის სესიები ოპერაციულ შეკვეთად არ ითვლება. წარმოების ეტაპები რეალური print job-ების მდგომარეობას მიჰყვება.</p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-center sm:min-w-[460px]">
           <div className="rounded-2xl bg-white/80 p-4 shadow-sm"><LayoutDashboard size={17} className="mx-auto text-amber-700" /><p className="mt-2 text-xs text-hooma-muted">შემოსული</p><p className="mt-1 text-2xl font-semibold">{incoming}</p></div>
@@ -166,6 +251,7 @@ export default async function AdminOrdersPage() {
       </div>
 
       {orderError ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">შეკვეთების წაკითხვა ვერ მოხერხდა. შეამოწმე Supabase კავშირი და migrations.</p> : null}
+      <BogPaymentSessionsPanel sessions={paymentSessionCards} loadError={Boolean(paymentSessionError)} />
       <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950"><Activity size={18} className="mt-1 shrink-0" /><p><strong>ოპერაციული წესი:</strong> შემოსული შეკვეთა, QC, კურიერზე გადაცემა და მიწოდება შეიძლება გადაიტანო ხელით. „წარმოების რიგი → წარმოებაში → QC“ იცვლება მხოლოდ პრინტერის მინიჭების, ფიზიკური გაშვებისა და დასრულების რეალური ჩანაწერებით.</p></div>
       <OrderOperationsKanban cards={cards} canMove={canMove} />
     </div>

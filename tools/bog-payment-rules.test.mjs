@@ -12,8 +12,13 @@ import {
 import {
   bindCheckoutPaymentOrder,
   clearCheckoutPaymentSessionForOrder,
+  prepareCheckoutPaymentSession,
   readCheckoutPaymentSessionPointer,
 } from "../components/checkout/payment-session-storage.ts";
+import {
+  isOrderVisibleInHistory,
+  ORDER_HISTORY_POSTGREST_FILTER,
+} from "../lib/orders/visibility.ts";
 
 test("BOG order payload permits only automatic full payment", () => {
   const payload = buildBogCreateOrderPayload({
@@ -147,6 +152,145 @@ test("database payment mutations are service-only and never queue printing", () 
   assert.equal(migration.includes("insert into public.print_jobs"), false);
 });
 
+test("catalog BOG checkout allows exact replay but blocks a second unresolved key", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20260805000200_bog_checkout_lifecycle.sql", import.meta.url),
+    "utf8",
+  );
+  const v3 = migration.slice(
+    migration.indexOf("create or replace function public.begin_bog_checkout_v3"),
+    migration.indexOf("-- Backward-compatible RPC name"),
+  );
+  const keyLock = v3.indexOf("hashtextextended(requested_idempotency_key::text, 0)");
+  const exactKeyCheck = v3.indexOf("where attempt.idempotency_key = requested_idempotency_key::text");
+  const replayReturn = v3.indexOf("'reused', true");
+  const customerLock = v3.indexOf("'bog-customer:' || requested_customer_id::text");
+  const exactKeyRecheck = v3.indexOf("select exists (", customerLock);
+  const recentLatePaymentGuard = v3.indexOf("late_attempt.late_paid_at", customerLock);
+  const unresolvedGuard = v3.indexOf("attempt.status in ('created', 'pending', 'review_required')");
+  const delegatedCheckout = v3.indexOf("checkout_result := public.begin_bog_checkout_v2_internal(");
+
+  assert.ok(keyLock >= 0);
+  assert.ok(exactKeyCheck > keyLock);
+  assert.ok(replayReturn > exactKeyCheck);
+  assert.ok(customerLock > replayReturn);
+  assert.ok(exactKeyRecheck > customerLock);
+  assert.ok(recentLatePaymentGuard > exactKeyRecheck);
+  assert.ok(unresolvedGuard > customerLock);
+  assert.ok(unresolvedGuard > recentLatePaymentGuard);
+  assert.ok(unresolvedGuard > exactKeyRecheck);
+  assert.ok(delegatedCheckout > unresolvedGuard);
+  assert.doesNotMatch(v3.slice(keyLock, customerLock), /for update/i);
+  assert.doesNotMatch(v3.slice(keyLock, customerLock), /begin_bog_checkout_v2_internal/);
+  assert.match(v3, /set search_path = public, extensions, pg_temp/);
+  assert.match(v3, /request_payload->>'checkout_fingerprint'[\s\S]*is distinct from checkout_fingerprint/);
+  assert.match(v3, /'items', requested_items[\s\S]*'delivery_address', requested_delivery_address[\s\S]*'guest_email'[\s\S]*'guest_phone'[\s\S]*'notes'/);
+  assert.match(v3, /'idempotency_key', existing_attempt\.idempotency_key/);
+  assert.match(v3, /raise exception 'BOG_IDEMPOTENCY_RACE_RETRY'/);
+  assert.match(v3, /late_attempt\.status = 'paid'[\s\S]*late_attempt\.signature_verified is true[\s\S]*late_attempt\.late_paid_at >= now\(\) - interval '30 minutes'/);
+  assert.match(v3, /late_attempt\.request_payload->>'checkout_fingerprint'[\s\S]*= checkout_fingerprint/);
+  assert.match(v3, /raise exception 'BOG_RECENT_LATE_PAYMENT'/);
+  assert.match(v3, /attempt\.idempotency_key <> requested_idempotency_key::text/);
+  assert.match(v3, /customer_order\.customer_id = requested_customer_id/);
+  assert.match(v3, /customer_order\.test_mode is false/);
+  assert.match(v3, /raise exception 'BOG_PAYMENT_IN_PROGRESS'/);
+  assert.match(v3, /'idempotency_key', authoritative_key/);
+  assert.match(v3, /authoritative_key <> requested_idempotency_key::text/);
+  assert.match(migration, /alter function public\.begin_bog_checkout_v2\([\s\S]*rename to begin_bog_checkout_v2_internal;/);
+  assert.match(migration, /create or replace function public\.begin_bog_checkout_v2\([\s\S]*select public\.begin_bog_checkout_v3\(/);
+  assert.match(migration, /grant execute on function public\.begin_bog_checkout_v3[\s\S]*to service_role;/);
+  assert.match(migration, /grant execute on function public\.begin_bog_checkout_v2[\s\S]*to service_role;/);
+  assert.match(migration, /revoke all on function public\.begin_bog_checkout_v1[\s\S]*service_role;/);
+  assert.match(migration, /revoke all on function public\.begin_bog_checkout_v2_internal[\s\S]*service_role;/);
+  assert.match(migration, /on public\.orders\(customer_id, updated_at desc, id\)[\s\S]*payment_status in \('paid', 'review_required', 'refunded'\)/);
+  assert.match(migration, /on public\.orders\(fulfillment_status, updated_at desc, id\)[\s\S]*payment_status in \('paid', 'review_required', 'refunded'\)/);
+  assert.match(migration, /on public\.orders\(payment_status, updated_at desc, id\)[\s\S]*test_mode is false[\s\S]*payment_status in \('unpaid', 'failed'\)/);
+});
+
+test("a signed late payment blocks only a bounded identical new checkout", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20260805000200_bog_checkout_lifecycle.sql", import.meta.url),
+    "utf8",
+  );
+  const marker = migration.slice(
+    migration.indexOf("create or replace function public.mark_bog_late_paid_transition_v1"),
+    migration.indexOf("-- A signed completion may arrive"),
+  );
+
+  assert.match(migration, /add column if not exists late_paid_at timestamptz/);
+  assert.match(marker, /old\.status in \('failed', 'cancelled', 'review_required'\)/);
+  assert.match(marker, /new\.status = 'paid'/);
+  assert.match(marker, /new\.signature_verified is true/);
+  assert.match(marker, /new\.late_paid_at := now\(\)/);
+  assert.match(marker, /'late_paid_transition'/);
+  assert.match(marker, /before update of status, signature_verified on public\.payment_attempts/);
+});
+
+test("a late paid older checkout is deferred to review when a newer BOG order exists", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20260805000200_bog_checkout_lifecycle.sql", import.meta.url),
+    "utf8",
+  );
+  const hold = migration.slice(
+    migration.indexOf("create or replace function public.hold_late_paid_duplicate_checkout_v1"),
+    migration.indexOf("create or replace function public.begin_bog_checkout_v3"),
+  );
+
+  assert.match(hold, /old\.status is not distinct from 'paid'/);
+  assert.match(hold, /old\.status is distinct from 'paid'/);
+  assert.doesNotMatch(hold, /old\.status (?:not )?in \('failed', 'cancelled'\)/);
+  assert.match(hold, /new\.status = 'paid'/);
+  assert.match(hold, /new\.signature_verified is true/);
+  assert.match(hold, /newer_order\.customer_id = customer_id_value/);
+  assert.match(hold, /newer_attempt\.created_at >= new\.created_at/);
+  assert.match(hold, /set status = 'review_required'/);
+  assert.match(hold, /set payment_status = 'review_required'/);
+  assert.match(hold, /event\.event_type in \('payment_confirmed', 'order_received'\)/);
+  assert.match(hold, /processing_status = 'manual_review'/);
+  assert.match(hold, /failure_reason = hold_reason/);
+  assert.match(hold, /notification\.notification_type = 'operator_order_paid'/);
+  assert.match(hold, /'operator_payment_review'/);
+  assert.match(hold, /'bog_late_paid_duplicate_checkout_held'/);
+  assert.match(hold, /create constraint trigger hold_late_paid_duplicate_checkout[\s\S]*deferrable initially deferred/);
+  assert.doesNotMatch(hold, /set (?:status|payment_status) = 'refunded'/);
+});
+
+test("catalog checkout intents become orders only after trusted payment confirmation", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20260805000200_bog_checkout_lifecycle.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(migration, /add column if not exists placed_at timestamptz/);
+  assert.match(migration, /event_type = 'checkout_started'[\s\S]*is_customer_visible = false/);
+  assert.match(migration, /after insert on public\.order_events[\s\S]*when \(new\.event_type = 'payment_confirmed'\)/);
+  assert.match(migration, /attempt\.status = 'paid'/);
+  assert.match(migration, /attempt\.signature_verified is true/);
+  assert.match(migration, /new\.event_key = 'payment:bog:' \|\| attempt\.provider_payment_id \|\| ':paid'/);
+  assert.match(migration, /set placed_at = coalesce\(placed_at, new\.created_at\)/);
+  assert.match(migration, /'order:' \|\| new\.order_id::text \|\| ':received'/);
+  assert.equal(migration.includes("apply_bog_payment_result_v1"), false);
+});
+
+test("checkout action stays rollout-compatible and verifies its authoritative key", () => {
+  const action = readFileSync(
+    new URL("../app/auth/actions.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(action, /admin\.rpc\("begin_bog_checkout_v2"/);
+  assert.match(action, /trustedCatalogCheckoutKeyForAttempt\([\s\S]*\.eq\("id", attemptId\)[\s\S]*\.eq\("order_id", orderId\)[\s\S]*\.eq\("orders\.customer_id", customerId\)/);
+  assert.match(action, /responseCheckoutKey !== "" && responseCheckoutKey !== authoritativeCheckoutKey/);
+  assert.match(action, /checkout\?\.idempotency_key/);
+  assert.match(action, /authoritativeCheckoutKey !== payload\.checkout_key/);
+  assert.match(action, /checkoutError\?\.message\?\.includes\("BOG_PAYMENT_IN_PROGRESS"\)/);
+  assert.match(action, /checkoutError\?\.message\?\.includes\("BOG_RECENT_LATE_PAYMENT"\)/);
+  assert.match(action, /previous payment was confirmed by the bank\. Do not pay again—check My Orders/);
+  assert.match(action, /checkoutKey: authoritativeCheckoutKey/g);
+  assert.match(action, /checkoutKey: recoveredCheckoutKey/);
+  assert.match(action, /\.select\("idempotency_key,orders!inner\(customer_id,test_mode\)"\)/);
+});
+
 test("callback verifies raw bytes before deserializing JSON", () => {
   const route = readFileSync(
     new URL("../app/api/payments/bog/callback/route.ts", import.meta.url),
@@ -194,6 +338,69 @@ test("browser payment idempotency stores only a SHA-256 fingerprint", () => {
   assert.match(checkout, /sha256CheckoutFingerprint\(JSON\.stringify\(/);
 });
 
+test("checkout stages immutable cart generations before binding an authoritative order", () => {
+  const storageKey = "hooma-bog-checkout-session-v2";
+  const checkoutKey = "00000000-0000-4000-8000-000000000010";
+  const differentCheckoutKey = "00000000-0000-4000-8000-000000000011";
+  const orderId = "00000000-0000-4000-8000-000000000012";
+  const values = new Map();
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    crypto: { randomUUID: () => checkoutKey },
+    sessionStorage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+  };
+  const generationA = [{
+    product_id: "product",
+    variant_id: "variant",
+    material: "PLA",
+    color: "White",
+    quantity: 1,
+    cartLineId: "cart-line-000000000000-generation-a",
+  }];
+  const generationB = [{
+    ...generationA[0],
+    cartLineId: "cart-line-000000000000-generation-b",
+  }];
+
+  try {
+    const prepared = prepareCheckoutPaymentSession("a".repeat(64), generationA);
+    assert.equal(prepared.checkoutKey, checkoutKey);
+    assert.deepEqual(prepared.submittedLines, generationA);
+    const replay = prepareCheckoutPaymentSession("a".repeat(64), generationB);
+    assert.equal(replay.reused, true);
+    assert.deepEqual(replay.submittedLines, generationA);
+
+    const exactBinding = bindCheckoutPaymentOrder(orderId, checkoutKey);
+    assert.equal(exactBinding.accepted, true);
+    assert.equal(exactBinding.matchedStagedCheckout, true);
+    assert.deepEqual(exactBinding.submittedLines, generationA);
+
+    values.set(storageKey, JSON.stringify({
+      version: 2,
+      fingerprintSha256: "b".repeat(64),
+      checkoutKey,
+      submittedLines: generationB,
+    }));
+    const recoveredBinding = bindCheckoutPaymentOrder(orderId, differentCheckoutKey);
+    assert.equal(recoveredBinding.accepted, true);
+    assert.equal(recoveredBinding.matchedStagedCheckout, false);
+    assert.equal(recoveredBinding.submittedLines, null);
+    assert.deepEqual(JSON.parse(values.get(storageKey)), {
+      version: 2,
+      fingerprintSha256: null,
+      checkoutKey: differentCheckoutKey,
+      orderId,
+    });
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
 test("delayed paid callbacks reconcile only their tracked cart quantities", () => {
   const action = readFileSync(
     new URL("../app/auth/actions.ts", import.meta.url),
@@ -213,10 +420,16 @@ test("delayed paid callbacks reconcile only their tracked cart quantities", () =
   );
 
   assert.match(action, /redirectUrl: payment\.redirectUrl,\s+orderId,/);
-  assert.match(action, /ok: true;\s+message: string;\s+redirectUrl: string;\s+orderId: string;/);
-  assert.match(checkout, /trackPendingPaymentOrder\(result\.orderId\)/);
-  assert.match(checkout, /bindCheckoutPaymentOrder\(result\.orderId\)/);
-  assert.match(checkout, /if \(!uuidPattern\.test\(result\.orderId\)\) \{[\s\S]*?return;[\s\S]*?window\.location\.assign\(result\.redirectUrl\)/);
+  assert.match(action, /ok: true;\s+message: string;\s+redirectUrl: string;\s+orderId: string;\s+checkoutKey: string;/);
+  assert.ok(
+    checkout.indexOf("prepareCheckoutPaymentSession(")
+      < checkout.indexOf("await createOrderAction(actionData)"),
+    "cart generations must be staged before the async checkout action",
+  );
+  assert.match(checkout, /result\.checkoutKey === submittedCheckoutKey[\s\S]*binding\.submittedLines \?\? submittedLines[\s\S]*: null/);
+  assert.match(checkout, /trackPendingPaymentOrder\(result\.orderId, exactSubmittedLines\)/);
+  assert.match(checkout, /bindCheckoutPaymentOrder\(\s*result\.orderId,\s*result\.checkoutKey,?\s*\)/);
+  assert.match(checkout, /!uuidPattern\.test\(result\.orderId\)[\s\S]*?!uuidPattern\.test\(result\.checkoutKey\)[\s\S]*?return;[\s\S]*?window\.location\.assign\(result\.redirectUrl\)/);
   assert.match(provider, /\.select\("id,payment_status"\)/);
   assert.match(provider, /\.select\("product_id,variant_id,material,color,quantity"\)/);
   assert.match(provider, /reconcilePaymentOrder\(/);
@@ -240,8 +453,8 @@ test("checkout never navigates to BOG without a valid server order id", () => {
     new URL("../components/checkout/CheckoutForm.tsx", import.meta.url),
     "utf8",
   );
-  const guard = checkout.indexOf("if (!uuidPattern.test(result.orderId))");
-  const tracking = checkout.indexOf("trackPendingPaymentOrder(result.orderId)");
+  const guard = checkout.indexOf("!uuidPattern.test(result.orderId)");
+  const tracking = checkout.indexOf("trackPendingPaymentOrder(result.orderId, exactSubmittedLines)");
   const navigation = checkout.indexOf("window.location.assign(result.redirectUrl)");
 
   assert.ok(guard >= 0);
@@ -272,7 +485,13 @@ test("an older order cannot overwrite or clear a newer checkout session", () => 
       orderId: orderB,
     }));
 
-    assert.equal(bindCheckoutPaymentOrder(orderA), false);
+    assert.equal(
+      bindCheckoutPaymentOrder(
+        orderA,
+        "00000000-0000-4000-8000-000000000003",
+      ).accepted,
+      false,
+    );
     assert.equal(clearCheckoutPaymentSessionForOrder(orderA), false);
     assert.equal(JSON.parse(values.get(storageKey)).orderId, orderB);
     assert.equal(clearCheckoutPaymentSessionForOrder(orderB), true);
@@ -328,20 +547,21 @@ test("legacy cart recovery is bound to the authenticated customer's exact checko
   assert.match(action, /recoverCatalogPaymentSessionAction/);
   assert.match(action, /supabase\.auth\.getUser\(\)/);
   assert.match(action, /\.eq\("idempotency_key", checkoutKey\)/);
+  assert.match(action, /\.select\("order_id,idempotency_key,created_at,orders!inner\(customer_id,test_mode,payment_status\)"\)/);
   assert.match(action, /\.eq\("orders\.customer_id", customer\.id\)/);
   assert.match(action, /\.eq\("orders\.test_mode", false\)/);
   assert.match(action, /Date\.now\(\) - 7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(action, /checkoutKey: attempt\.idempotency_key/);
   assert.doesNotMatch(action, /\.order\("created_at"[\s\S]*recoverCatalogPaymentSessionAction/);
   assert.match(provider, /readCheckoutPaymentSessionPointer\(\)/);
   assert.match(provider, /recoverCatalogPaymentSessionAction\(session\.checkoutKey\)/);
   assert.match(provider, /session\.orderId && session\.orderId !== result\.orderId/);
   assert.match(provider, /attempts < 3/);
   assert.match(provider, /recoveredCheckoutKeysRef\.current\.delete\(recoveryKey\)/);
-  assert.match(provider, /cartMatchesPurchasedLinesExactly/);
-  assert.match(provider, /!alreadyTracked && !legacyCartIsUnchanged/);
+  assert.match(provider, /binding\.submittedLines/);
   assert.doesNotMatch(provider, /if \(session\.orderId\) \{\s*trackPendingPaymentOrder/);
-  assert.match(provider, /bindCheckoutPaymentOrder\(result\.orderId\)/);
-  assert.match(provider, /trackPendingPaymentOrder\(result\.orderId\)/);
+  assert.match(provider, /bindCheckoutPaymentOrder\(\s*result\.orderId,\s*result\.checkoutKey,?\s*\)/);
+  assert.match(provider, /trackPendingPaymentOrder\(result\.orderId, binding\.submittedLines\)/);
   assert.match(provider, /reconcilePaymentOrder\(\{/);
 });
 
@@ -391,4 +611,76 @@ test("account order timestamps render in Tbilisi time", () => {
   }).format(new Date("2026-08-05T13:59:56Z"));
 
   assert.match(formatted, /17:59/);
+});
+
+test("unfinished checkout intents stay out of order history and production Kanban", () => {
+  assert.equal(isOrderVisibleInHistory("unpaid", false), false);
+  assert.equal(isOrderVisibleInHistory("failed", false), false);
+  assert.equal(isOrderVisibleInHistory("paid", false), true);
+  assert.equal(isOrderVisibleInHistory("review_required", false), true);
+  assert.equal(isOrderVisibleInHistory("refunded", false), true);
+  assert.equal(isOrderVisibleInHistory("unpaid", true), true);
+  assert.equal(
+    ORDER_HISTORY_POSTGREST_FILTER,
+    "test_mode.eq.true,payment_status.in.(paid,review_required,refunded)",
+  );
+
+  const accountOrders = readFileSync(
+    new URL("../app/account/orders/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const accountFilterIndex = accountOrders.indexOf(".or(ORDER_HISTORY_POSTGREST_FILTER)");
+  const accountLimitIndex = accountOrders.indexOf(".limit(", accountFilterIndex);
+  assert.ok(accountFilterIndex >= 0);
+  assert.ok(accountLimitIndex > accountFilterIndex);
+  assert.match(accountOrders, /\.order\("updated_at", \{ ascending: false \}\)/);
+  assert.match(accountOrders, /events\.find\(\(event\) => event\.event_type === "order_received"\)\?\.created_at/);
+  assert.match(accountOrders, /isOrderVisibleInHistory\(order\.payment_status, order\.test_mode\)/);
+
+  const adminOrders = readFileSync(
+    new URL("../app/admin/orders/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const openFilterIndex = adminOrders.indexOf('.in("fulfillment_status", [...OPEN_OPERATIONAL_STATUSES])');
+  const closedFilterIndex = adminOrders.indexOf('.in("fulfillment_status", [...CLOSED_OPERATIONAL_STATUSES])');
+  const closedLimitIndex = adminOrders.indexOf(".limit(CLOSED_OPERATIONAL_HISTORY_LIMIT)", closedFilterIndex);
+  const sessionFilterIndex = adminOrders.indexOf('.in("payment_status", [...PAYMENT_SESSION_STATUSES])');
+  const sessionLimitIndex = adminOrders.indexOf(".limit(PAYMENT_SESSION_HISTORY_LIMIT)", sessionFilterIndex);
+  assert.ok(openFilterIndex >= 0, "open operational rows must have their own query");
+  assert.ok(closedFilterIndex >= 0 && closedLimitIndex > closedFilterIndex, "closed history must be filtered before its bound");
+  assert.ok(sessionFilterIndex >= 0 && sessionLimitIndex > sessionFilterIndex, "payment sessions must be filtered before their bound");
+  assert.match(adminOrders, /const PAYMENT_SESSION_STATUSES = \["unpaid", "failed"\]/);
+  assert.match(adminOrders, /<BogPaymentSessionsPanel sessions=\{paymentSessionCards\}/);
+  assert.match(adminOrders, /isOrderVisibleInHistory\(order\.payment_status, order\.test_mode\)/);
+
+  const kanban = readFileSync(
+    new URL("../components/admin/OrderOperationsKanban.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(kanban, /card\.paymentReady && !card\.operationalRefundHold/);
+
+  const paymentSessions = readFileSync(
+    new URL("../components/admin/BogPaymentSessionsPanel.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(paymentSessions, /reconcileBogPaymentAction/);
+  assert.doesNotMatch(paymentSessions, /moveOrderKanbanAction|production_queued|provider_payment_id|providerPaymentId/);
+  assert.match(paymentSessions, /ოპერაციული შეკვეთები არ არის და წარმოებაში ვერ გადავა/);
+});
+
+test("payment result navigation follows authoritative history visibility", () => {
+  const resultPage = readFileSync(
+    new URL("../app/checkout/result/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const refresh = readFileSync(
+    new URL("../components/checkout/PaymentResultAutoRefresh.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(resultPage, /const historyVisible = paid \|\| reviewRequired \|\| refunded/);
+  assert.match(resultPage, /\{historyVisible \? \([\s\S]*href="\/account\/orders"[\s\S]*\) : failed \? \([\s\S]*href="\/checkout"[\s\S]*\) : \([\s\S]*href="\/shop"/);
+  assert.equal((resultPage.match(/href="\/account\/orders"/g) ?? []).length, 1);
+  assert.match(refresh, /უსაფრთხოების შემოწმებაზე გადასვლამდე ჩანაწერი „ჩემ შეკვეთებში“ არ გამოჩნდება/);
+  assert.doesNotMatch(refresh, /href=["']\/account\/orders/);
 });

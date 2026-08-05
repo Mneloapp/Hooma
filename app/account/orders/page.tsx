@@ -9,6 +9,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { LocalizedText } from "@/components/LocalizedText";
 import { getBogCustomerRefundAvailability } from "@/lib/payments/bog";
+import {
+  isOrderVisibleInHistory,
+  ORDER_HISTORY_POSTGREST_FILTER,
+} from "@/lib/orders/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +30,7 @@ type Order = {
   delivery_address: Record<string, unknown> | null;
   test_mode: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 type OrderItem = {
@@ -162,11 +167,13 @@ export default async function AccountOrdersPage() {
   const { data: orderRows, error: orderError } = supabase
     ? await supabase
       .from("orders")
-      .select("id,tracking_code,status,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,fulfillment_status,promised_at,delivery_address,test_mode,created_at")
-      .order("created_at", { ascending: false })
+      .select("id,tracking_code,status,payment_status,subtotal,delivery_fee,delivery_benefit_code,total,fulfillment_status,promised_at,delivery_address,test_mode,created_at,updated_at")
+      .or(ORDER_HISTORY_POSTGREST_FILTER)
+      .order("updated_at", { ascending: false })
       .limit(50)
     : { data: [], error: null };
-  const orders = (orderRows ?? []) as Order[];
+  const orders = ((orderRows ?? []) as Order[]).filter((order) =>
+    isOrderVisibleInHistory(order.payment_status, order.test_mode));
   const orderIds = orders.map((order) => order.id);
   // The service-role client is used only after user RLS has produced this
   // exact owned-order allowlist. No provider identifiers are selected below.
@@ -195,7 +202,7 @@ export default async function AccountOrdersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted"><LocalizedText ka="შეკვეთის ისტორია" en="Order history" /></p><h1 className="mt-3 text-4xl font-medium"><LocalizedText ka="შეკვეთები" en="Orders" /></h1><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="აქ ჩანს შეკვეთის მიმდინარე ეტაპი შეკვეთიდან მიწოდებამდე." en="Track every order from confirmation through delivery." /></p></div>
+        <div><p className="text-xs uppercase tracking-[0.28em] text-hooma-muted"><LocalizedText ka="შეკვეთის ისტორია" en="Order history" /></p><h1 className="mt-3 text-4xl font-medium"><LocalizedText ka="შეკვეთები" en="Orders" /></h1><p className="mt-3 text-sm text-hooma-muted"><LocalizedText ka="აქ ჩანს მხოლოდ გადახდით დადასტურებული ან საბანკო შემოწმებაზე მყოფი შეკვეთები. დაუსრულებელი გადახდის სესია შეკვეთად არ ითვლება." en="Only payment-confirmed orders and orders under bank review appear here. An unfinished payment session is not treated as an order." /></p></div>
         <OrdersAutoRefresh />
       </div>
 
@@ -204,6 +211,8 @@ export default async function AccountOrdersPage() {
       {orders.map((order) => {
         const orderItems = itemsByOrder.get(order.id) ?? [];
         const events = eventsByOrder.get(order.id) ?? [];
+        const placedAt = events.find((event) => event.event_type === "order_received")?.created_at
+          ?? order.created_at;
         const cancellation = cancellationByOrder.get(order.id);
         const orderCancelled = order.fulfillment_status === "cancelled";
         const cancellationStatus = cancellation?.status
@@ -292,7 +301,7 @@ export default async function AccountOrdersPage() {
               <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText
                 ka={operationalRefundHold ? "თანხის დაბრუნებას ოპერაციული შემოწმება სჭირდება" : refundProcessing ? "შეკვეთა გაუქმებულია · დაბრუნება მუშავდება" : refundReview ? "შეკვეთა გაუქმებულია · საჭიროა მხარდაჭერა" : refundComplete ? "შეკვეთა გაუქმებულია · თანხა დაბრუნებულია" : cancelled ? "შეკვეთა გაუქმებულია" : !paymentReady ? paymentTitle[0] : currentStageLabel.ka}
                 en={operationalRefundHold ? "Refund needs operational review" : refundProcessing ? "Order cancelled · refund processing" : refundReview ? "Order cancelled · support review needed" : refundComplete ? "Order cancelled · payment refunded" : cancelled ? "Order cancelled" : !paymentReady ? paymentTitle[1] : currentStageLabel.en}
-              /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
+              /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(placedAt))}</p></div>
               <div className="text-left sm:text-right">
                 <p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p>
                 <span className={`mt-2 inline-flex rounded-full border px-3 py-1.5 text-xs font-bold ${paymentPresentation.className}`}><LocalizedText ka={paymentPresentation.ka} en={paymentPresentation.en} /></span>
@@ -399,7 +408,7 @@ export default async function AccountOrdersPage() {
       })}
 
       {!orders.length ? (
-        <div className="rounded-[2rem] border border-dashed border-hooma-text/15 bg-white/55 px-6 py-16 text-center"><Package className="mx-auto text-hooma-muted" /><p className="mt-4 font-semibold"><LocalizedText ka="შეკვეთა ჯერ არ გაქვს" en="You have no orders yet" /></p><p className="mt-2 text-sm text-hooma-muted"><LocalizedText ka="შეკვეთის გაფორმების შემდეგ მისი ეტაპები აქ გამოჩნდება." en="Order stages will appear here after checkout." /></p></div>
+        <div className="rounded-[2rem] border border-dashed border-hooma-text/15 bg-white/55 px-6 py-16 text-center"><Package className="mx-auto text-hooma-muted" /><p className="mt-4 font-semibold"><LocalizedText ka="დადასტურებული შეკვეთა ჯერ არ გაქვს" en="You have no confirmed orders yet" /></p><p className="mt-2 text-sm text-hooma-muted"><LocalizedText ka="შეკვეთა აქ BOG-ის მიერ გადახდის დადასტურების შემდეგ გამოჩნდება." en="An order will appear here after BOG confirms its payment." /></p></div>
       ) : null}
     </div>
   );

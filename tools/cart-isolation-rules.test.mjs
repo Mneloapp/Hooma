@@ -4,17 +4,22 @@ import test from "node:test";
 import {
   GUEST_CART_STORAGE_KEY,
   LEGACY_CART_STORAGE_KEY,
+  MAX_CART_LINE_QUANTITY,
   MAX_PENDING_PAYMENT_ORDERS,
   cartMatchesPurchasedLinesExactly,
+  cartItemKey,
   cartStorageKeyForUser,
+  ensureCartLineIds,
   isCartStorageEventForScope,
   mergeCartItems,
   parseStoredCart,
   parseStoredCartSnapshot,
   reconcileSettledPaymentOrder,
+  removeCartItem,
   rememberPendingPaymentOrder,
   resolveCartScope,
   serializeStoredCart,
+  snapshotCartPaymentLines,
   subtractPurchasedCartItems,
 } from "../lib/cart-storage.ts";
 
@@ -32,7 +37,14 @@ const item = (productId, quantity = 1) => ({
   quantity,
   price: 10,
   pricePlaceholder: "₾10.00",
+  cart_line_id: `cart-line-000000000000-${String(productId).replace(/[^a-zA-Z0-9-]/g, "-")}`,
 });
+
+const paymentLines = (items) => {
+  const lines = snapshotCartPaymentLines(items);
+  assert.ok(lines, "test cart requires stable payment generations");
+  return lines;
+};
 
 test("guest and authenticated users receive separate versioned cart keys", () => {
   assert.equal(cartStorageKeyForUser(null), GUEST_CART_STORAGE_KEY);
@@ -123,8 +135,8 @@ test("cart storage events update only the currently active account scope", () =>
 });
 
 test("stored carts validate data and merged quantities remain bounded", () => {
-  const merged = mergeCartItems([item("same", 70)], [item("same", 50)]);
-  assert.equal(merged[0].quantity, 100);
+  const merged = mergeCartItems([item("same", 15)], [item("same", 10)]);
+  assert.equal(merged[0].quantity, MAX_CART_LINE_QUANTITY);
   assert.deepEqual(parseStoredCart(serializeStoredCart(merged)), merged);
 
   const invalid = JSON.stringify({
@@ -132,6 +144,12 @@ test("stored carts validate data and merged quantities remain bounded", () => {
     items: [{ ...item("invalid"), quantity: 101 }],
   });
   assert.deepEqual(parseStoredCart(invalid), []);
+
+  const legacy = JSON.stringify({
+    version: 2,
+    items: [{ ...item("legacy-high"), quantity: 75 }],
+  });
+  assert.equal(parseStoredCart(legacy)[0].quantity, MAX_CART_LINE_QUANTITY);
 });
 
 test("first authenticated resolution combines saved, guest, and pending carts", () => {
@@ -241,16 +259,26 @@ test("guest transfer marker is persisted atomically with the user cart", () => {
 test("paid orders subtract only exact purchased quantities and settle once", () => {
   const orderId = "00000000-0000-4000-8000-000000000001";
   const paymentNow = Date.now();
-  const sameVariant = item("same", 3);
-  const otherVariant = { ...item("same", 2), variant_id: "variant-other" };
+  const purchasedVariant = item("same", 2);
+  const sameVariant = { ...purchasedVariant, quantity: 3 };
+  const otherVariant = {
+    ...item("same", 2),
+    variant_id: "variant-other",
+    cart_line_id: "cart-line-000000000000-other-variant",
+  };
   const unrelated = item("unrelated", 1);
-  const initial = parseStoredCartSnapshot(serializeStoredCart([
-    sameVariant,
-    otherVariant,
-    unrelated,
-  ]));
-  const pending = rememberPendingPaymentOrder(initial, orderId, paymentNow);
-  const settled = reconcileSettledPaymentOrder(pending, {
+  const initial = parseStoredCartSnapshot(serializeStoredCart([purchasedVariant]));
+  const pending = rememberPendingPaymentOrder(
+    initial,
+    orderId,
+    paymentNow,
+    paymentLines(initial.items),
+  );
+  const changedAfterCheckout = {
+    ...pending,
+    items: [sameVariant, otherVariant, unrelated],
+  };
+  const settled = reconcileSettledPaymentOrder(changedAfterCheckout, {
     orderId,
     status: "paid",
     purchasedLines: [{
@@ -258,7 +286,7 @@ test("paid orders subtract only exact purchased quantities and settle once", () 
       variant_id: sameVariant.variant_id,
       material: sameVariant.material,
       color: sameVariant.color,
-      quantity: 2,
+      quantity: purchasedVariant.quantity,
     }],
     settledAt: paymentNow + 100,
   });
@@ -276,30 +304,212 @@ test("paid orders subtract only exact purchased quantities and settle once", () 
   assert.equal(reconcileSettledPaymentOrder(settled, {
     orderId,
     status: "paid",
-    purchasedLines: [{ ...sameVariant, quantity: 2 }],
+    purchasedLines: [{ ...purchasedVariant }],
   }), settled);
 });
 
-test("failed and refunded payments keep cart items while closing their marker", () => {
+test("explicit removal targets only the exact configured cart line", () => {
+  const target = item("same");
+  const otherVariant = {
+    ...item("same"),
+    variant_id: "variant-other",
+    cart_line_id: "cart-line-000000000000-other",
+  };
+  const unrelated = item("unrelated");
+  const next = removeCartItem(
+    [target, otherVariant, unrelated],
+    cartItemKey(target),
+  );
+
+  assert.deepEqual(next, [otherVariant, unrelated]);
+});
+
+test("a late paid callback cannot remove the same product re-added after deletion", () => {
+  const orderId = "00000000-0000-4000-8000-000000000090";
+  const original = {
+    ...item("same"),
+    cart_line_id: "cart-line-000000000000-original",
+  };
+  const pending = rememberPendingPaymentOrder(
+    parseStoredCartSnapshot(serializeStoredCart([original])),
+    orderId,
+    Date.now(),
+    paymentLines([original]),
+  );
+  const readded = {
+    ...original,
+    cart_line_id: "cart-line-000000000000-readded",
+  };
+  const changed = {
+    ...pending,
+    items: [readded],
+  };
+  const settled = reconcileSettledPaymentOrder(changed, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{
+      product_id: original.product_id,
+      variant_id: original.variant_id,
+      material: original.material,
+      color: original.color,
+      quantity: original.quantity,
+    }],
+  });
+
+  assert.deepEqual(settled.items, [readded]);
+  assert.equal(settled.pendingPaymentOrders.length, 0);
+  assert.deepEqual(settled.settledPaymentOrders.map((marker) => marker.orderId), [orderId]);
+});
+
+test("an async checkout response binds submitted generation A, never current generation B", () => {
+  const orderId = "00000000-0000-4000-8000-000000000093";
+  const submitted = {
+    ...item("async-boundary"),
+    cart_line_id: "cart-line-000000000000-submitted-a",
+  };
+  const readdedWhileServerWasRunning = {
+    ...submitted,
+    cart_line_id: "cart-line-000000000000-current-b",
+  };
+  const currentSnapshot = parseStoredCartSnapshot(
+    serializeStoredCart([readdedWhileServerWasRunning]),
+  );
+  const pending = rememberPendingPaymentOrder(
+    currentSnapshot,
+    orderId,
+    Date.now(),
+    paymentLines([submitted]),
+  );
+  const settled = reconcileSettledPaymentOrder(pending, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{
+      product_id: submitted.product_id,
+      variant_id: submitted.variant_id,
+      material: submitted.material,
+      color: submitted.color,
+      quantity: submitted.quantity,
+    }],
+  });
+
+  assert.deepEqual(settled.items, [readdedWhileServerWasRunning]);
+  assert.equal(settled.pendingPaymentOrders.length, 0);
+});
+
+test("retracking the same payment preserves its original cart-line generation", () => {
+  const orderId = "00000000-0000-4000-8000-000000000092";
+  const original = {
+    ...item("same"),
+    cart_line_id: "cart-line-000000000000-original",
+  };
+  const pending = rememberPendingPaymentOrder(
+    parseStoredCartSnapshot(serializeStoredCart([original])),
+    orderId,
+    Date.now() - 1_000,
+    paymentLines([original]),
+  );
+  const changed = {
+    ...pending,
+    items: [{
+      ...original,
+      cart_line_id: "cart-line-000000000000-readded",
+    }],
+  };
+  const retracked = rememberPendingPaymentOrder(changed, orderId);
+
+  assert.equal(retracked, changed);
+  assert.equal(
+    retracked.pendingPaymentOrders[0].lines?.[0].cartLineId,
+    "cart-line-000000000000-original",
+  );
+});
+
+test("legacy payment markers close safely without mutating current cart lines", () => {
+  const orderId = "00000000-0000-4000-8000-000000000091";
+  const current = item("legacy-current");
+  const pending = parseStoredCartSnapshot(serializeStoredCart([current], {
+    pendingPaymentOrders: [{ orderId, recordedAt: Date.now() }],
+  }));
+  const settled = reconcileSettledPaymentOrder(pending, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{
+      product_id: current.product_id,
+      variant_id: current.variant_id,
+      material: current.material,
+      color: current.color,
+      quantity: current.quantity,
+    }],
+  });
+
+  assert.deepEqual(settled.items, [current]);
+  assert.equal(settled.pendingPaymentOrders.length, 0);
+  assert.equal(settled.settledPaymentOrders.length, 1);
+});
+
+test("missing cart line generations are assigned before payment tracking", () => {
+  const withoutLineId = { ...item("missing-line") };
+  delete withoutLineId.cart_line_id;
+  const withLineIds = ensureCartLineIds(
+    [withoutLineId],
+    () => "cart-line-000000000000-generated",
+  );
+  assert.equal(withLineIds[0].cart_line_id, "cart-line-000000000000-generated");
+});
+
+test("failed payments retain their exact generation for a later signed paid transition", () => {
   const paymentNow = Date.now();
-  const statuses = ["failed", "refunded"];
-  for (const [index, status] of statuses.entries()) {
-    const orderId = `00000000-0000-4000-8000-${String(index + 2).padStart(12, "0")}`;
-    const initial = rememberPendingPaymentOrder(
-      parseStoredCartSnapshot(serializeStoredCart([item("retry")])),
-      orderId,
-      paymentNow,
-    );
-    const settled = reconcileSettledPaymentOrder(initial, {
-      orderId,
-      status,
-      purchasedLines: [],
-      settledAt: paymentNow + 100,
-    });
-    assert.deepEqual(settled.items, initial.items);
-    assert.equal(settled.pendingPaymentOrders.length, 0);
-    assert.equal(settled.settledPaymentOrders.length, 0);
-  }
+  const orderId = "00000000-0000-4000-8000-000000000002";
+  const purchased = item("retry");
+  const initial = parseStoredCartSnapshot(serializeStoredCart([purchased]));
+  const pending = rememberPendingPaymentOrder(
+    initial,
+    orderId,
+    paymentNow,
+    paymentLines(initial.items),
+  );
+  const failed = reconcileSettledPaymentOrder(pending, {
+    orderId,
+    status: "failed",
+    purchasedLines: [],
+    settledAt: paymentNow + 100,
+  });
+  assert.deepEqual(failed.items, initial.items);
+  assert.equal(failed.pendingPaymentOrders.length, 1);
+  assert.equal(failed.pendingPaymentOrders[0].lastObservedStatus, "failed");
+  assert.equal(failed.pendingPaymentOrders[0].lines?.[0].cartLineId, purchased.cart_line_id);
+
+  const paid = reconcileSettledPaymentOrder(failed, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{
+      product_id: purchased.product_id,
+      variant_id: purchased.variant_id,
+      material: purchased.material,
+      color: purchased.color,
+      quantity: purchased.quantity,
+    }],
+    settledAt: paymentNow + 200,
+  });
+  assert.deepEqual(paid.items, []);
+  assert.equal(paid.pendingPaymentOrders.length, 0);
+  assert.deepEqual(paid.settledPaymentOrders.map((marker) => marker.orderId), [orderId]);
+});
+
+test("refunded payments keep cart items and close their watched marker", () => {
+  const orderId = "00000000-0000-4000-8000-000000000003";
+  const initial = rememberPendingPaymentOrder(
+    parseStoredCartSnapshot(serializeStoredCart([item("refunded")])),
+    orderId,
+  );
+  const refunded = reconcileSettledPaymentOrder(initial, {
+    orderId,
+    status: "refunded",
+    purchasedLines: [],
+  });
+  assert.deepEqual(refunded.items, initial.items);
+  assert.equal(refunded.pendingPaymentOrders.length, 0);
+  assert.equal(refunded.settledPaymentOrders.length, 0);
 });
 
 test("payment markers are bounded and an untracked order cannot change a cart", () => {
@@ -384,5 +594,33 @@ test("CartProvider reconciles server-action auth changes and persists mutations 
   assert.match(provider, /\.eq\("test_mode", false\)/);
   assert.match(provider, /order\.payment_status === "paid"/);
   assert.match(provider, /\.from\("order_items"\)/);
+  assert.match(provider, /removeItem:\s*\(key\)[\s\S]*removeCartItem\(current, key\)/);
+  assert.match(provider, /const \{ snapshot: stored, readable \} = readCartResult\(current\.storageKey\)/);
+  assert.match(provider, /rememberPendingPaymentOrder\([\s\S]*submittedLines/);
+  assert.match(provider, /marker\.lastObservedStatus === "failed"/);
+  assert.match(provider, /onlyFailedMarkers[\s\S]*\? null[\s\S]*15_000/);
   assert.doesNotMatch(provider, /return=success/);
+});
+
+test("cart drawer exposes an accessible, deliberate remove action", () => {
+  const drawer = readFileSync(
+    new URL("../components/CartDrawer.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(drawer, /Trash2/);
+  assert.match(drawer, /removeItem\(itemKey\)/);
+  assert.match(drawer, /type="button"[\s\S]*კალათიდან წაშლა/);
+  assert.match(drawer, /role="status" aria-live="polite"/);
+  assert.match(drawer, /min-h-11/);
+  assert.match(drawer, /disabled=\{item\.quantity <= 1\}/);
+  assert.match(drawer, /disabled=\{item\.quantity >= MAX_CART_LINE_QUANTITY\}/);
+  assert.match(drawer, /role="dialog"/);
+  assert.match(drawer, /aria-labelledby="cart-drawer-title"/);
+  assert.match(drawer, /inert=\{!isOpen\}/);
+  assert.match(drawer, /h-dvh[\s\S]*overflow-y-auto/);
+  assert.match(drawer, /event\.key === "Escape"/);
+  assert.match(drawer, /previousFocus\?\.focus\(\)/);
+  assert.match(drawer, /hasPendingPaymentOrders/);
+  assert.match(drawer, /does not cancel a payment or order already created at the bank/);
+  assert.match(drawer, /items\.length \? \([\s\S]*href="\/checkout"[\s\S]*href="\/shop"/);
 });
