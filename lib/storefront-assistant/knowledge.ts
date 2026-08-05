@@ -125,6 +125,17 @@ export const storefrontFaqs: StorefrontFaq[] = [
     },
   },
   {
+    id: "order-cancellation",
+    question: {
+      ka: "შემიძლია გადახდილი შეკვეთის გაუქმება?",
+      en: "Can I cancel a paid order?",
+    },
+    answer: {
+      ka: "BOG-ით სრულად გადახდილი სტანდარტული კატალოგის შეკვეთა შეგიძლია გააუქმო ანგარიშის „შეკვეთების“ გვერდიდან მხოლოდ წარმოების დაწყებამდე, როცა შესაბამის შეკვეთაზე გაუქმების ღილაკი ჩანს. გაუქმება შეუქცევადია და სრული ჯამი, მიწოდების საფასურის ჩათვლით, გადახდის თავდაპირველ მეთოდზე დაბრუნდება; ბანკის მიერ ასახვის დრო შეიძლება განსხვავდებოდეს. წარმოების რიგში გადასვლის ან წარმოების დაწყების შემდეგ ავტომატური გაუქმება აღარ არის შესაძლებელი — დაუკავშირდი მხარდაჭერას. ჩატი პირადი შეკვეთის უფლებამოსილებას ან დაბრუნების სტატუსს ვერ ამოწმებს.",
+      en: "You can cancel a standard catalog order paid in full through BOG from your account’s Orders page only before production starts and while the cancellation button is shown for that order. Cancellation is irreversible, and the full total, including the delivery fee, is returned to the original payment method; the bank’s posting time may vary. Automatic cancellation is unavailable once the order enters the production queue or production starts—contact support for assistance. Chat cannot verify a personal order’s eligibility or refund status.",
+    },
+  },
+  {
     id: "hooma-plus",
     question: {
       ka: "რა არის Hooma+?",
@@ -182,6 +193,18 @@ const rules: KnowledgeRule[] = [
     suggestions: [
       { ka: "რამდენ დღეში მივიღებ?", en: "How soon will I receive it?" },
       { ka: "ინდივიდუალური ნივთი მინდა", en: "I want a custom item" },
+    ],
+  },
+  {
+    faqId: "order-cancellation",
+    keywords: [
+      "შეკვეთის გაუქმ", "შეკვეთა გავაუქმ", "გავაუქმო შეკვეთა", "გადახდილი შეკვეთა გავაუქმ", "გაუქმების ღილაკ",
+      "cancel my order", "cancel an order", "cancel a paid order", "order cancellation",
+    ],
+    actions: ["orders", "terms"],
+    suggestions: [
+      { ka: "სად ვნახო ჩემი შეკვეთა?", en: "Where can I see my order?" },
+      { ka: "გამოყენების პირობები", en: "Terms of use" },
     ],
   },
   {
@@ -324,14 +347,18 @@ export function getDirectStorefrontAnswer(
   const matches = (candidate: KnowledgeRule) =>
     candidate.keywords.some((keyword) => normalized.includes(keyword));
   const returnsRule = rules.find((candidate) => candidate.faqId === "returns");
+  const cancellationRule = rules.find((candidate) => candidate.faqId === "order-cancellation");
+  const explicitCancellation = /(?:შეკვეთ\S*.{0,32}(?:გაუქმ|გავაუქმ)|(?:გაუქმ|გავაუქმ)\S*.{0,32}შეკვეთ|გადახდილ\S*.{0,32}შეკვეთ\S*.{0,32}(?:გაუქმ|გავაუქმ)|cancel (?:my |an? |the )?(?:paid )?order|order cancellation)/.test(normalized);
   const explicitCustomRequest = /(?:ინდივიდუალური (?:ნივთ|დეტალ|შეკვეთ)|ჩემი (?:დიზაინ|ფაილ)|custom (?:item|order|part|design)|my (?:design|file))/.test(normalized);
   const inventoryQuestion = /(?:ყველა პროდუქტი|წინასწარ მზად|მარაგში|საწყობში|in stock|kept in stock)/.test(normalized);
   const productDiscovery = /(?:მაჩვენ|მომიძებნ|მინდა(?:[?!., ]|$)|გაქვთ(?:[?!., ]|$)|იყიდება|show me|find me|looking for|do you (?:sell|have)|i (?:want|need))/.test(normalized);
-  const rule = returnsRule && matches(returnsRule)
-    ? returnsRule
-    : productDiscovery && !explicitCustomRequest && !inventoryQuestion
-      ? null
-      : rules.find(matches);
+  const rule = explicitCancellation && cancellationRule
+    ? cancellationRule
+    : returnsRule && matches(returnsRule)
+      ? returnsRule
+      : productDiscovery && !explicitCustomRequest && !inventoryQuestion
+        ? null
+        : rules.find(matches);
   if (!rule) return null;
 
   const faq = storefrontFaqs.find((candidate) => candidate.id === rule.faqId);

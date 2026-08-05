@@ -25,6 +25,9 @@ export type OperationsKanbanCard = {
   mapUrl: string | null;
   paymentReady: boolean;
   paymentStatus: string;
+  cancellationStatus: "processing" | "refund_submitted" | "submission_failed" | "review_required" | "refunded" | null;
+  operationalRefundHold: boolean;
+  refundAmount: number;
   canReconcile: boolean;
   testMode: boolean;
   items: Array<{ id: string; name: string; configuration: string; quantity: number }>;
@@ -42,7 +45,7 @@ const columns: Column[] = [
   { id: "ready", title: "მზადაა", caption: "შეფუთვა და კურიერი", statuses: ["ready_for_delivery"], tone: "border-teal-200 bg-teal-50/70", dropTarget: "ready_for_delivery" },
   { id: "courier", title: "კურიერთან", caption: "გადაცემულია მიწოდებაზე", statuses: ["out_for_delivery"], tone: "border-orange-200 bg-orange-50/70", dropTarget: "out_for_delivery" },
   { id: "delivered", title: "მიწოდებული", caption: "ციკლი დასრულებულია", statuses: ["delivered"], tone: "border-slate-200 bg-slate-50/80", dropTarget: "delivered" },
-  { id: "cancelled", title: "გაუქმებული", caption: "დახურული შეკვეთები", statuses: ["cancelled"], tone: "border-red-200 bg-red-50/60" },
+  { id: "cancelled", title: "გაუქმებული", caption: "დაბრუნება და დახურული შეკვეთები", statuses: ["cancelled"], tone: "border-red-200 bg-red-50/60" },
 ];
 
 const expectedTarget: Record<string, TargetStatus | undefined> = {
@@ -139,8 +142,11 @@ export function OrderOperationsKanban({ cards, canMove }: { cards: OperationsKan
                 <div className="flex items-start justify-between gap-3 px-2 py-2"><div><h2 className="font-semibold">{column.title}</h2><p className="mt-1 text-xs text-hooma-muted">{column.caption}</p></div><span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold">{columnCards.length}</span></div>
                 <div className="mt-2 min-h-36 space-y-3">
                   {columnCards.map((card) => {
-                    const target = expectedTarget[card.fulfillmentStatus];
+                    const target = card.operationalRefundHold ? undefined : expectedTarget[card.fulfillmentStatus];
                     const productionLocked = ["production_queued", "in_production"].includes(card.fulfillmentStatus);
+                    const refundProcessing = card.cancellationStatus === "processing" || card.cancellationStatus === "refund_submitted";
+                    const refundNeedsReview = card.cancellationStatus === "submission_failed" || card.cancellationStatus === "review_required";
+                    const refundComplete = card.cancellationStatus === "refunded";
                     return (
                       <article
                         key={card.id}
@@ -156,9 +162,20 @@ export function OrderOperationsKanban({ cards, canMove }: { cards: OperationsKan
                         <div className="mt-3 space-y-2 border-t border-hooma-text/10 pt-3">{card.items.slice(0, 3).map((item) => <div key={item.id} className="text-xs"><p className="font-semibold">{item.name} ×{item.quantity}</p><p className="mt-0.5 truncate text-hooma-muted">{item.configuration}</p></div>)}{card.items.length > 3 ? <p className="text-xs font-semibold text-hooma-accent">+ კიდევ {card.items.length - 3}</p> : null}</div>
                         <div className="mt-3 rounded-xl bg-hooma-background p-3 text-xs"><p className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0 text-hooma-accent" /><span>{card.address}</span></p>{card.mapUrl ? <a href={card.mapUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block font-semibold text-hooma-accent">რუკის გახსნა</a> : null}</div>
                         {card.jobs.total ? <div className="mt-3 rounded-xl border border-hooma-text/10 p-3 text-xs"><p className="flex items-center gap-2 font-semibold"><Printer size={14} />წარმოება: {card.jobs.completed}/{card.jobs.total} დასრულებული</p><p className="mt-2 text-hooma-muted">რიგი {card.jobs.queued} · მზადება {card.jobs.preparing} · აქტიური {card.jobs.active}{card.jobs.failed ? ` · failure ${card.jobs.failed}` : ""}</p></div> : null}
-                        <div className="mt-3 flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${card.paymentReady ? "bg-emerald-100 text-emerald-900" : card.paymentStatus === "review_required" ? "bg-orange-100 text-orange-900" : "bg-red-100 text-red-900"}`}>{card.testMode ? "TEST" : card.paymentReady ? "გადახდილია" : card.paymentStatus === "review_required" ? "გადახდის შემოწმება" : card.paymentStatus === "failed" ? "გადახდა ვერ დასრულდა" : "გადახდას ელოდება"}</span>{productionLocked || card.fulfillmentStatus === "quality_check" ? <Link href={`/admin/production?order=${card.id}`} className="rounded-full bg-hooma-text px-3 py-1 text-[10px] font-semibold text-white">ამ შეკვეთის წარმოება</Link> : null}</div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${refundProcessing ? "bg-amber-100 text-amber-950" : refundNeedsReview ? "bg-orange-100 text-orange-950" : refundComplete ? "bg-violet-100 text-violet-950" : card.paymentReady ? "bg-emerald-100 text-emerald-900" : card.paymentStatus === "review_required" ? "bg-orange-100 text-orange-900" : "bg-red-100 text-red-900"}`}>
+                            {card.operationalRefundHold ? (card.paymentStatus === "refunded" ? "თანხა დაბრუნებულია · ოპერაციული HOLD" : "დაბრუნება · ოპერაციული HOLD") : refundProcessing ? "გაუქმებულია · დაბრუნება მუშავდება" : refundNeedsReview ? "გაუქმებულია · საჭიროა შემოწმება" : refundComplete ? "გაუქმებულია · თანხა დაბრუნებულია" : card.testMode ? "TEST" : card.paymentReady ? "გადახდილია" : card.paymentStatus === "review_required" ? "გადახდის შემოწმება" : card.paymentStatus === "failed" ? "გადახდა ვერ დასრულდა" : "გადახდას ელოდება"}
+                          </span>
+                          {(card.operationalRefundHold && card.fulfillmentStatus !== "delivered") || productionLocked || card.fulfillmentStatus === "quality_check" ? <Link href={`/admin/production?order=${card.id}`} className="rounded-full bg-hooma-text px-3 py-1 text-[10px] font-semibold text-white">ამ შეკვეთის წარმოება</Link> : null}
+                        </div>
+                        {card.cancellationStatus ? (
+                          <div className={`mt-3 rounded-xl border p-3 text-xs leading-5 ${card.operationalRefundHold ? "border-red-300 bg-red-50 text-red-950" : refundNeedsReview ? "border-orange-200 bg-orange-50 text-orange-950" : refundComplete ? "border-violet-200 bg-violet-50 text-violet-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+                            <p className="font-semibold">სრული დაბრუნება: {money.format(card.refundAmount)}</p>
+                            <p className="mt-1">{card.operationalRefundHold ? "თანხის დაბრუნება ან შეუთავსებელი მდგომარეობა დაფიქსირდა, მაგრამ ფიზიკური წარმოების ეტაპი ავტომატურად არ შეცვლილა. დაუყოვნებლივ გადაამოწმე წარმოება და მხარდაჭერის ჩანაწერი." : refundNeedsReview ? "შეკვეთა წარმოებიდან დაბლოკილია. გადაამოწმე დაბრუნების მოთხოვნა მხარდაჭერის პროცესით." : refundComplete ? "BOG-ის დაცული callback-ით სრული დაბრუნება დადასტურებულია." : "შეკვეთა წარმოებიდან დაბლოკილია; საბანკო დაბრუნება ჯერ მუშავდება."}</p>
+                          </div>
+                        ) : null}
                         {card.canReconcile ? <button type="button" onClick={() => reconcilePayment(card)} disabled={isPending} className="mt-3 w-full rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">BOG receipt-ის შემოწმება</button> : null}
-                        {target ? <button onClick={() => requestMove(card, target)} className="mt-3 w-full rounded-xl border border-hooma-text/10 px-3 py-2 text-xs font-semibold transition hover:bg-hooma-text hover:text-white">შემდეგ ეტაპზე გადატანა →</button> : productionLocked ? <p className="mt-3 text-[11px] leading-5 text-hooma-muted">სტატუსი ავტომატურად შეიცვლება print job-ის რეალური მოქმედებით.</p> : null}
+                        {target ? <button onClick={() => requestMove(card, target)} className="mt-3 w-full rounded-xl border border-hooma-text/10 px-3 py-2 text-xs font-semibold transition hover:bg-hooma-text hover:text-white">შემდეგ ეტაპზე გადატანა →</button> : card.operationalRefundHold ? <p className="mt-3 text-[11px] font-semibold leading-5 text-red-800">ჩვეულებრივი ეტაპის შეცვლა დაბლოკილია ოპერაციული შემოწმების დასრულებამდე.</p> : productionLocked ? <p className="mt-3 text-[11px] leading-5 text-hooma-muted">სტატუსი ავტომატურად შეიცვლება print job-ის რეალური მოქმედებით.</p> : null}
                       </article>
                     );
                   })}

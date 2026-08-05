@@ -1,8 +1,14 @@
 import { Check, Clock3, Package, Truck } from "lucide-react";
 import Link from "next/link";
+import {
+  OrderCancellationButton,
+  type CustomerCancellationStatus,
+} from "@/components/account/OrderCancellationButton";
 import { OrdersAutoRefresh } from "@/components/account/OrdersAutoRefresh";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { LocalizedText } from "@/components/LocalizedText";
+import { getBogCustomerRefundAvailability } from "@/lib/payments/bog";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +48,19 @@ type OrderEvent = {
   created_at: string;
 };
 
+type CancellationRefund = {
+  order_id: string;
+  status: CustomerCancellationStatus;
+  refund_amount: number | string;
+  currency: string;
+  requested_at: string;
+  submitted_at: string | null;
+  refunded_at: string | null;
+  updated_at: string;
+};
+
+type BogPaymentAttempt = { order_id: string };
+
 const stages = [
   { key: "payment_confirmed", ka: "გადახდილია", en: "Paid" },
   { key: "order_received", ka: "შეკვეთა მიღებულია", en: "Order received" },
@@ -56,6 +75,7 @@ const eventLabelsEn: Record<string, string> = {
   order_received: "Order received", confirmed: "Order confirmed", production_queued: "Queued for production",
   production_started: "Production started", in_production: "In production", quality_check: "Quality check",
   ready_for_delivery: "Ready for courier", out_for_delivery: "Out for delivery", delivered: "Delivered", cancelled: "Order cancelled",
+  cancellation_requested: "Order cancelled — refund requested",
   payment_confirmed: "Payment confirmed", payment_refunded: "Payment refunded",
 };
 
@@ -138,6 +158,7 @@ const money = new Intl.NumberFormat("ka-GE", { style: "currency", currency: "GEL
 
 export default async function AccountOrdersPage() {
   const supabase = (await createClient()) as any;
+  const refundAvailability = getBogCustomerRefundAvailability();
   const { data: orderRows, error: orderError } = supabase
     ? await supabase
       .from("orders")
@@ -147,18 +168,29 @@ export default async function AccountOrdersPage() {
     : { data: [], error: null };
   const orders = (orderRows ?? []) as Order[];
   const orderIds = orders.map((order) => order.id);
+  // The service-role client is used only after user RLS has produced this
+  // exact owned-order allowlist. No provider identifiers are selected below.
+  const admin = orderIds.length ? createAdminClient() as any : null;
 
-  const [{ data: itemRows }, { data: eventRows }] = supabase && orderIds.length
+  const [{ data: itemRows }, { data: eventRows }, { data: cancellationRows }, { data: bogAttemptRows }] = supabase && orderIds.length
     ? await Promise.all([
       supabase.from("order_items").select("id,order_id,product_id,product_name,size_label,material,color,quantity,products(slug)").in("order_id", orderIds).order("created_at"),
       supabase.from("order_events").select("id,order_id,customer_label_ka,event_type,created_at").in("order_id", orderIds).eq("is_customer_visible", true).order("created_at"),
+      admin
+        ? admin.from("order_cancellation_refunds").select("order_id,status,refund_amount,currency,requested_at,submitted_at,refunded_at,updated_at").in("order_id", orderIds)
+        : Promise.resolve({ data: [] }),
+      admin
+        ? admin.from("payment_attempts").select("order_id").in("order_id", orderIds).eq("provider", "bog").eq("status", "paid").eq("signature_verified", true)
+        : Promise.resolve({ data: [] }),
     ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
   const itemsByOrder = new Map<string, OrderItem[]>();
   for (const item of (itemRows ?? []) as OrderItem[]) itemsByOrder.set(item.order_id, [...(itemsByOrder.get(item.order_id) ?? []), item]);
   const eventsByOrder = new Map<string, OrderEvent[]>();
   for (const event of (eventRows ?? []) as OrderEvent[]) eventsByOrder.set(event.order_id, [...(eventsByOrder.get(event.order_id) ?? []), event]);
+  const cancellationByOrder = new Map(((cancellationRows ?? []) as CancellationRefund[]).map((refund) => [refund.order_id, refund]));
+  const paidBogOrderIds = new Set(((bogAttemptRows ?? []) as BogPaymentAttempt[]).map((attempt) => attempt.order_id));
 
   return (
     <div className="space-y-6">
@@ -172,12 +204,22 @@ export default async function AccountOrdersPage() {
       {orders.map((order) => {
         const orderItems = itemsByOrder.get(order.id) ?? [];
         const events = eventsByOrder.get(order.id) ?? [];
-        const cancelled = order.fulfillment_status === "cancelled";
+        const cancellation = cancellationByOrder.get(order.id);
+        const orderCancelled = order.fulfillment_status === "cancelled";
+        const cancellationStatus = cancellation?.status
+          ?? (order.payment_status === "refunded"
+            ? orderCancelled ? "refunded" : "review_required"
+            : null);
+        const refundProcessing = cancellationStatus === "processing" || cancellationStatus === "refund_submitted";
+        const refundReview = cancellationStatus === "submission_failed" || cancellationStatus === "review_required";
+        const refundComplete = cancellationStatus === "refunded";
+        const operationalRefundHold = Boolean(cancellationStatus && !orderCancelled);
+        const cancelled = orderCancelled;
         const paymentReady = order.test_mode || order.payment_status === "paid";
         const reviewRequired = order.payment_status === "review_required";
         const refunded = order.payment_status === "refunded";
         const paymentFailed = order.payment_status === "failed";
-        const currentStage = paymentReady ? (stageByStatus[order.fulfillment_status] ?? 1) : 0;
+        const currentStage = paymentReady || operationalRefundHold ? (stageByStatus[order.fulfillment_status] ?? 1) : 0;
         const reachedBeforeCancellation = paymentReady
           ? events.reduce((highest, event) => Math.max(highest, stageByEvent[event.event_type] ?? -1), 1)
           : -1;
@@ -188,22 +230,50 @@ export default async function AccountOrdersPage() {
             : refunded
               ? ["თანხა დაბრუნებულია", "Payment refunded"]
               : ["გადახდას ელოდება", "Awaiting payment"];
-        const paymentPresentation = order.test_mode
-          ? { ka: "სატესტო შეკვეთა", en: "Test order", className: "border-sky-200 bg-sky-50 text-sky-900" }
-          : order.payment_status === "paid"
-            ? { ka: "გადახდილია", en: "Paid", className: "border-emerald-200 bg-emerald-50 text-emerald-900" }
-            : paymentFailed
-              ? { ka: "გადახდა ვერ დასრულდა", en: "Payment failed", className: "border-red-200 bg-red-50 text-red-900" }
-              : reviewRequired
-                ? { ka: "მოწმდება", en: "Under review", className: "border-orange-200 bg-orange-50 text-orange-900" }
-                : refunded
-                  ? { ka: "თანხა დაბრუნებულია", en: "Refunded", className: "border-violet-200 bg-violet-50 text-violet-900" }
-                  : { ka: "გადახდას ელოდება", en: "Awaiting payment", className: "border-amber-200 bg-amber-50 text-amber-900" };
+        const paymentPresentation = refundProcessing
+          ? { ka: "დაბრუნება მუშავდება", en: "Refund processing", className: "border-amber-200 bg-amber-50 text-amber-900" }
+          : refundReview
+            ? { ka: "საჭიროა მხარდაჭერა", en: "Support review", className: "border-orange-200 bg-orange-50 text-orange-900" }
+            : refundComplete
+              ? { ka: "თანხა დაბრუნებულია", en: "Refunded", className: "border-violet-200 bg-violet-50 text-violet-900" }
+              : order.test_mode
+                ? { ka: "სატესტო შეკვეთა", en: "Test order", className: "border-sky-200 bg-sky-50 text-sky-900" }
+                : order.payment_status === "paid"
+                  ? { ka: "გადახდილია", en: "Paid", className: "border-emerald-200 bg-emerald-50 text-emerald-900" }
+                  : paymentFailed
+                    ? { ka: "გადახდა ვერ დასრულდა", en: "Payment failed", className: "border-red-200 bg-red-50 text-red-900" }
+                    : reviewRequired
+                      ? { ka: "მოწმდება", en: "Under review", className: "border-orange-200 bg-orange-50 text-orange-900" }
+                      : refunded
+                        ? { ka: "თანხა დაბრუნებულია", en: "Refunded", className: "border-violet-200 bg-violet-50 text-violet-900" }
+                        : { ka: "გადახდას ელოდება", en: "Awaiting payment", className: "border-amber-200 bg-amber-50 text-amber-900" };
         const paymentStageLabel = order.test_mode
           ? { ka: "სატესტო რეჟიმი", en: "Test mode" }
           : { ka: paymentPresentation.ka, en: paymentPresentation.en };
         const currentStageLabel = stages[currentStage] ?? stages[1];
+        const orderIsCatalog = orderItems.length > 0 && orderItems.every((item) => Boolean(item.product_id));
+        const isPaidBogCatalogOrder = !order.test_mode
+          && order.payment_status === "paid"
+          && paidBogOrderIds.has(order.id)
+          && orderIsCatalog;
+        const isPreProduction = ["order_received", "confirmed"].includes(order.fulfillment_status);
+        const canRequestCancellation = refundAvailability.available
+          && isPaidBogCatalogOrder
+          && isPreProduction
+          && !cancellation;
+        const cancellationUnavailableReason = !cancellation && isPaidBogCatalogOrder
+          ? isPreProduction && !refundAvailability.available
+            ? "service_unavailable" as const
+            : !isPreProduction && order.fulfillment_status !== "cancelled"
+              ? "later_stage" as const
+              : null
+          : null;
         const stageState = (index: number): StageState => {
+          if (operationalRefundHold) {
+            if (index < currentStage) return "completed";
+            if (index === currentStage) return "review";
+            return "upcoming";
+          }
           if (!paymentReady) {
             if (index > 0) return "upcoming";
             if (paymentFailed) return "failed";
@@ -219,7 +289,10 @@ export default async function AccountOrdersPage() {
         return (
           <article key={order.id} className="overflow-hidden rounded-[2rem] border border-hooma-text/10 bg-white/75 shadow-soft">
             <div className="flex flex-col justify-between gap-4 border-b border-hooma-text/10 p-5 sm:flex-row sm:items-start lg:p-6">
-              <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText ka={cancelled ? "შეკვეთა გაუქმებულია" : !paymentReady ? paymentTitle[0] : currentStageLabel.ka} en={cancelled ? "Order cancelled" : !paymentReady ? paymentTitle[1] : currentStageLabel.en} /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
+              <div><p className="text-xs font-semibold text-hooma-accent">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p><h2 className="mt-2 text-2xl font-semibold"><LocalizedText
+                ka={operationalRefundHold ? "თანხის დაბრუნებას ოპერაციული შემოწმება სჭირდება" : refundProcessing ? "შეკვეთა გაუქმებულია · დაბრუნება მუშავდება" : refundReview ? "შეკვეთა გაუქმებულია · საჭიროა მხარდაჭერა" : refundComplete ? "შეკვეთა გაუქმებულია · თანხა დაბრუნებულია" : cancelled ? "შეკვეთა გაუქმებულია" : !paymentReady ? paymentTitle[0] : currentStageLabel.ka}
+                en={operationalRefundHold ? "Refund needs operational review" : refundProcessing ? "Order cancelled · refund processing" : refundReview ? "Order cancelled · support review needed" : refundComplete ? "Order cancelled · payment refunded" : cancelled ? "Order cancelled" : !paymentReady ? paymentTitle[1] : currentStageLabel.en}
+              /></h2><p className="mt-2 text-xs text-hooma-muted"><LocalizedText ka="შეკვეთა:" en="Ordered:" /> {dateFormat.format(new Date(order.created_at))}</p></div>
               <div className="text-left sm:text-right">
                 <p className="text-xl font-semibold">{money.format(Number(order.total ?? 0))}</p>
                 <span className={`mt-2 inline-flex rounded-full border px-3 py-1.5 text-xs font-bold ${paymentPresentation.className}`}><LocalizedText ka={paymentPresentation.ka} en={paymentPresentation.en} /></span>
@@ -253,12 +326,21 @@ export default async function AccountOrdersPage() {
               </div>
             </div>
 
-            {cancelled ? (
+            <OrderCancellationButton
+              orderId={order.id}
+              total={Number(cancellation?.refund_amount ?? order.total ?? 0)}
+              status={cancellationStatus}
+              orderCancelled={orderCancelled}
+              canRequest={canRequestCancellation}
+              unavailableReason={cancellationUnavailableReason}
+            />
+
+            {cancelled && !cancellationStatus ? (
               <div className="border-b border-red-200 bg-red-50 p-5 text-sm leading-6 text-red-950 lg:p-6">
                 <p className="font-bold"><LocalizedText ka="შეკვეთა გაუქმებულია" en="Order cancelled" /></p>
                 <p className="mt-1"><LocalizedText ka="გაუქმების შემდეგ დარჩენილი წარმოებისა და მიწოდების ეტაპები აღარ გაგრძელდება." en="Production and delivery stages will not continue after cancellation." /></p>
               </div>
-            ) : !paymentReady ? (
+            ) : !cancellationStatus && !paymentReady ? (
               <div className={`border-b p-5 text-sm leading-6 lg:p-6 ${reviewRequired ? "border-orange-200 bg-orange-50 text-orange-950" : paymentFailed ? "border-red-200 bg-red-50 text-red-950" : refunded ? "border-violet-200 bg-violet-50 text-violet-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
                 <p className="font-semibold"><LocalizedText ka={paymentTitle[0]} en={paymentTitle[1]} /></p>
                 <p className="mt-1"><LocalizedText
