@@ -17,6 +17,8 @@ prepaid Hooma+ membership purchases.
   only when the customer explicitly pays again
 - No preauthorization
 - No custom-quote payment flow in this version
+- Customer-initiated cancellation is limited to a full, paid catalog order
+  before it enters the production queue; partial refunds are never requested
 
 Customers enter payment details on BOG's hosted page. Hooma never receives or
 stores a full PAN, CVV, or card token.
@@ -28,6 +30,7 @@ Set these server-side variables in Vercel for the intended environment:
 ```text
 NEXT_PUBLIC_SITE_URL=https://hooma.ge
 BOG_PAYMENTS_ENABLED=false
+BOG_CUSTOMER_REFUNDS_ENABLED=false
 HOOMA_PLUS_PAYMENTS_ENABLED=false
 BOG_CLIENT_ID=<bank-issued client id>
 BOG_CLIENT_SECRET=<bank-issued secret>
@@ -43,6 +46,11 @@ Keep `BOG_PAYMENTS_ENABLED=false` until the database migration, Vercel secrets,
 merchant methods, callback, and bank-provided test transaction have all been
 verified. Disabling the flag stops new payment sessions but deliberately does
 not disable callbacks for payments that are already in progress.
+
+Keep `BOG_CUSTOMER_REFUNDS_ENABLED=false` until the cancellation/refund
+migration is applied and BOG has accepted the full-refund flow. The refund
+flag controls only new customer cancellation requests. Turning it off must not
+hide an existing refund state or disable signed callbacks and reconciliation.
 
 Callback URL registered/sent to BOG:
 
@@ -77,6 +85,37 @@ credentials and the approved test procedure directly from BOG.
    method all match.
 9. Payment does not create print jobs. The existing human production approval
    remains mandatory.
+
+## Paid pre-production cancellation and full refund
+
+1. Only the signed-in owner can request cancellation from **Account → Orders**.
+   The button is shown only for a live, standard catalog order paid in full
+   through BOG while fulfillment is still `order_received` or `confirmed`.
+   Test orders, Hooma+, custom orders, unpaid or review-held payments, orders
+   with print jobs, and orders in the production queue or later are excluded.
+2. Button visibility is not authorization. The server and
+   `claim_customer_bog_refund_v1` recheck ownership, the signed paid attempt,
+   exact GEL amount, full-payment method, fulfillment state, and absence of
+   print jobs while holding the order lock used by production operations.
+3. An accepted claim atomically records one cancellation/refund ledger row and
+   moves the order to `cancelled` before any bank request is made. This blocks
+   production even if BOG is temporarily unavailable. The order remains
+   financially `paid` until a signed full-refund callback proves otherwise.
+4. Hooma calls BOG's full-refund endpoint without an `amount` field and uses the
+   single UUIDv4 idempotency key sealed in the ledger. Repeated clicks or an
+   existing ledger row never issue another customer-side BOG request.
+5. BOG's successful `request_received` response means only that the request was
+   submitted. The UI shows **Order cancelled · refund processing**; it does not
+   mark the payment refunded or promise a bank posting time.
+6. Only a valid signed callback followed by a fresh BOG receipt for the exact
+   full amount advances the order and ledger to `refunded`. Partial, ambiguous,
+   unexpected, or failed submissions remain blocked from production and go to
+   support review. V1 does not offer a customer retry button after a submission
+   failure.
+
+The customer-visible ledger query exposes only order, state, amount, currency,
+and timestamps. Provider order/action IDs, idempotency keys, raw responses, and
+sanitized operator errors remain service-only.
 
 Hooma+ uses separate purchase, payment-attempt, period, and event tables so a
 membership payment can never enter physical production, catalog order
@@ -113,8 +152,8 @@ card expiry.
 | `created`, `processing` | Payment remains pending |
 | `completed` | Exact full payment becomes paid |
 | `rejected` | Payment fails unless it was already paid/refunded |
-| `refunded` | Only an exact full refund becomes refunded |
-| `refund_requested` | Order is held in `review_required` |
+| `refunded` | Only an exact full refund becomes refunded; a matching cancellation ledger is finalized |
+| `refund_requested` | A matching customer cancellation remains refund-processing; an unexpected refund request is held for review |
 | `refunded_partially` | Order is held in `review_required` |
 | `auth_requested`, `blocked`, `partial_completed` | Order is held in `review_required`; these preauthorization states are not accepted |
 
@@ -144,6 +183,9 @@ BOG_PAYMENT_METHODS=card,google_pay,apple_pay
 Finally set `BOG_PAYMENTS_ENABLED=true` and redeploy.
 Set `HOOMA_PLUS_PAYMENTS_ENABLED=true` only after the separate Hooma+ callback
 has also passed BOG acceptance testing.
+Set `BOG_CUSTOMER_REFUNDS_ENABLED=true` only after the cancellation migration,
+production-lock race test, BOG full-refund acceptance test, and signed refunded
+callback test have all passed.
 
 ## Pre-live checks
 
@@ -160,6 +202,15 @@ has also passed BOG acceptance testing.
   and manual-capture fixtures go to manual review and never mark paid.
 - `/admin/orders` receives the paid-order notification.
 - Production still requires operator confirmation.
+- Customer cancellation and production confirmation racing on the same paid
+  order have one winner: a cancelled order creates no print jobs, while an
+  order already queued for production cannot be auto-cancelled.
+- Double submission creates one ledger row and one BOG refund request using one
+  stable idempotency key. A BOG `request_received` response remains pending.
+- Only a signed callback plus exact fresh receipt marks the full refund final;
+  duplicate and out-of-order callbacks cannot regress a refunded state.
+- Admin Orders clearly distinguishes refund processing, support review, and
+  refunded states; cancelled cards cannot move back into production.
 - ERP legal name and tax ID are configured; otherwise the payment commits but
   the existing ERP sync issue ledger records an accounting follow-up.
 
@@ -177,4 +228,8 @@ has also passed BOG acceptance testing.
   receipt, creates an operator audit event, and puts completed/refunded or
   anomalous states on `review_required`. It cannot mark an order paid; request
   signed callback redelivery from BOG before releasing production.
+- If customer refund submission is `submission_failed` or `review_required`,
+  keep the order cancelled, do not ask the customer to submit again, and follow
+  the audited support/bank process. Never generate a second refund idempotency
+  key for the same order.
 - Rotate `BOG_CLIENT_SECRET` in BOG and Vercel if exposure is suspected.

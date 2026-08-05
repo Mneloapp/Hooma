@@ -13,6 +13,7 @@ const BOG_TOKEN_URL = "https://oauth2.bog.ge/auth/realms/bog/protocol/openid-con
 const BOG_ORDERS_URL = "https://api.bog.ge/payments/v1/ecommerce/orders";
 const BOG_RECEIPTS_URL = "https://api.bog.ge/payments/v1/receipt";
 const REQUEST_TIMEOUT_MS = 12_000;
+const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type CachedToken = { value: string; expiresAt: number };
 let cachedToken: CachedToken | null = null;
@@ -77,6 +78,16 @@ export function getBogCheckoutAvailability() {
     available: enabled && configured,
     methods: getBogPaymentMethods(),
   };
+}
+
+export function getBogCustomerRefundAvailability() {
+  const enabled = enabledValue(process.env.BOG_CUSTOMER_REFUNDS_ENABLED);
+  const configured = Boolean(
+    process.env.BOG_CLIENT_ID?.trim()
+    && process.env.BOG_CLIENT_SECRET?.trim()
+    && canonicalOrigin(),
+  );
+  return { available: enabled && configured };
 }
 
 export function getHoomaPlusCheckoutAvailability() {
@@ -259,4 +270,59 @@ export async function getBogPaymentDetails(providerOrderId: string) {
     });
   }
   return body;
+}
+
+/**
+ * Submits an irreversible full-refund request to BOG.
+ *
+ * A successful response only means that BOG accepted the request for
+ * processing. Financial finality must come from a signature-verified callback
+ * (or the trusted reconciliation flow), never from this response.
+ */
+export async function requestBogFullRefund(
+  providerOrderId: string,
+  idempotencyKey: string,
+) {
+  const normalizedProviderOrderId = providerOrderId.trim();
+  if (!normalizedProviderOrderId || normalizedProviderOrderId.length > 128) {
+    throw new BogPaymentError("Invalid BOG order identifier");
+  }
+  if (!uuidV4Pattern.test(idempotencyKey)) {
+    throw new BogPaymentError("Invalid BOG refund idempotency key");
+  }
+
+  const refundUrl = "https://api.bog.ge/payments/v1/payment/refund";
+  const response = await authorizedRequest(
+    `${refundUrl}/${encodeURIComponent(normalizedProviderOrderId)}`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  const body = await readJson(response) as Record<string, unknown> | null;
+  const key = typeof body?.key === "string" ? body.key.trim() : "";
+  const actionId = typeof body?.action_id === "string" ? body.action_id.trim() : "";
+
+  if (
+    !response.ok
+    || key !== "request_received"
+    || !actionId
+    || actionId.length > 128
+  ) {
+    throw new BogPaymentError("BOG could not accept the refund request", {
+      retryable: response.status >= 500 || response.status === 429,
+      status: response.status,
+    });
+  }
+
+  return {
+    actionId,
+    httpStatus: response.status,
+    requestStatus: "request_received" as const,
+  };
 }

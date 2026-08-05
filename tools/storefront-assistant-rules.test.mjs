@@ -52,6 +52,16 @@ test("known operational questions remain deterministic", () => {
   assert.deepEqual(membership?.actions, ["hooma_plus"]);
 });
 
+test("paid-order cancellation uses the pre-production policy", () => {
+  const cancellation = getDirectStorefrontAnswer(
+    "გადახდილი შეკვეთა მინდა გავაუქმო",
+    "ka",
+  );
+  assert.match(cancellation?.answer ?? "", /წარმოების დაწყებამდე/);
+  assert.match(cancellation?.answer ?? "", /მიწოდების საფასურის ჩათვლით/);
+  assert.deepEqual(cancellation?.actions, ["orders", "terms"]);
+});
+
 test("printed-parts-only policy is consistent across product, checkout, FAQ, and assistant", () => {
   assert.match(PRODUCT_SUPPLY_POLICY.body.ka, /მხოლოდ პროდუქტის 3D პრინტერზე დაბეჭდილი/);
   assert.match(PRODUCT_SUPPLY_POLICY.body.ka, /რგოლები[\s\S]*ძრავები[\s\S]*შეკვეთაში არ შედის/);

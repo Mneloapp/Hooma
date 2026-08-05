@@ -88,6 +88,11 @@ type OrderRow = {
   created_at: string;
 };
 
+type CancellationRefundRow = {
+  order_id: string;
+  status: string;
+};
+
 const dateFormat = new Intl.DateTimeFormat("ka-GE", { dateStyle: "medium", timeStyle: "short" });
 
 function orderLabel(order: OrderRow | undefined) {
@@ -129,6 +134,15 @@ function AmsProductionProfile({ attributes }: { attributes?: Record<string, unkn
   return <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950"><div className="flex items-center gap-2"><strong>AMS აუცილებელია</strong><span className="rounded-full bg-violet-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">Fixed multicolor</span></div><p className="mt-2 text-xs leading-5 text-violet-900/75">ჩატვირთე ეს ფერები AMS-ში და დაბეჭდე რეფერენსის/ფოტოს ფიქსირებული კომბინაციით:</p><p className="mt-2 font-semibold">{palette.join(" · ")}</p></div>;
 }
 
+function RefundProductionHold({ order }: { order: OrderRow | undefined }) {
+  return (
+    <div className="mt-4 rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-sm leading-6 text-red-950" role="alert">
+      <p className="flex items-center gap-2 font-bold"><CircleAlert size={17} aria-hidden="true" />თანხის დაბრუნების ოპერაციული HOLD</p>
+      <p className="mt-1">{orderLabel(order)}-ზე წარმოების ჩვეულებრივი მოქმედებები დაბლოკილია. თუ ბეჭდვა ფიზიკურად მიმდინარეობს, უსაფრთხოდ შეაჩერე Bambu Studio-დან და დაუყოვნებლივ დაუკავშირდი Owner/Admin-ს. Hooma-ში დასრულება, failure/retry ან შემდეგ ეტაპზე გადატანა არ დააფიქსირო.</p>
+    </div>
+  );
+}
+
 export default async function ProductionPage({
   searchParams,
 }: {
@@ -154,10 +168,20 @@ export default async function ProductionPage({
   const printers = (printerRows ?? []) as PrinterRow[];
   const orders = (orderRows ?? []) as OrderRow[];
   const orderIds = orders.map((order) => order.id);
-  const { data: itemRows, error: itemError } = admin && orderIds.length
-    ? await admin.from("order_items").select("id,order_id,product_id,variant_id,product_name,sku,size_label,material,color,quantity").in("order_id", orderIds).order("created_at")
-    : { data: [], error: null };
+  const [
+    { data: itemRows, error: itemError },
+    { data: cancellationRows, error: cancellationError },
+  ] = admin && orderIds.length
+    ? await Promise.all([
+      admin.from("order_items").select("id,order_id,product_id,variant_id,product_name,sku,size_label,material,color,quantity").in("order_id", orderIds).order("created_at"),
+      admin.from("order_cancellation_refunds").select("order_id,status").in("order_id", orderIds),
+    ])
+    : [{ data: [], error: null }, { data: [], error: null }];
   const items = (itemRows ?? []) as ItemRow[];
+  const refundHoldOrderIds = new Set(((cancellationRows ?? []) as CancellationRefundRow[]).map((row) => row.order_id));
+  for (const order of orders) {
+    if (order.payment_status === "refunded") refundHoldOrderIds.add(order.id);
+  }
   const productIds = Array.from(new Set(items.map((item) => item.product_id).filter((id): id is string => Boolean(id))));
   const { data: operatorReferenceRows, error: operatorReferenceError } = admin && productIds.length
     ? await admin.from("product_operator_references").select("product_id,reference").in("product_id", productIds)
@@ -206,7 +230,7 @@ export default async function ProductionPage({
   const courierOrders = orders.filter((order) => order.fulfillment_status === "ready_for_delivery");
   const deliveryOrders = orders.filter((order) => order.fulfillment_status === "out_for_delivery");
   const idlePrinters = printers.filter((printer) => printer.status === "idle");
-  const errorsPresent = printerError || orderError || itemError || operatorReferenceError || productionVariantError || jobError;
+  const errorsPresent = printerError || orderError || itemError || cancellationError || operatorReferenceError || productionVariantError || jobError;
 
   const stages = [
     ["რიგში / მინიჭებული", waitingJobs.length + preparingJobs.length, Clock3],
@@ -226,6 +250,7 @@ export default async function ProductionPage({
       {params.error ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{params.error}</p> : null}
       {selectedOrderId ? <div className="flex flex-col justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 sm:flex-row sm:items-center"><span><strong>კანბანიდან გახსნილი შეკვეთა:</strong> ნაჩვენებია მხოლოდ #{orders[0]?.tracking_code ?? selectedOrderId.slice(0, 8).toUpperCase()}-ის წარმოების სამუშაოები.</span><a href="/admin/production" className="font-semibold underline underline-offset-4">ყველა სამუშაოს ჩვენება</a></div> : null}
       {errorsPresent ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">წარმოების მონაცემების ნაწილი ვერ ჩაიტვირთა. დარწმუნდი, რომ ბოლო Supabase migration გამოყენებულია.</p> : null}
+      {refundHoldOrderIds.size ? <div className="rounded-[1.5rem] border-2 border-red-400 bg-red-50 p-5 text-red-950" role="alert"><p className="flex items-center gap-2 font-bold"><CircleAlert size={20} aria-hidden="true" />ოპერაციული HOLD — {refundHoldOrderIds.size} შეკვეთა</p><p className="mt-2 text-sm leading-6">ამ შეკვეთებზე თანხის დაბრუნება ან დაბრუნების შემოწმება მიმდინარეობს. რეალური საწარმოო ეტაპი ხილული რჩება, მაგრამ ყველა ჩვეულებრივი print-job/QC/მიწოდების მოქმედება ბაზაშიც დაბლოკილია.</p></div> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stages.map(([label, value, StageIcon]) => (
@@ -247,6 +272,7 @@ export default async function ProductionPage({
           {waitingJobs.map((job) => {
             const item = itemsById.get(job.order_item_id);
             const order = item ? ordersById.get(item.order_id) : undefined;
+            const refundHold = Boolean(order && refundHoldOrderIds.has(order.id));
             const sourceUrl = safeMakerWorldUrl(job.source_url);
             const operatorReference = item?.product_id ? operatorReferencesByProduct.get(item.product_id) : undefined;
             const colorProfile = item?.variant_id ? productionVariantAttributes.get(item.variant_id) : undefined;
@@ -271,13 +297,13 @@ export default async function ProductionPage({
                   <span className="text-xs text-hooma-muted">3MF profile: {job.print_profile_path ? "დამაგრებულია" : "ოპერატორის რეფერენსიდან"}</span>
                 </div>
 
-                <form action={assignPrintJobAction} className="mt-5 flex flex-col gap-3 rounded-2xl border border-hooma-text/10 bg-hooma-panel/60 p-4 sm:flex-row sm:items-end">
+                {refundHold ? <RefundProductionHold order={order} /> : <form action={assignPrintJobAction} className="mt-5 flex flex-col gap-3 rounded-2xl border border-hooma-text/10 bg-hooma-panel/60 p-4 sm:flex-row sm:items-end">
                   <input type="hidden" name="job_id" value={job.id} />
                   <input type="hidden" name="lock_version" value={job.lock_version} />
                   <input type="hidden" name="operation_key" value={randomUUID()} />
                   <label className="flex-1 text-sm font-semibold">Hooma-ში დასაჯავშნი პრინტერი<select name="printer_id" required defaultValue="" className="mt-2 w-full rounded-xl border border-hooma-text/10 bg-white px-3 py-2.5 font-normal outline-none focus:border-hooma-accent"><option value="" disabled>აირჩიე თავისუფალი პრინტერი</option>{idlePrinters.map((printer) => <option key={printer.id} value={printer.id}>{printer.name} · {printer.model}</option>)}</select></label>
                   <button disabled={!idlePrinters.length} className="min-h-11 rounded-full bg-hooma-text px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">1. პრინტერის დაჯავშნა</button>
-                </form>
+                </form>}
               </article>
             );
           })}
@@ -291,6 +317,7 @@ export default async function ProductionPage({
           {preparingJobs.map((job) => {
             const item = itemsById.get(job.order_item_id);
             const order = item ? ordersById.get(item.order_id) : undefined;
+            const refundHold = Boolean(order && refundHoldOrderIds.has(order.id));
             const printer = job.printer_id ? printersById.get(job.printer_id) : undefined;
             const sourceUrl = safeMakerWorldUrl(job.source_url);
             const operatorReference = item?.product_id ? operatorReferencesByProduct.get(item.product_id) : undefined;
@@ -299,13 +326,13 @@ export default async function ProductionPage({
               <article key={job.id} className="rounded-[1.5rem] border border-violet-200 bg-violet-50 p-5">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><p className="text-xs font-semibold text-violet-900">{orderLabel(order)} · ერთეული {job.unit_number} · plate {job.plate_number}{job.attempt_number > 1 ? ` · retry ${job.attempt_number}` : ""}</p><h3 className="mt-2 text-xl font-semibold">{job.product_name_snapshot || item?.product_name || "პროდუქტი"}</h3><p className="mt-2 text-sm text-violet-900/75">{job.color || item?.color || "ფერი —"} · {job.material || item?.material || "მასალა —"}</p><p className="mt-2 text-xs text-violet-900/65">მიანიჭა: {job.assigned_operator_id ? operatorsById.get(job.assigned_operator_id) || "ოპერატორი" : "—"}</p></div><div className="rounded-2xl bg-white/75 px-4 py-3 text-sm"><span className="block text-xs text-hooma-muted">დაჯავშნილი პრინტერი</span><strong>{printer?.name || "მინიჭებულია"}</strong><span className="ml-1 text-xs text-hooma-muted">{printer?.model}</span></div></div>
                 <OperatorReference value={operatorReference} /><AmsProductionProfile attributes={colorProfile} /><div className="mt-4 flex flex-wrap items-center gap-3">{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold"><ExternalLink size={15} />ძველი წყაროს გახსნა</a> : null}<span className="text-xs text-violet-900/70">ჯერ გაუშვი ამ დაჯავშნილ პრინტერზე Bambu Studio-დან.</span></div>
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
+                {refundHold ? <RefundProductionHold order={order} /> : <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
                   <form action={startPhysicalPrintAction}>
                     <input type="hidden" name="job_id" value={job.id} /><input type="hidden" name="lock_version" value={job.lock_version} /><input type="hidden" name="operation_key" value={randomUUID()} />
                     <button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-violet-950 px-5 text-sm font-semibold text-white"><Printer size={17} />2. ფიზიკური ბეჭდვა დაიწყო</button>
                   </form>
                   <details className="rounded-2xl border border-violet-200 bg-white/70 p-3 text-sm"><summary className="cursor-pointer font-semibold">ჯავშნის მოხსნა</summary><form action={releasePrintAssignmentAction} className="mt-3 grid gap-2"><input type="hidden" name="job_id" value={job.id} /><input type="hidden" name="lock_version" value={job.lock_version} /><input type="hidden" name="operation_key" value={randomUUID()} /><select name="release_reason" required defaultValue="" className="rounded-xl border border-violet-200 bg-white px-3 py-2"><option value="" disabled>მიზეზი</option><option value="Printer unavailable during preflight">პრინტერი მიუწვდომელია</option><option value="Material or color unavailable">ფერი / მასალა არ არის</option><option value="Profile requires correction">პროფილი შესასწორებელია</option><option value="Assignment made by mistake">შეცდომით მიენიჭა</option></select><button className="rounded-full border border-violet-300 px-4 py-2 text-xs font-semibold">დააბრუნე რიგში</button></form></details>
-                </div>
+                </div>}
               </article>
             );
           })}
@@ -319,12 +346,13 @@ export default async function ProductionPage({
           {activeJobs.map((job) => {
             const item = itemsById.get(job.order_item_id);
             const order = item ? ordersById.get(item.order_id) : undefined;
+            const refundHold = Boolean(order && refundHoldOrderIds.has(order.id));
             const printer = job.printer_id ? printersById.get(job.printer_id) : undefined;
             return (
               <article key={job.id} className="rounded-[1.5rem] border border-blue-200 bg-blue-50/80 p-5">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><p className="text-xs font-semibold text-blue-800">{orderLabel(order)} · ერთეული {job.unit_number} · plate {job.plate_number}{job.attempt_number > 1 ? ` · retry ${job.attempt_number}` : ""}</p><h3 className="mt-2 text-xl font-semibold">{job.product_name_snapshot || item?.product_name || "პროდუქტი"}</h3><p className="mt-2 text-sm text-blue-900/70">{job.color || item?.color || "ფერი —"} · {job.material || item?.material || "მასალა —"}</p></div><div className="rounded-2xl bg-white/70 px-4 py-3 text-sm"><span className="block text-xs text-hooma-muted">პრინტერი</span><strong>{printer?.name || "მინიჭებულია"}</strong><span className="ml-1 text-xs text-hooma-muted">{printer?.model}</span></div></div>
                 <p className="mt-4 text-xs text-blue-900/70">დაწყება: {job.started_at ? dateFormat.format(new Date(job.started_at)) : "—"}</p>
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
+                {refundHold ? <RefundProductionHold order={order} /> : <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start">
                   <form action={completePrintJobAction}>
                     <input type="hidden" name="job_id" value={job.id} />
                     <input type="hidden" name="lock_version" value={job.lock_version} />
@@ -341,7 +369,7 @@ export default async function ProductionPage({
                       <button className="rounded-full bg-red-900 px-4 py-2.5 text-xs font-semibold text-white">შეინახე failure და შექმენი retry</button>
                     </form>
                   </details>
-                </div>
+                </div>}
               </article>
             );
           })}
@@ -353,35 +381,38 @@ export default async function ProductionPage({
       <section className="grid gap-5 xl:grid-cols-2">
         <div className="space-y-4">
           <div><p className="text-xs uppercase tracking-[0.24em] text-hooma-muted">4. ხარისხი</p><h2 className="mt-2 text-2xl font-semibold">QC დასადასტურებელი</h2></div>
-          {qcOrders.map((order) => (
-            <article key={order.id} className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
+          {qcOrders.map((order) => {
+            const refundHold = refundHoldOrderIds.has(order.id);
+            return <article key={order.id} className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
               <p className="text-xs font-semibold text-emerald-900">{orderLabel(order)}</p><h3 className="mt-2 text-xl font-semibold">ყველა ბეჭდვა დასრულებულია</h3><p className="mt-2 text-sm leading-6 text-emerald-900/75">შეამოწმე ზედაპირი, ზომა, ფერი, რაოდენობა და შეფუთვის მზადყოფნა. სამუშაოები: {jobsByOrder.get(order.id)?.length ?? 0}.</p>
-              <form action={approveOrderQcAction} className="mt-5"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="operation_key" value={randomUUID()} /><button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-emerald-950 px-5 text-sm font-semibold text-white"><PackageCheck size={17} />ხარისხი დადასტურებულია</button></form>
+              {refundHold ? <RefundProductionHold order={order} /> : <form action={approveOrderQcAction} className="mt-5"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="operation_key" value={randomUUID()} /><button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-emerald-950 px-5 text-sm font-semibold text-white"><PackageCheck size={17} />ხარისხი დადასტურებულია</button></form>}
             </article>
-          ))}
+          })}
           {!qcOrders.length ? <p className="rounded-[1.5rem] border border-dashed border-hooma-text/15 bg-white/55 p-8 text-center text-sm text-hooma-muted">QC-ს მომლოდინე შეკვეთა არ არის.</p> : null}
         </div>
 
         <div className="space-y-4">
           <div><p className="text-xs uppercase tracking-[0.24em] text-hooma-muted">5. მიწოდება</p><h2 className="mt-2 text-2xl font-semibold">კურიერზე გადასაცემი</h2></div>
-          {courierOrders.map((order) => (
-            <article key={order.id} className="rounded-[1.5rem] border border-violet-200 bg-violet-50 p-5">
+          {courierOrders.map((order) => {
+            const refundHold = refundHoldOrderIds.has(order.id);
+            return <article key={order.id} className="rounded-[1.5rem] border border-violet-200 bg-violet-50 p-5">
               <p className="text-xs font-semibold text-violet-900">{orderLabel(order)}</p><h3 className="mt-2 text-xl font-semibold">შეფუთული და მზადაა</h3><p className="mt-2 text-sm text-violet-900/75">ეს ღილაკი გამოიყენე მხოლოდ მას შემდეგ, რაც კურიერმა შეკვეთა რეალურად ჩაიბარა.</p>
               {deliveryMapUrl(order) ? <a href={deliveryMapUrl(order)!} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-950"><ExternalLink size={15} />მომხმარებლის ზუსტი ლოკაცია</a> : <p className="mt-4 rounded-xl bg-white/60 px-3 py-2 text-xs text-violet-900/70">ზუსტი რუკის ლოკაცია არ არის მითითებული.</p>}
-              <form action={handoffOrderToCourierAction} className="mt-5 grid gap-3 sm:grid-cols-2">
+              {refundHold ? <RefundProductionHold order={order} /> : <form action={handoffOrderToCourierAction} className="mt-5 grid gap-3 sm:grid-cols-2">
                 <input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="operation_key" value={randomUUID()} />
                 <label className="text-sm font-semibold">საკურიერო კომპანია<input name="courier_name" placeholder="მაგ. Hooma Courier" className="mt-2 w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 font-normal outline-none" /></label>
                 <label className="text-sm font-semibold">კურიერის კოდი (თუ არის)<input name="courier_reference" className="mt-2 w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 font-normal outline-none" /></label>
                 <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-violet-950 px-5 text-sm font-semibold text-white sm:col-span-2 sm:w-fit"><Send size={17} />რეალურად გადაეცა კურიერს</button>
-              </form>
+              </form>}
             </article>
-          ))}
-          {deliveryOrders.map((order) => (
-            <article key={order.id} className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-5">
+          })}
+          {deliveryOrders.map((order) => {
+            const refundHold = refundHoldOrderIds.has(order.id);
+            return <article key={order.id} className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-5">
               <p className="text-xs font-semibold text-blue-900">{orderLabel(order)}</p><h3 className="mt-2 text-xl font-semibold">საკურიერო მომსახურებასთანაა</h3><p className="mt-2 text-sm text-blue-900/75">მიწოდებულად მონიშნე მხოლოდ კურიერისგან მიღებული რეალური დადასტურების შემდეგ.</p>
-              <form action={markOrderDeliveredAction} className="mt-5"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="operation_key" value={randomUUID()} /><button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-blue-950 px-5 text-sm font-semibold text-white"><CheckCircle2 size={17} />მიწოდება დადასტურებულია</button></form>
+              {refundHold ? <RefundProductionHold order={order} /> : <form action={markOrderDeliveredAction} className="mt-5"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="operation_key" value={randomUUID()} /><button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-blue-950 px-5 text-sm font-semibold text-white"><CheckCircle2 size={17} />მიწოდება დადასტურებულია</button></form>}
             </article>
-          ))}
+          })}
           {!courierOrders.length && !deliveryOrders.length ? <p className="rounded-[1.5rem] border border-dashed border-hooma-text/15 bg-white/55 p-8 text-center text-sm text-hooma-muted">კურიერისთვის მზად შეკვეთა არ არის.</p> : null}
         </div>
       </section>
