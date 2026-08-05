@@ -42,7 +42,7 @@ The limits do not apply to deterministic FAQ answers because they incur no provi
 - Catalog prices are starting prices; the product/checkout flow remains authoritative for the current configuration and final amount.
 - Preparing or dispatching a standard catalog order within three business days is a target, not an unconditional arrival guarantee.
 - Delivery fees, exact custom feasibility, refunds, return windows, payment results, and personal order status are never guessed.
-- The contact form is not currently a working human handoff, so the assistant does not promise a ticket or callback.
+- The general contact form is the approved human-support handoff. The assistant may link to it but never collects personal order details in chat or promises a response deadline.
 
 ## Threat review
 

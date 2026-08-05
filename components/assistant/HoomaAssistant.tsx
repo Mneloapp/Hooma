@@ -47,6 +47,7 @@ const actionPaths: Record<StorefrontAssistantAction, string> = {
   hooma_plus: "/hooma-plus",
   how_it_works: "/how-it-works",
   faq: "/faq",
+  contact: "/contact",
   privacy: "/privacy",
   terms: "/terms",
 };
@@ -58,6 +59,7 @@ const actionLabels: Record<StorefrontAssistantAction, { ka: string; en: string }
   hooma_plus: { ka: "Hooma+ პირობები", en: "Hooma+ details" },
   how_it_works: { ka: "როგორ მუშაობს?", en: "How it works" },
   faq: { ka: "ხშირი კითხვები", en: "FAQ" },
+  contact: { ka: "მხარდაჭერასთან დაკავშირება", en: "Contact support" },
   privacy: { ka: "კონფიდენციალურობა", en: "Privacy" },
   terms: { ka: "გამოყენების პირობები", en: "Terms of use" },
 };

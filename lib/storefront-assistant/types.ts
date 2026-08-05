@@ -9,6 +9,7 @@ export type StorefrontAssistantAction =
   | "hooma_plus"
   | "how_it_works"
   | "faq"
+  | "contact"
   | "privacy"
   | "terms";
 

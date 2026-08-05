@@ -24,7 +24,8 @@ test("returns and damage outrank delivery and payment keywords", () => {
   );
 
   assert.match(damaged?.answer ?? "", /შეკვეთის მონაცემები ამ ჩატში არ გამოგზავნო/);
-  assert.match(refund?.answer ?? "", /უსაფრთხო პრეტენზიის/);
+  assert.match(refund?.answer ?? "", /საკონტაქტო ფორმაში/);
+  assert.deepEqual(refund?.actions, ["orders", "contact"]);
 });
 
 test("product discovery is not swallowed by broad FAQ words", () => {

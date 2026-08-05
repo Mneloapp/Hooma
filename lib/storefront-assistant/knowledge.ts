@@ -153,8 +153,19 @@ export const storefrontFaqs: StorefrontFaq[] = [
       en: "What if an item is damaged or does not match my order?",
     },
     answer: {
-      ka: "ხარვეზის, დაზიანების ან შეკვეთასთან შეუსაბამობის შემთხვევაში შედი ანგარიშში და გახსენი შესაბამისი შეკვეთა. შეკვეთის მონაცემები ამ ჩატში არ გამოგზავნო. შემთხვევა პროდუქტის ტიპისა და მოქმედი სამომხმარებლო წესების შესაბამისად განიხილება; უსაფრთხო პრეტენზიის გაგზავნის არხი ჯერ არ არის ჩართული.",
-      en: "If an item is defective, damaged, or does not match the order, sign in and open the relevant order. Do not send order details in this chat. The case is reviewed according to the product type and applicable consumer rules; a secure claim-submission channel is not enabled yet.",
+      ka: "ხარვეზის, დაზიანების ან შეკვეთასთან შეუსაბამობის შემთხვევაში შედი ანგარიშში, გახსენი შესაბამისი შეკვეთა და შემდეგ მხარდაჭერის საკონტაქტო ფორმაში მიუთითე შეკვეთის კოდი და აღწერე პრობლემა. შეკვეთის მონაცემები ამ ჩატში არ გამოგზავნო. ფოტოს დასართავად შეგიძლია პირდაპირ support@hooma.ge-ზე მოგვწერო. შემთხვევა პროდუქტის ტიპისა და მოქმედი სამომხმარებლო წესების შესაბამისად განიხილება.",
+      en: "If an item is defective, damaged, or does not match the order, sign in, open the relevant order, then include the order reference and describe the issue in the support contact form. Do not send order details in this chat. You can email support@hooma.ge directly to attach a photo. The case is reviewed according to the product type and applicable consumer rules.",
+    },
+  },
+  {
+    id: "contact-support",
+    question: {
+      ka: "როგორ დავუკავშირდე Hooma-ს მხარდაჭერას?",
+      en: "How do I contact Hooma support?",
+    },
+    answer: {
+      ka: "შეკვეთის, გადახდის, მიწოდების, პროდუქტის, ანგარიშის ან სხვა საკითხზე გამოიყენე Hooma-ს საკონტაქტო ფორმა. პასუხი შენს მიერ მითითებულ ელფოსტაზე გამოგეგზავნება. ფოტოს ან ფაილის დასართავად პირდაპირ support@hooma.ge-ზე მოგვწერე. პაროლი, ბარათის სრული ნომერი, CVV ან ერთჯერადი კოდი არასდროს გამოგვიგზავნო.",
+      en: "Use Hooma’s contact form for questions about orders, payments, delivery, products, accounts, or another issue. We will reply to the email you provide. To attach a photo or file, email support@hooma.ge directly. Never send a password, full card number, CVV, or one-time code.",
     },
   },
 ];
@@ -296,10 +307,22 @@ const rules: KnowledgeRule[] = [
       "დაბრუნ", "დამიბრუნ", "დაზიან", "ხარვეზ", "არ ემთხვევ", "refund", "return an item",
       "return this", "return it", "return policy", "returns policy", "damaged", "defect",
     ],
-    actions: ["orders", "terms"],
+    actions: ["orders", "contact"],
     suggestions: [
       { ka: "სად ვნახო ჩემი შეკვეთა?", en: "Where can I see my order?" },
-      { ka: "გამოყენების პირობები", en: "Terms of use" },
+      { ka: "მხარდაჭერასთან დაკავშირება", en: "Contact support" },
+    ],
+  },
+  {
+    faqId: "contact-support",
+    keywords: [
+      "როგორ დაგიკავშირდეთ", "როგორ დაგიკავშირდე", "მხარდაჭერას როგორ", "საპორტი", "საკონტაქტო ფორმა",
+      "support@hooma.ge", "contact support", "contact hooma", "customer support", "support email",
+    ],
+    actions: ["contact"],
+    suggestions: [
+      { ka: "შეკვეთის სტატუსი სად ვნახო?", en: "Where can I see my order status?" },
+      { ka: "ინდივიდუალური ნივთი მინდა", en: "I want a custom item" },
     ],
   },
   {
