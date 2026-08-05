@@ -30,6 +30,7 @@ const allowedActions = new Set<StorefrontAssistantAction>([
   "hooma_plus",
   "how_it_works",
   "faq",
+  "contact",
   "privacy",
   "terms",
 ]);
@@ -345,7 +346,7 @@ function responseSchema() {
         maxItems: 3,
         items: {
           type: "string",
-          enum: ["shop", "custom_order", "orders", "hooma_plus", "how_it_works", "faq", "privacy", "terms"],
+          enum: ["shop", "custom_order", "orders", "hooma_plus", "how_it_works", "faq", "contact", "privacy", "terms"],
         },
       },
       recommended_product_slugs: {
