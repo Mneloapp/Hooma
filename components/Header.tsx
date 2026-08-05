@@ -92,6 +92,7 @@ export function Header() {
   };
   const accountHref = account.signedIn ? "/account" : "/login?next=/account";
   const accountLabel = account.signedIn ? (georgian ? "ჩემი ანგარიში" : "My account") : (georgian ? "ანგარიში" : "Account");
+  const ordersActive = pathname === "/account/orders" || pathname.startsWith("/account/orders/");
 
   const SearchForm = ({ mobile = false }: { mobile?: boolean }) => (
     <form action="/shop" className={`flex min-w-0 overflow-hidden rounded-xl bg-white ring-2 ring-transparent transition focus-within:ring-hooma-accent ${mobile ? "w-full" : "flex-1"}`}>
@@ -125,7 +126,7 @@ export function Header() {
             <Link href={accountHref} aria-label={accountLabel} title={account.signedIn ? account.name : undefined} className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 sm:flex">
               <span className="relative"><UserRound size={25} />{account.signedIn ? <span className="absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-hooma-secondary px-1 text-[10px] font-bold text-hooma-text">{account.initial}</span> : null}</span><strong className="text-sm">{accountLabel}</strong>
             </Link>
-            <Link href="/account/orders" aria-label={georgian ? "შეკვეთები" : "Orders"} className="hidden items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10 lg:flex">
+            <Link href="/account/orders" aria-label={georgian ? "შეკვეთები" : "Orders"} aria-current={ordersActive ? "page" : undefined} className={`hidden items-end gap-1 rounded-lg px-2.5 py-2 transition lg:flex ${ordersActive ? "bg-hooma-secondary font-bold text-hooma-text shadow-sm" : "hover:bg-white/10"}`}>
               <Package size={25} /><strong className="text-sm">{georgian ? "შეკვეთები" : "Orders"}</strong>
             </Link>
             <button onClick={openCart} aria-label="Open cart" className="relative flex items-end gap-1 rounded-lg px-2.5 py-2 transition hover:bg-white/10">
@@ -143,7 +144,15 @@ export function Header() {
             {open ? <X size={18} /> : <Menu size={18} />}{georgian ? "ყველა კატეგორია" : "All categories"}
           </button>
           <button type="button" onClick={() => setLocationOpen(true)} className="flex h-full shrink-0 items-center gap-1.5 px-2.5 transition hover:bg-white/10 xl:hidden"><MapPin size={14} className="text-hooma-secondary" />{deliveryCityLabel}</button>
-          {utilityLinks.map(([label, href]) => <Link key={label} href={href} className={`flex h-full shrink-0 items-center px-2.5 transition hover:bg-white/10 ${href === "/hooma-plus" || href === "/deals" ? "font-semibold text-hooma-secondary" : ""}`}>{label}</Link>)}
+          {utilityLinks.map(([label, href]) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+
+            return (
+              <Link key={label} href={href} aria-current={active ? "page" : undefined} className={`flex h-full shrink-0 items-center px-2.5 transition ${active ? "bg-white font-bold text-[#34486B] shadow-inner" : `hover:bg-white/10 ${href === "/hooma-plus" || href === "/deals" ? "font-semibold text-hooma-secondary" : ""}`}`}>
+                {label}
+              </Link>
+            );
+          })}
           <span className="ml-auto hidden shrink-0 text-xs text-white/65 xl:block">{georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery"}</span>
         </div>
       </div>

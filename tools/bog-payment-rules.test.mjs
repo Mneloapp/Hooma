@@ -379,4 +379,16 @@ test("account orders shows an accessible colored payment and fulfillment timelin
   assert.match(page, /refunded[\s\S]*return ["']refunded["']/);
   assert.match(page, /reviewRequired[\s\S]*return ["']review["']/);
   assert.match(page, /cancelled[\s\S]*შეკვეთა გაუქმებულია/);
+  assert.match(page, /timeZone:\s*["']Asia\/Tbilisi["']/);
+  assert.match(page, /href=\{`\/product\/\$\{joinedProduct\.slug\}`\}[\s\S]*პროდუქტის ნახვა/);
+});
+
+test("account order timestamps render in Tbilisi time", () => {
+  const formatted = new Intl.DateTimeFormat("ka-GE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Tbilisi",
+  }).format(new Date("2026-08-05T13:59:56Z"));
+
+  assert.match(formatted, /17:59/);
 });

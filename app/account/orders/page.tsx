@@ -129,7 +129,11 @@ const stageStyles: Record<StageState, { card: string; marker: string; text: stri
   },
 };
 
-const dateFormat = new Intl.DateTimeFormat("ka-GE", { dateStyle: "medium", timeStyle: "short" });
+const dateFormat = new Intl.DateTimeFormat("ka-GE", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Tbilisi",
+});
 const money = new Intl.NumberFormat("ka-GE", { style: "currency", currency: "GEL" });
 
 export default async function AccountOrdersPage() {
@@ -269,9 +273,27 @@ export default async function AccountOrdersPage() {
               <div>
                 <h3 className="flex items-center gap-2 font-semibold"><Package size={18} className="text-hooma-accent" /><LocalizedText ka="პროდუქტები" en="Products" /></h3>
                 <div className="mt-3 divide-y divide-hooma-text/10 rounded-2xl border border-hooma-text/10 bg-white">
-                  {orderItems.map((item) => { const joinedProduct = Array.isArray(item.products) ? item.products[0] : item.products; return (
-                    <div key={item.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold">{item.product_name || <LocalizedText ka="ინდივიდუალური პროდუქტი" en="Custom product" />}</p><p className="mt-1 text-xs text-hooma-muted">{[item.size_label, item.material, item.color].filter(Boolean).join(" · ") || <LocalizedText ka="კონფიგურაცია" en="Configuration" />}</p></div><div className="flex items-center gap-3"><strong className="text-sm">×{item.quantity}</strong>{order.fulfillment_status === "delivered" && joinedProduct?.slug ? <Link href={`/product/${joinedProduct.slug}#reviews`} className="rounded-full bg-hooma-text px-3 py-1.5 text-xs font-semibold text-white"><LocalizedText ka="შეფასება" en="Review" /></Link> : null}</div></div>
-                  ); })}
+                  {orderItems.map((item) => {
+                    const joinedProduct = Array.isArray(item.products) ? item.products[0] : item.products;
+
+                    return (
+                      <div key={item.id} className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center">
+                        <div>
+                          <p className="font-semibold">{item.product_name || <LocalizedText ka="ინდივიდუალური პროდუქტი" en="Custom product" />}</p>
+                          <p className="mt-1 text-xs text-hooma-muted">{[item.size_label, item.material, item.color].filter(Boolean).join(" · ") || <LocalizedText ka="კონფიგურაცია" en="Configuration" />}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                          <strong className="mr-1 text-sm">×{item.quantity}</strong>
+                          {joinedProduct?.slug ? (
+                            <Link href={`/product/${joinedProduct.slug}`} className="rounded-full border border-hooma-text/15 bg-white px-3 py-1.5 text-xs font-semibold text-hooma-text transition hover:border-hooma-accent hover:text-hooma-accent">
+                              <LocalizedText ka="პროდუქტის ნახვა" en="View product" />
+                            </Link>
+                          ) : null}
+                          {order.fulfillment_status === "delivered" && joinedProduct?.slug ? <Link href={`/product/${joinedProduct.slug}#reviews`} className="rounded-full bg-hooma-text px-3 py-1.5 text-xs font-semibold text-white"><LocalizedText ka="შეფასება" en="Review" /></Link> : null}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {!orderItems.length ? <p className="p-4 text-sm text-hooma-muted"><LocalizedText ka="პროდუქტის მონაცემები ვერ ჩაიტვირთა." en="Product details could not be loaded." /></p> : null}
                 </div>
                 {paymentReady ? <div className="mt-4 flex flex-wrap gap-3 text-xs text-hooma-muted">
