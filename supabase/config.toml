@@ -249,6 +249,12 @@ otp_expiry = 3600
 subject = "დაადასტურე Hooma-ს ანგარიში"
 content_path = "./supabase/templates/confirmation.html"
 
+# Hosted projects must mirror this in Authentication > Email Templates >
+# Change email address so the token hash is verified by the server route.
+[auth.email.template.email_change]
+subject = "დაადასტურე Hooma-ს ახალი ელფოსტა"
+content_path = "./supabase/templates/email-change.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
