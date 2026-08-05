@@ -1,14 +1,35 @@
-"use client";
+import { redirect } from "next/navigation";
+import { AccountSettingsPanel } from "@/components/account/AccountSettingsPanel";
+import { getSessionUser } from "@/lib/supabase/server";
 
-import { useLanguage } from "@/components/LanguageProvider";
+export default async function AccountSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email_change?: string }>;
+}) {
+  const user = await getSessionUser();
+  if (!user) redirect("/login?next=/account/settings");
+  const query = await searchParams;
 
-export default function AccountSettingsPage() {
-  const { language } = useLanguage();
+  const providers = new Set<string>();
+  if (typeof user.app_metadata?.provider === "string") providers.add(user.app_metadata.provider);
+  if (Array.isArray(user.app_metadata?.providers)) {
+    user.app_metadata.providers.forEach((provider: unknown) => {
+      if (typeof provider === "string") providers.add(provider);
+    });
+  }
+  user.identities?.forEach((identity) => providers.add(identity.provider));
+
+  const passwordIdentity = providers.has("email");
+  const externalProvider = Array.from(providers).find((provider) => provider !== "email") ?? null;
+
   return (
-    <div className="rounded-[2rem] bg-white/75 p-6 shadow-soft">
-      <p className="text-xs uppercase tracking-[0.28em] text-hooma-muted">{language === "ka" ? "პარამეტრები" : "Settings"}</p>
-      <h1 className="mt-3 text-4xl font-medium">{language === "ka" ? "ანგარიშის პარამეტრები" : "Account settings"}</h1>
-      <p className="mt-4 text-hooma-muted">{language === "ka" ? "პაროლისა და ელფოსტის პარამეტრები იმართება Supabase Auth-ის მეშვეობით." : "Password and email preferences remain managed by Supabase Auth."}</p>
-    </div>
+    <AccountSettingsPanel
+      currentEmail={user.email ?? "—"}
+      emailConfirmed={Boolean(user.email_confirmed_at)}
+      passwordIdentity={passwordIdentity}
+      externalProvider={externalProvider}
+      emailChangeStatus={query.email_change === "confirmed" || query.email_change === "pending" ? query.email_change : null}
+    />
   );
 }
