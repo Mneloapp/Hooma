@@ -133,7 +133,7 @@ test("unexpected post-production refunds preserve the physical operations stage"
 
   assert.match(adminPage, /fulfillmentStatus: order\.fulfillment_status/);
   assert.match(adminPage, /operationalRefundHold/);
-  assert.match(kanban, /card\.operationalRefundHold \? undefined : expectedTarget/);
+  assert.match(kanban, /card\.paymentReady && !card\.operationalRefundHold[\s\S]*expectedTarget/);
   assert.match(kanban, /ოპერაციული HOLD/);
   assert.match(kanban, /ფიზიკური წარმოების ეტაპი ავტომატურად არ შეცვლილა/);
   assert.match(migration, /guard_refunded_print_job_mutation_v1/);

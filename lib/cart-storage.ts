@@ -13,6 +13,7 @@ export type CartItem = {
   price?: number | null;
   pricePlaceholder: string;
   price_placeholder?: string;
+  cart_line_id?: string;
 };
 
 export const LEGACY_CART_STORAGE_KEY = "hooma-cart";
@@ -20,11 +21,15 @@ export const GUEST_CART_STORAGE_KEY = "hooma-cart:v2:guest";
 export const ACTIVE_CART_SCOPE_SESSION_KEY = "hooma-cart:v2:active-scope";
 export const CART_STORAGE_VERSION = 2;
 export const MAX_STORED_CART_ITEMS = 100;
+export const MAX_CART_LINE_QUANTITY = 20;
 export const MAX_CONSUMED_GUEST_CART_IDS = 100;
 export const MAX_PENDING_PAYMENT_ORDERS = 5;
 export const MAX_SETTLED_PAYMENT_ORDERS = 20;
 
-const PENDING_PAYMENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// BOG can redeliver a final callback well after the browser left checkout.
+// Keep a bounded watch long enough for support-led reconciliation while the
+// five-marker cap prevents unbounded local storage growth.
+const PENDING_PAYMENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SETTLED_PAYMENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PAYMENT_MARKER_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
@@ -42,6 +47,16 @@ type StoredCart = {
 export type CartPaymentOrderMarker = {
   orderId: string;
   recordedAt: number;
+  lines?: CartPaymentLineMarker[];
+  lastObservedStatus?: "failed";
+  lastObservedAt?: number;
+};
+
+export type CartPaymentLineMarker = Pick<
+  CartItem,
+  "product_id" | "variant_id" | "material" | "color" | "quantity"
+> & {
+  cartLineId: string;
 };
 
 export type PurchasedCartLine = Pick<
@@ -75,12 +90,78 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const isCartId = (value: unknown): value is string =>
+  typeof value === "string"
+  && value.length >= 16
+  && value.length <= 128
+  && /^[a-zA-Z0-9-]+$/.test(value);
+
+const isPaymentLineMarker = (value: unknown): value is CartPaymentLineMarker =>
+  isRecord(value)
+  && isShortString(value.product_id, 128)
+  && isShortString(value.variant_id, 128)
+  && isShortString(value.material, 128)
+  && isShortString(value.color, 128)
+  && Number.isInteger(value.quantity)
+  && Number(value.quantity) > 0
+  && Number(value.quantity) <= MAX_CART_LINE_QUANTITY
+  && isCartId(value.cartLineId);
+
+export function parseCartPaymentLineSnapshot(
+  value: unknown,
+): CartPaymentLineMarker[] | null {
+  if (
+    !Array.isArray(value)
+    || !value.length
+    || value.length > MAX_STORED_CART_ITEMS
+    || !value.every(isPaymentLineMarker)
+  ) return null;
+
+  const keys = new Set<string>();
+  const lineIds = new Set<string>();
+  const lines: CartPaymentLineMarker[] = [];
+  for (const line of value) {
+    const key = cartItemKey(line);
+    if (keys.has(key) || lineIds.has(line.cartLineId)) return null;
+    keys.add(key);
+    lineIds.add(line.cartLineId);
+    lines.push({
+      product_id: line.product_id,
+      variant_id: line.variant_id,
+      material: line.material,
+      color: line.color,
+      quantity: line.quantity,
+      cartLineId: line.cartLineId,
+    });
+  }
+  return lines;
+}
+
+export function snapshotCartPaymentLines(
+  items: CartItem[],
+): CartPaymentLineMarker[] | null {
+  return parseCartPaymentLineSnapshot(items.map((item) => ({
+    product_id: item.product_id,
+    variant_id: item.variant_id,
+    material: item.material,
+    color: item.color,
+    quantity: item.quantity,
+    cartLineId: item.cart_line_id,
+  })));
+}
+
 const isPaymentOrderMarker = (value: unknown): value is CartPaymentOrderMarker =>
   isRecord(value)
   && typeof value.orderId === "string"
   && uuidPattern.test(value.orderId)
   && Number.isSafeInteger(value.recordedAt)
-  && Number(value.recordedAt) > 0;
+  && Number(value.recordedAt) > 0
+  && (value.lastObservedStatus === undefined || value.lastObservedStatus === "failed")
+  && (value.lastObservedAt === undefined
+    || (Number.isSafeInteger(value.lastObservedAt) && Number(value.lastObservedAt) > 0))
+  && ((value.lastObservedStatus === undefined) === (value.lastObservedAt === undefined))
+  && (value.lines === undefined
+    || parseCartPaymentLineSnapshot(value.lines) !== null);
 
 function normalizePaymentOrderMarkers(
   value: unknown,
@@ -94,6 +175,8 @@ function normalizePaymentOrderMarkers(
     if (
       !isPaymentOrderMarker(marker)
       || marker.recordedAt > now + PAYMENT_MARKER_MAX_CLOCK_SKEW_MS
+      || (marker.lastObservedAt !== undefined
+        && marker.lastObservedAt > now + PAYMENT_MARKER_MAX_CLOCK_SKEW_MS)
       || now - marker.recordedAt > ttlMs
     ) continue;
     unique.set(marker.orderId, marker);
@@ -120,20 +203,33 @@ function isCartItem(value: unknown): value is CartItem {
     && isShortString(value.color, 128)
     && Number.isInteger(value.quantity)
     && Number(value.quantity) > 0
+    // Read legacy carts created before checkout adopted BOG's per-line cap.
+    // Parsing normalizes them to MAX_CART_LINE_QUANTITY instead of silently
+    // deleting the customer's line.
     && Number(value.quantity) <= 100
     && (value.price === undefined
       || value.price === null
       || (typeof value.price === "number" && Number.isFinite(value.price) && value.price >= 0))
     && isShortString(value.pricePlaceholder, 200)
     && (value.price_placeholder === undefined || isShortString(value.price_placeholder, 200))
+    && (value.cart_line_id === undefined || isCartId(value.cart_line_id))
   );
 }
 
-const isCartId = (value: unknown): value is string =>
-  typeof value === "string"
-  && value.length >= 16
-  && value.length <= 128
-  && /^[a-zA-Z0-9-]+$/.test(value);
+export function ensureCartLineIds(
+  items: CartItem[],
+  createLineId: () => string,
+) {
+  let changed = false;
+  const nextItems = items.map((item) => {
+    if (isCartId(item.cart_line_id)) return item;
+    const lineId = createLineId();
+    if (!isCartId(lineId)) return item;
+    changed = true;
+    return { ...item, cart_line_id: lineId };
+  });
+  return changed ? nextItems : items;
+}
 
 export function parseStoredCartSnapshot(value: string | null): CartStorageSnapshot {
   const empty: CartStorageSnapshot = {
@@ -154,7 +250,12 @@ export function parseStoredCartSnapshot(value: string | null): CartStorageSnapsh
       return empty;
     }
     return {
-      items: stored.items.slice(0, MAX_STORED_CART_ITEMS).filter(isCartItem),
+      items: stored.items
+        .slice(0, MAX_STORED_CART_ITEMS)
+        .filter(isCartItem)
+        .map((item) => item.quantity > MAX_CART_LINE_QUANTITY
+          ? { ...item, quantity: MAX_CART_LINE_QUANTITY }
+          : item),
       cartId: isCartId(stored.cartId) ? stored.cartId : null,
       consumedGuestCartIds: Array.isArray(stored.consumedGuestCartIds)
         ? stored.consumedGuestCartIds
@@ -250,6 +351,10 @@ export function subtractPurchasedCartItems(
   });
 }
 
+export function removeCartItem(items: CartItem[], key: string) {
+  return items.filter((item) => cartItemKey(item) !== key);
+}
+
 export function cartMatchesPurchasedLinesExactly(
   items: CartItem[],
   purchasedLines: PurchasedCartLine[],
@@ -287,6 +392,7 @@ export function rememberPendingPaymentOrder(
   snapshot: CartStorageSnapshot,
   orderId: string,
   recordedAt = Date.now(),
+  trackedLines?: readonly CartPaymentLineMarker[] | null,
 ): CartStorageSnapshot {
   if (
     !uuidPattern.test(orderId)
@@ -299,13 +405,68 @@ export function rememberPendingPaymentOrder(
   if (snapshot.settledPaymentOrders.some((marker) => marker.orderId === orderId)) {
     return snapshot;
   }
+  if (snapshot.pendingPaymentOrders.some((marker) => marker.orderId === orderId)) {
+    return snapshot;
+  }
+  const safeTrackedLines = parseCartPaymentLineSnapshot(trackedLines);
   return {
     ...snapshot,
     pendingPaymentOrders: [
-      ...snapshot.pendingPaymentOrders.filter((marker) => marker.orderId !== orderId),
-      { orderId, recordedAt },
+      ...snapshot.pendingPaymentOrders,
+      {
+        orderId,
+        recordedAt,
+        ...(safeTrackedLines
+          ? { lines: safeTrackedLines }
+          : {}),
+      },
     ].slice(-MAX_PENDING_PAYMENT_ORDERS),
   };
+}
+
+function subtractTrackedPurchasedCartItems(
+  items: CartItem[],
+  purchasedLines: PurchasedCartLine[],
+  trackedLines: CartPaymentLineMarker[] | undefined,
+) {
+  if (!trackedLines?.length) return items;
+
+  const trackedByKey = new Map<string, CartPaymentLineMarker>();
+  for (const line of trackedLines) {
+    const key = cartItemKey(line);
+    if (trackedByKey.has(key)) return items;
+    trackedByKey.set(key, line);
+  }
+
+  const purchasedByKey = new Map<string, number>();
+  for (const line of purchasedLines.slice(0, MAX_STORED_CART_ITEMS)) {
+    if (
+      !isShortString(line.product_id, 128)
+      || !isShortString(line.variant_id, 128)
+      || !isShortString(line.material, 128)
+      || !isShortString(line.color, 128)
+      || !Number.isInteger(line.quantity)
+      || line.quantity < 1
+      || line.quantity > 100
+    ) return items;
+    const key = cartItemKey(line);
+    purchasedByKey.set(key, (purchasedByKey.get(key) ?? 0) + line.quantity);
+  }
+
+  if (
+    !purchasedByKey.size
+    || purchasedByKey.size !== trackedByKey.size
+    || [...purchasedByKey].some(([key, quantity]) =>
+      trackedByKey.get(key)?.quantity !== quantity)
+  ) return items;
+
+  return items.flatMap((item) => {
+    const key = cartItemKey(item);
+    const trackedLine = trackedByKey.get(key);
+    if (!trackedLine || item.cart_line_id !== trackedLine.cartLineId) return [item];
+    const remainingQuantity = item.quantity - trackedLine.quantity;
+    return remainingQuantity > 0 ? [{ ...item, quantity: remainingQuantity }] : [];
+  });
 }
 
 export function reconcileSettledPaymentOrder(
@@ -331,15 +492,36 @@ export function reconcileSettledPaymentOrder(
     || !snapshot.pendingPaymentOrders.some((marker) => marker.orderId === orderId)
   ) return snapshot;
 
-  if (status === "failed" || status === "refunded") {
+  const pendingMarker = snapshot.pendingPaymentOrders.find(
+    (marker) => marker.orderId === orderId,
+  );
+  if (status === "failed") {
+    if (pendingMarker?.lastObservedStatus === "failed") return snapshot;
+    return {
+      ...snapshot,
+      pendingPaymentOrders: snapshot.pendingPaymentOrders.map((marker) =>
+        marker.orderId === orderId
+          ? {
+            ...marker,
+            lastObservedStatus: "failed" as const,
+            lastObservedAt: settledAt,
+          }
+          : marker),
+    };
+  }
+
+  if (status === "refunded") {
     return {
       ...snapshot,
       pendingPaymentOrders: snapshot.pendingPaymentOrders.filter((marker) => marker.orderId !== orderId),
     };
   }
 
-  const nextItems = subtractPurchasedCartItems(snapshot.items, purchasedLines);
-  if (nextItems === snapshot.items) return snapshot;
+  const nextItems = subtractTrackedPurchasedCartItems(
+    snapshot.items,
+    purchasedLines,
+    pendingMarker?.lines,
+  );
   return {
     ...snapshot,
     items: nextItems,
@@ -357,14 +539,20 @@ export function mergeCartItems(...groups: ReadonlyArray<ReadonlyArray<CartItem>>
 
   for (const group of groups) {
     for (const item of group) {
-      const quantity = Math.min(100, Math.max(1, Math.trunc(item.quantity)));
+      const quantity = Math.min(
+        MAX_CART_LINE_QUANTITY,
+        Math.max(1, Math.trunc(item.quantity)),
+      );
       const itemKey = cartItemKey(item);
       const existingIndex = itemIndexes.get(itemKey);
       if (existingIndex !== undefined) {
         const existing = merged[existingIndex];
         merged[existingIndex] = {
           ...existing,
-          quantity: Math.min(100, existing.quantity + quantity),
+          quantity: Math.min(
+            MAX_CART_LINE_QUANTITY,
+            existing.quantity + quantity,
+          ),
         };
       } else if (merged.length < MAX_STORED_CART_ITEMS) {
         itemIndexes.set(itemKey, merged.length);

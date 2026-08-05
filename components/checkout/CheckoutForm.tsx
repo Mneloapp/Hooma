@@ -13,10 +13,14 @@ import {
 import {
   bindCheckoutPaymentOrder,
   clearCheckoutPaymentSession,
-  getOrCreateCheckoutKey,
+  prepareCheckoutPaymentSession,
   sha256CheckoutFingerprint,
 } from "@/components/checkout/payment-session-storage";
 import { ProductSupplyNotice } from "@/components/ProductSupplyNotice";
+import {
+  snapshotCartPaymentLines,
+  type CartPaymentLineMarker,
+} from "@/lib/cart-storage";
 
 const deliveryCityLabels: Record<string, { ka: string; en: string }> = {
   tbilisi: { ka: "თბილისი", en: "Tbilisi" }, batumi: { ka: "ბათუმი", en: "Batumi" },
@@ -69,6 +73,7 @@ export function CheckoutForm({
   const [isPending, startTransition] = useTransition();
   const checkoutKey = useRef("");
   const checkoutFingerprint = useRef("");
+  const checkoutLines = useRef<CartPaymentLineMarker[] | null>(null);
   const pricesComplete = items.length > 0 && items.every(
     (item) => typeof item.price === "number" && Number.isFinite(item.price) && item.price > 0,
   );
@@ -110,6 +115,13 @@ export function CheckoutForm({
           : "BOG online payment is temporarily unavailable. You will not be charged.");
       return;
     }
+    const currentSubmittedLines = snapshotCartPaymentLines(items);
+    if (!currentSubmittedLines) {
+      setMessage(georgian
+        ? "კალათის უსაფრთხო იდენტიფიკაცია ვერ დასრულდა. განაახლე გვერდი და თავიდან სცადე — ბანკის გვერდზე არ გადაგიყვანთ."
+        : "The cart could not be identified safely. Refresh and retry—we will not redirect you to the bank.");
+      return;
+    }
     const payloadWithoutKey = {
       guest_email: String(formData.get("guest_email") ?? ""),
       guest_phone: String(formData.get("guest_phone") ?? ""),
@@ -145,12 +157,19 @@ export function CheckoutForm({
       })),
     }));
     if (!checkoutKey.current || checkoutFingerprint.current !== paymentFingerprint) {
-      checkoutKey.current = getOrCreateCheckoutKey(paymentFingerprint);
+      const prepared = prepareCheckoutPaymentSession(
+        paymentFingerprint,
+        currentSubmittedLines,
+      );
+      checkoutKey.current = prepared.checkoutKey;
       checkoutFingerprint.current = paymentFingerprint;
+      checkoutLines.current = prepared.submittedLines;
     }
+    const submittedCheckoutKey = checkoutKey.current;
+    const submittedLines = checkoutLines.current;
     const payload = {
       ...payloadWithoutKey,
-      checkout_key: checkoutKey.current,
+      checkout_key: submittedCheckoutKey,
     };
     const actionData = new FormData();
     actionData.set("payload", JSON.stringify(payload));
@@ -162,16 +181,32 @@ export function CheckoutForm({
           clearCheckoutPaymentSession();
           checkoutKey.current = "";
           checkoutFingerprint.current = "";
+          checkoutLines.current = null;
         }
         if (result.ok) {
-          if (!uuidPattern.test(result.orderId)) {
+          if (
+            !uuidPattern.test(result.orderId)
+            || !uuidPattern.test(result.checkoutKey)
+          ) {
             setMessage(georgian
               ? "გადახდის სესიის უსაფრთხო იდენტიფიკაცია ვერ დასრულდა. ბანკის გვერდზე არ გადაგიყვანთ — იგივე ღილაკით მოგვიანებით სცადე."
               : "The payment session could not be identified safely. We will not redirect you to the bank—retry later with the same button.");
             return;
           }
-          trackPendingPaymentOrder(result.orderId);
-          bindCheckoutPaymentOrder(result.orderId);
+          const binding = bindCheckoutPaymentOrder(
+            result.orderId,
+            result.checkoutKey,
+          );
+          if (!binding.accepted) {
+            setMessage(georgian
+              ? "სხვა გადახდის სესია უკვე არის მიბმული ამ ჩანართზე. ბანკის გვერდზე არ გადაგიყვანთ — განაახლე გვერდი და გადაამოწმე სტატუსი."
+              : "Another payment session is already bound to this tab. We will not redirect you to the bank—refresh and check its status.");
+            return;
+          }
+          const exactSubmittedLines = result.checkoutKey === submittedCheckoutKey
+            ? binding.submittedLines ?? submittedLines
+            : null;
+          trackPendingPaymentOrder(result.orderId, exactSubmittedLines);
           window.location.assign(result.redirectUrl);
         }
       } catch {

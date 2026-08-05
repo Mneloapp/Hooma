@@ -24,18 +24,21 @@ import {
   ACTIVE_CART_SCOPE_SESSION_KEY,
   GUEST_CART_STORAGE_KEY,
   LEGACY_CART_STORAGE_KEY,
+  MAX_CART_LINE_QUANTITY,
   MAX_STORED_CART_ITEMS,
   cartItemKey,
-  cartMatchesPurchasedLinesExactly,
   cartStorageKeyForUser,
+  ensureCartLineIds,
   isCartStorageEventForScope,
   mergeCartItems,
   parseStoredCartSnapshot,
   reconcileSettledPaymentOrder,
+  removeCartItem,
   rememberPendingPaymentOrder,
   resolveCartScope,
   serializeStoredCart,
   type CartItem,
+  type CartPaymentLineMarker,
   type CartPaymentOrderMarker,
   type CartStorageSnapshot,
   type PendingCartMode,
@@ -51,13 +54,18 @@ type CartContextValue = {
   closeCart: () => void;
   addItem: (item: CartItem) => void;
   updateQuantity: (key: string, quantity: number) => void;
+  removeItem: (key: string) => void;
   clearCart: () => void;
-  trackPendingPaymentOrder: (orderId: string) => void;
+  trackPendingPaymentOrder: (
+    orderId: string,
+    submittedLines?: readonly CartPaymentLineMarker[] | null,
+  ) => void;
   reconcilePaymentOrder: (input: {
     orderId: string;
     status: "paid" | "failed" | "refunded";
     purchasedLines: PurchasedCartLine[];
   }) => void;
+  hasPendingPaymentOrders: boolean;
   count: number;
 };
 
@@ -221,9 +229,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         : resolved.items.length
           ? scopedCart.cartId ?? createCartId()
           : null;
+      const resolvedItems = ensureCartLineIds(resolved.items, createCartId);
       const nextCart: ScopedCart = {
         storageKey: resolved.storageKey,
-        items: resolved.items,
+        items: resolvedItems,
         cartId,
         consumedGuestCartIds: userId ? resolved.consumedGuestCartIds : [],
         pendingPaymentOrders: scopedCart.pendingPaymentOrders,
@@ -256,7 +265,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       replaceCart({
         storageKey: resolved.storageKey,
-        items: resolved.items,
+        items: resolvedItems,
         cartId: nextCart.cartId,
         consumedGuestCartIds: nextCart.consumedGuestCartIds,
         pendingPaymentOrders: nextCart.pendingPaymentOrders,
@@ -306,11 +315,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", syncCart);
   }, [replaceCart]);
 
-  const trackPendingPaymentOrder = useCallback((orderId: string) => {
+  const trackPendingPaymentOrder = useCallback((
+    orderId: string,
+    submittedLines?: readonly CartPaymentLineMarker[] | null,
+  ) => {
     const current = cartRef.current;
     if (!current.storageKey) return;
-    const nextSnapshot = rememberPendingPaymentOrder(current, orderId);
-    if (nextSnapshot === current) return;
+    const { snapshot: stored, readable } = readCartResult(current.storageKey);
+    // Payment binding is metadata-only. Preserve a newer cross-tab cart as the
+    // item authority and never reconstruct generations from a stale render.
+    const source = readable ? stored : current;
+    const nextSnapshot = rememberPendingPaymentOrder(
+      source,
+      orderId,
+      Date.now(),
+      submittedLines,
+    );
+    if (nextSnapshot === source) {
+      if (readable) {
+        replaceCart({
+          storageKey: current.storageKey,
+          ...stored,
+          pendingMode: "none",
+        });
+      }
+      return;
+    }
     const next: ScopedCart = {
       storageKey: current.storageKey,
       ...nextSnapshot,
@@ -343,7 +373,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // fall back to this tab's older in-memory cart and subtract the order twice.
     const source = readable ? stored : current;
     const nextSnapshot = reconcileSettledPaymentOrder(source, input);
-    if (nextSnapshot === source) return;
+    if (nextSnapshot === source) {
+      if (input.status === "failed" || input.status === "refunded") {
+        clearCheckoutPaymentSessionForOrder(input.orderId);
+      }
+      return;
+    }
     const next: ScopedCart = {
       storageKey: current.storageKey,
       ...nextSnapshot,
@@ -355,7 +390,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [replaceCart]);
 
   const pendingPaymentOrderKey = cart.pendingPaymentOrders
-    .map((marker) => marker.orderId)
+    .map((marker) => `${marker.orderId}:${marker.lastObservedStatus ?? "pending"}`)
     .join(",");
 
   useEffect(() => {
@@ -390,22 +425,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const alreadyTracked = cartRef.current.pendingPaymentOrders.some(
-        (marker) => marker.orderId === result.orderId,
+      const binding = bindCheckoutPaymentOrder(
+        result.orderId,
+        result.checkoutKey,
       );
-      const legacyCartIsUnchanged = cartMatchesPurchasedLinesExactly(
-        cartRef.current.items,
-        result.purchasedLines,
-      );
-      if (!alreadyTracked && !legacyCartIsUnchanged) {
-        // Old sessions did not capture cart line generations. If that cart was
-        // changed, fail closed instead of risking removal of newly added units.
+      if (!binding.accepted) {
         clearCheckoutPaymentSession();
         return;
       }
-
-      bindCheckoutPaymentOrder(result.orderId);
-      trackPendingPaymentOrder(result.orderId);
+      // Legacy or different-key recovery deliberately carries no lines. It is
+      // still watched, but a later callback cannot consume today's cart.
+      trackPendingPaymentOrder(result.orderId, binding.submittedLines);
       if (["paid", "failed", "refunded"].includes(result.paymentStatus)) {
         reconcilePaymentOrder({
           orderId: result.orderId,
@@ -464,7 +494,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
 
     void synchronize();
-    const timer = window.setInterval(() => void synchronize(), 15_000);
+    const onlyFailedMarkers = cart.pendingPaymentOrders.length > 0
+      && cart.pendingPaymentOrders.every(
+        (marker) => marker.lastObservedStatus === "failed",
+      );
+    // A failed receipt is a bounded safety tombstone because SQL permits a
+    // later signed `completed` transition. Recheck it on mount/focus only;
+    // active sessions retain the responsive 15-second polling cadence.
+    const timer = onlyFailedMarkers
+      ? null
+      : window.setInterval(() => void synchronize(), 15_000);
     const onFocus = () => void synchronize();
     const onVisibility = () => {
       if (document.visibilityState === "visible") void synchronize();
@@ -473,7 +512,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
     };
@@ -494,12 +533,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const next = [...current];
             next[index] = {
               ...next[index],
-              quantity: Math.min(100, next[index].quantity + Math.max(1, item.quantity)),
+              quantity: Math.min(
+                MAX_CART_LINE_QUANTITY,
+                next[index].quantity + Math.max(1, item.quantity),
+              ),
             };
             return next;
           }
           if (current.length >= MAX_STORED_CART_ITEMS) return current;
-          return mergeCartItems(current, [item]);
+          return mergeCartItems(current, [{
+            ...item,
+            cart_line_id: item.cart_line_id ?? createCartId(),
+          }]);
         });
         setIsOpen(true);
       },
@@ -507,16 +552,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
         updateItems((current) => current
           .map((item) => (
             cartItemKey(item) === key
-              ? { ...item, quantity: Math.min(100, Math.trunc(quantity)) }
+              ? {
+                ...item,
+                quantity: Math.min(
+                  MAX_CART_LINE_QUANTITY,
+                  Math.trunc(quantity),
+                ),
+              }
               : item
           ))
           .filter((item) => item.quantity > 0)),
+      removeItem: (key) =>
+        updateItems((current) => removeCartItem(current, key)),
       clearCart: () => updateItems(() => [], "replace"),
       trackPendingPaymentOrder,
       reconcilePaymentOrder,
+      hasPendingPaymentOrders: cart.pendingPaymentOrders.some(
+        (marker) => marker.lastObservedStatus !== "failed",
+      ),
       count: cart.items.reduce((sum, item) => sum + item.quantity, 0),
     }),
-    [cart.items, isOpen, reconcilePaymentOrder, trackPendingPaymentOrder, updateItems],
+    [
+      cart.items,
+      pendingPaymentOrderKey,
+      isOpen,
+      reconcilePaymentOrder,
+      trackPendingPaymentOrder,
+      updateItems,
+    ],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

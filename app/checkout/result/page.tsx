@@ -36,8 +36,8 @@ export default async function PaymentResultPage({
       <section className="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
         <CircleAlert className="mx-auto text-amber-600" size={44} />
         <h1 className="mt-5 text-3xl font-semibold"><LocalizedText ka="შეკვეთა ვერ მოიძებნა" en="Order not found" /></h1>
-        <p className="mt-3 text-hooma-muted"><LocalizedText ka="გადახდის შედეგი მხოლოდ შესაბამის ანგარიშში ჩანს. შეკვეთების გვერდზე გადაამოწმე ბოლო სტატუსი." en="Payment results are visible only in the corresponding account. Check the latest status on the Orders page." /></p>
-        <Link href="/account/orders" className="mt-7 inline-flex rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="ჩემი შეკვეთები" en="My orders" /></Link>
+        <p className="mt-3 text-hooma-muted"><LocalizedText ka="გადახდის შედეგი მხოლოდ შესაბამის ანგარიშში და სწორ ბმულზე ჩანს. ხელახლა ნუ გადაიხდი, თუ ბანკში თანხა უკვე ჩამოგეჭრა." en="A payment result is visible only in the corresponding account and at the correct link. Do not pay again if the bank has already charged you." /></p>
+        <Link href="/shop" className="mt-7 inline-flex rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="კატალოგში დაბრუნება" en="Back to shop" /></Link>
       </section>
     );
   }
@@ -47,6 +47,7 @@ export default async function PaymentResultPage({
   const refunded = order.payment_status === "refunded";
   const reviewRequired = order.payment_status === "review_required";
   const settled = paid || failed || refunded || reviewRequired;
+  const historyVisible = paid || reviewRequired || refunded;
   const returnedFromFailure = query.return === "fail";
   const state = paid
     ? {
@@ -99,10 +100,14 @@ export default async function PaymentResultPage({
           <LocalizedText ka="მიწოდება" en="Delivery" /> {Number(order.delivery_fee ?? 0) === 0 ? <LocalizedText ka="უფასო" en="Free" /> : money.format(Number(order.delivery_fee))}
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/account/orders" className="rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="შეკვეთების ნახვა" en="View orders" /></Link>
-          {failed
-            ? <Link href="/checkout" className="rounded-full border border-hooma-text/15 bg-white px-6 py-3 text-sm font-semibold"><LocalizedText ka="გადახდის ხელახლა ცდა" en="Try payment again" /></Link>
-            : <Link href="/shop" className="rounded-full border border-hooma-text/15 bg-white px-6 py-3 text-sm font-semibold"><LocalizedText ka="კატალოგში დაბრუნება" en="Back to shop" /></Link>}
+          {historyVisible ? (
+            <Link href="/account/orders" className="rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="შეკვეთების ნახვა" en="View orders" /></Link>
+          ) : failed ? (
+            <Link href="/checkout" className="rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="გადახდის ხელახლა ცდა" en="Try payment again" /></Link>
+          ) : (
+            <Link href="/shop" className="rounded-full bg-hooma-text px-6 py-3 text-sm font-semibold text-white"><LocalizedText ka="კატალოგში დაბრუნება" en="Back to shop" /></Link>
+          )}
+          {historyVisible || failed ? <Link href="/shop" className="rounded-full border border-hooma-text/15 bg-white px-6 py-3 text-sm font-semibold"><LocalizedText ka="კატალოგში დაბრუნება" en="Back to shop" /></Link> : null}
         </div>
       </div>
     </section>

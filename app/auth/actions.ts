@@ -34,6 +34,7 @@ type CreateOrderResult =
     message: string;
     redirectUrl: string;
     orderId: string;
+    checkoutKey: string;
     resetCheckout?: never;
   }
   | {
@@ -41,6 +42,7 @@ type CreateOrderResult =
     message: string;
     redirectUrl?: never;
     orderId?: never;
+    checkoutKey?: never;
     resetCheckout?: boolean;
   };
 
@@ -56,6 +58,7 @@ export type CatalogPaymentSessionRecovery =
   | {
     ok: true;
     orderId: string;
+    checkoutKey: string;
     paymentStatus: "paid" | "failed" | "refunded" | "review_required" | "unpaid";
     purchasedLines: CatalogPurchasedLine[];
   }
@@ -74,6 +77,47 @@ const recoverablePaymentStatuses = new Set([
   "review_required",
   "unpaid",
 ] as const);
+
+async function trustedCatalogCheckoutKeyForOrder(
+  admin: any,
+  customerId: string,
+  orderId: string,
+) {
+  const { data, error } = await admin
+    .from("payment_attempts")
+    .select("idempotency_key,orders!inner(customer_id,test_mode)")
+    .eq("provider", "bog")
+    .eq("order_id", orderId)
+    .eq("orders.customer_id", customerId)
+    .eq("orders.test_mode", false)
+    .limit(2);
+  if (error || !Array.isArray(data) || data.length !== 1) return null;
+  const checkoutKey = data[0]?.idempotency_key;
+  return typeof checkoutKey === "string" && uuidPattern.test(checkoutKey)
+    ? checkoutKey
+    : null;
+}
+
+async function trustedCatalogCheckoutKeyForAttempt(
+  admin: any,
+  customerId: string,
+  orderId: string,
+  attemptId: string,
+) {
+  const { data, error } = await admin
+    .from("payment_attempts")
+    .select("idempotency_key,orders!inner(customer_id,test_mode)")
+    .eq("id", attemptId)
+    .eq("provider", "bog")
+    .eq("order_id", orderId)
+    .eq("orders.customer_id", customerId)
+    .eq("orders.test_mode", false)
+    .maybeSingle();
+  const checkoutKey = data?.idempotency_key;
+  return !error && typeof checkoutKey === "string" && uuidPattern.test(checkoutKey)
+    ? checkoutKey
+    : null;
+}
 
 const safeNextPath = (value: string, fallback = "/account") => {
   const safePath = value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : fallback;
@@ -108,7 +152,7 @@ export async function recoverCatalogPaymentSessionAction(
   const recoveryCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: attempt, error: attemptError } = await admin
     .from("payment_attempts")
-    .select("order_id,created_at,orders!inner(customer_id,test_mode,payment_status)")
+    .select("order_id,idempotency_key,created_at,orders!inner(customer_id,test_mode,payment_status)")
     .eq("provider", "bog")
     .eq("idempotency_key", checkoutKey)
     .eq("orders.customer_id", customer.id)
@@ -120,6 +164,8 @@ export async function recoverCatalogPaymentSessionAction(
   if (
     attemptError
     || !uuidPattern.test(attempt?.order_id ?? "")
+    || !uuidPattern.test(attempt?.idempotency_key ?? "")
+    || attempt.idempotency_key !== checkoutKey
     || !recoverablePaymentStatuses.has(paymentStatus)
   ) return { ok: false };
 
@@ -144,6 +190,7 @@ export async function recoverCatalogPaymentSessionAction(
   return {
     ok: true,
     orderId: attempt.order_id,
+    checkoutKey: attempt.idempotency_key,
     paymentStatus,
     purchasedLines,
   };
@@ -326,10 +373,24 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
             : "A previous payment session could not be identified safely. Do not pay again; retry later or contact us.",
         };
       }
+      const recoveredCheckoutKey = await trustedCatalogCheckoutKeyForOrder(
+        admin,
+        customerId,
+        recovery.orderId,
+      );
+      if (!recoveredCheckoutKey) {
+        return {
+          ok: false,
+          message: georgian
+            ? "წინა გადახდის სესიის უსაფრთხო გასაღები ვერ მოიძებნა. ხელახლა ნუ გადაიხდი; მოგვიანებით სცადე ან დაგვიკავშირდი."
+            : "The previous payment session key could not be verified safely. Do not pay again; retry later or contact us.",
+        };
+      }
       return {
         ok: true,
         redirectUrl: recovery.redirectUrl,
         orderId: recovery.orderId,
+        checkoutKey: recoveredCheckoutKey,
         message: georgian
           ? "წინა უსაფრთხო გადახდის სესია აღდგა..."
           : "Your previous secure payment session was recovered...",
@@ -463,6 +524,9 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
     quantity: item.quantity,
   }));
 
+  // Keep the application compatible with the established app-first rollout:
+  // before the lifecycle migration this invokes the legacy v2 implementation;
+  // afterward the same public name is a compatibility wrapper over guarded v3.
   const { data: checkoutData, error: checkoutError } = await admin.rpc("begin_bog_checkout_v2", {
     requested_customer_id: customerId,
     requested_guest_email: user.email ?? payload.guest_email ?? null,
@@ -484,6 +548,19 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
   const providerPaymentId = typeof checkout?.provider_payment_id === "string"
     ? checkout.provider_payment_id
     : "";
+  const responseCheckoutKey = typeof checkout?.idempotency_key === "string"
+    ? checkout.idempotency_key
+    : "";
+  const authoritativeCheckoutKey = !checkoutError
+    && uuidPattern.test(orderId)
+    && uuidPattern.test(attemptId)
+    ? await trustedCatalogCheckoutKeyForAttempt(
+      admin,
+      customerId,
+      orderId,
+      attemptId,
+    ) ?? ""
+    : "";
   const attemptCreatedAt = typeof checkout?.attempt_created_at === "string"
     ? Date.parse(checkout.attempt_created_at)
     : Number.NaN;
@@ -491,19 +568,40 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
   const totalMinor = moneyToMinor(checkout?.amount);
   const deliveryMinor = moneyToMinor(checkout?.delivery_fee);
   const ttlMinutes = Number(checkout?.payment_ttl_minutes ?? 15);
-  if (checkoutError || !uuidPattern.test(orderId) || !uuidPattern.test(attemptId) || !attemptStatus || totalMinor === null || totalMinor <= 0) {
+  if (
+    checkoutError
+    || !uuidPattern.test(orderId)
+    || !uuidPattern.test(attemptId)
+    || !uuidPattern.test(authoritativeCheckoutKey)
+    || authoritativeCheckoutKey !== payload.checkout_key
+    || (responseCheckoutKey !== "" && responseCheckoutKey !== authoritativeCheckoutKey)
+    || !attemptStatus
+    || totalMinor === null
+    || totalMinor <= 0
+  ) {
     console.error("BOG_CHECKOUT_PREPARATION_FAILED", { code: checkoutError?.code ?? null });
     const totalChanged = checkoutError?.message?.includes("HOOMA_CHECKOUT_TOTAL_CHANGED");
+    const paymentInProgress = checkoutError?.message?.includes("BOG_PAYMENT_IN_PROGRESS");
+    const recentLatePayment = checkoutError?.message?.includes("BOG_RECENT_LATE_PAYMENT");
+    const preparationMessage = recentLatePayment
+      ? georgian
+        ? "წინა გადახდა ბანკმა დაადასტურა. ხელახლა ნუ გადაიხდი — გადაამოწმე „ჩემი შეკვეთები“ ან დაგვიკავშირდი."
+        : "Your previous payment was confirmed by the bank. Do not pay again—check My Orders or contact us."
+      : paymentInProgress
+        ? georgian
+          ? "წინა გადახდის სესია ჯერ დასრულებული არ არის. ხელახლა ნუ გადაიხდი; დაასრულე წინა სესია, მოგვიანებით სცადე ან დაგვიკავშირდი."
+          : "A previous payment session is still unresolved. Do not pay again; complete that session, retry later, or contact us."
+        : totalChanged
+          ? georgian
+            ? "კალათის ან მიწოდების ფასი შეიცვალა. გვერდი განაახლე და შეკვეთა ხელახლა გადაამოწმე."
+            : "A cart or delivery price changed. Refresh the page and review the order again."
+          : georgian
+            ? "შეკვეთის უსაფრთხოდ მომზადება ვერ მოხერხდა. თანხა არ ჩამოგეჭრება."
+            : "The order could not be prepared safely. You will not be charged.";
     return {
       ok: false,
       resetCheckout: totalChanged,
-      message: totalChanged
-        ? georgian
-          ? "კალათის ან მიწოდების ფასი შეიცვალა. გვერდი განაახლე და შეკვეთა ხელახლა გადაამოწმე."
-          : "A cart or delivery price changed. Refresh the page and review the order again."
-        : georgian
-          ? "შეკვეთის უსაფრთხოდ მომზადება ვერ მოხერხდა. თანხა არ ჩამოგეჭრება."
-          : "The order could not be prepared safely. You will not be charged.",
+      message: preparationMessage,
     };
   }
 
@@ -569,7 +667,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
           successUrl: urls.successUrl,
           failUrl: urls.failUrl,
           paymentMethods: getBogPaymentMethods(),
-        }, payload.checkout_key, georgian ? "ka" : "en");
+        }, authoritativeCheckoutKey, georgian ? "ka" : "en");
         recoveredProviderId = recoveredPayment.providerOrderId;
         recoveredRedirect = recoveredPayment.redirectUrl;
         const { error: recoveredBindError } = await admin.rpc(
@@ -631,6 +729,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
           ok: true,
           redirectUrl: recoveredRedirect,
           orderId,
+          checkoutKey: authoritativeCheckoutKey,
           message: georgian
             ? "უსაფრთხო გადახდის სესია აღდგა..."
             : "Secure payment session recovered...",
@@ -665,6 +764,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
       ok: true,
       redirectUrl: storedResponse.redirect_url,
       orderId,
+      checkoutKey: authoritativeCheckoutKey,
       message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
     };
   }
@@ -681,7 +781,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
       successUrl: urls.successUrl,
       failUrl: urls.failUrl,
       paymentMethods: getBogPaymentMethods(),
-    }, payload.checkout_key, georgian ? "ka" : "en");
+    }, authoritativeCheckoutKey, georgian ? "ka" : "en");
 
     const { error: bindError } = await admin.rpc("bind_bog_payment_attempt_v1", {
       requested_attempt_id: attemptId,
@@ -701,6 +801,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
           ok: true,
           redirectUrl: payment.redirectUrl,
           orderId,
+          checkoutKey: authoritativeCheckoutKey,
           message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
         };
       }
@@ -718,6 +819,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
       ok: true,
       redirectUrl: payment.redirectUrl,
       orderId,
+      checkoutKey: authoritativeCheckoutKey,
       message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
     };
   } catch (error) {
