@@ -44,11 +44,36 @@ type CreateOrderResult =
     resetCheckout?: boolean;
   };
 
+type CatalogPurchasedLine = {
+  product_id: string;
+  variant_id: string;
+  material: string;
+  color: string;
+  quantity: number;
+};
+
+export type CatalogPaymentSessionRecovery =
+  | {
+    ok: true;
+    orderId: string;
+    paymentStatus: "paid" | "failed" | "refunded" | "review_required" | "unpaid";
+    purchasedLines: CatalogPurchasedLine[];
+  }
+  | { ok: false };
+
 export type ProfileActionState = AuthState & { savedAt?: string };
 
 const getString = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isGeorgian = (value: unknown) => value === "ka";
+
+const recoverablePaymentStatuses = new Set([
+  "paid",
+  "failed",
+  "refunded",
+  "review_required",
+  "unpaid",
+] as const);
 
 const safeNextPath = (value: string, fallback = "/account") => {
   const safePath = value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : fallback;
@@ -61,6 +86,67 @@ async function siteOrigin() {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${protocol}://${host}`;
+}
+
+export async function recoverCatalogPaymentSessionAction(
+  checkoutKey: string,
+): Promise<CatalogPaymentSessionRecovery> {
+  if (!uuidPattern.test(checkoutKey)) return { ok: false };
+  const supabase = await createClient();
+  const admin = createAdminClient() as any;
+  if (!supabase || !admin) return { ok: false };
+
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return { ok: false };
+  const { data: customer, error: customerError } = await admin
+    .from("customers")
+    .select("id")
+    .eq("profile_id", userData.user.id)
+    .maybeSingle();
+  if (customerError || !customer?.id) return { ok: false };
+
+  const recoveryCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: attempt, error: attemptError } = await admin
+    .from("payment_attempts")
+    .select("order_id,created_at,orders!inner(customer_id,test_mode,payment_status)")
+    .eq("provider", "bog")
+    .eq("idempotency_key", checkoutKey)
+    .eq("orders.customer_id", customer.id)
+    .eq("orders.test_mode", false)
+    .gte("created_at", recoveryCutoff)
+    .maybeSingle();
+  const joinedOrder = Array.isArray(attempt?.orders) ? attempt.orders[0] : attempt?.orders;
+  const paymentStatus = joinedOrder?.payment_status;
+  if (
+    attemptError
+    || !uuidPattern.test(attempt?.order_id ?? "")
+    || !recoverablePaymentStatuses.has(paymentStatus)
+  ) return { ok: false };
+
+  const { data: orderItems, error: itemsError } = await admin
+    .from("order_items")
+    .select("product_id,variant_id,material,color,quantity")
+    .eq("order_id", attempt.order_id)
+    .limit(100);
+  if (itemsError || !orderItems?.length) return { ok: false };
+  const validLines = orderItems.filter((line: Record<string, unknown>) => (
+    typeof line.product_id === "string"
+    && typeof line.variant_id === "string"
+    && typeof line.material === "string"
+    && typeof line.color === "string"
+    && Number.isInteger(line.quantity)
+    && Number(line.quantity) > 0
+    && Number(line.quantity) <= 100
+  ));
+  if (validLines.length !== orderItems.length) return { ok: false };
+  const purchasedLines = validLines as CatalogPurchasedLine[];
+
+  return {
+    ok: true,
+    orderId: attempt.order_id,
+    paymentStatus,
+    purchasedLines,
+  };
 }
 
 export async function loginAction(_state: AuthState, formData: FormData): Promise<AuthState> {

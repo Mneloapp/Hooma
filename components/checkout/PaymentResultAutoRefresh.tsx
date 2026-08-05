@@ -1,51 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCart } from "@/components/CartContext";
 import { useLanguage } from "@/components/LanguageProvider";
-import { bindCheckoutPaymentOrder } from "@/components/checkout/payment-session-storage";
-import type { PurchasedCartLine } from "@/lib/cart-storage";
 
 export function PaymentResultAutoRefresh({
-  orderId,
   settled,
-  paid,
-  failed,
-  refunded,
-  purchasedLines,
 }: {
-  orderId: string;
   settled: boolean;
-  paid: boolean;
-  failed: boolean;
-  refunded: boolean;
-  purchasedLines: PurchasedCartLine[];
 }) {
   const router = useRouter();
-  const { reconcilePaymentOrder, trackPendingPaymentOrder } = useCart();
   const { language } = useLanguage();
-  const reconciled = useRef(false);
   const [timedOut, setTimedOut] = useState(false);
   const [refreshCycle, setRefreshCycle] = useState(0);
-
-  useEffect(() => {
-    // Older in-flight checkouts predate the durable cart marker. The server
-    // renders this component only after RLS has confirmed that the signed-in
-    // customer owns the live order, so it is safe to register on result mount.
-    trackPendingPaymentOrder(orderId);
-    bindCheckoutPaymentOrder(orderId);
-  }, [orderId, trackPendingPaymentOrder]);
-
-  useEffect(() => {
-    if ((!paid && !failed && !refunded) || reconciled.current) return;
-    reconciled.current = true;
-    reconcilePaymentOrder({
-      orderId,
-      status: paid ? "paid" : refunded ? "refunded" : "failed",
-      purchasedLines: paid ? purchasedLines : [],
-    });
-  }, [failed, orderId, paid, purchasedLines, reconcilePaymentOrder, refunded]);
 
   useEffect(() => {
     if (settled) return;

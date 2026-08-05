@@ -12,6 +12,7 @@ import {
 import {
   bindCheckoutPaymentOrder,
   clearCheckoutPaymentSessionForOrder,
+  readCheckoutPaymentSessionPointer,
 } from "../components/checkout/payment-session-storage.ts";
 
 test("BOG order payload permits only automatic full payment", () => {
@@ -223,19 +224,15 @@ test("delayed paid callbacks reconcile only their tracked cart quantities", () =
   assert.doesNotMatch(result, /return=success/);
 });
 
-test("an authenticated result page registers legacy in-flight orders before settlement", () => {
+test("historical result URLs cannot register or consume a current cart", () => {
   const result = readFileSync(
     new URL("../components/checkout/PaymentResultAutoRefresh.tsx", import.meta.url),
     "utf8",
   );
-  const tracking = result.indexOf("trackPendingPaymentOrder(orderId)");
-  const binding = result.indexOf("bindCheckoutPaymentOrder(orderId)");
-  const reconciliation = result.indexOf("reconcilePaymentOrder({");
-
-  assert.ok(tracking >= 0);
-  assert.ok(binding > tracking);
-  assert.ok(reconciliation > binding);
-  assert.match(result, /trackPendingPaymentOrder\(orderId\);\s+bindCheckoutPaymentOrder\(orderId\);/);
+  assert.doesNotMatch(result, /trackPendingPaymentOrder/);
+  assert.doesNotMatch(result, /bindCheckoutPaymentOrder/);
+  assert.doesNotMatch(result, /reconcilePaymentOrder/);
+  assert.doesNotMatch(result, /purchasedLines/);
 });
 
 test("checkout never navigates to BOG without a valid server order id", () => {
@@ -284,4 +281,102 @@ test("an older order cannot overwrite or clear a newer checkout session", () => 
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   }
+});
+
+test("legacy checkout sessions expose only their validated recovery pointer", () => {
+  const storageKey = "hooma-bog-checkout-session-v2";
+  const checkoutKey = "00000000-0000-4000-8000-000000000003";
+  const values = new Map();
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    sessionStorage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+  };
+
+  try {
+    values.set(storageKey, JSON.stringify({
+      version: 2,
+      fingerprintSha256: "b".repeat(64),
+      checkoutKey,
+    }));
+    assert.deepEqual(readCheckoutPaymentSessionPointer(), { checkoutKey });
+    values.set(storageKey, JSON.stringify({
+      version: 2,
+      fingerprintSha256: "not-a-hash",
+      checkoutKey,
+    }));
+    assert.equal(readCheckoutPaymentSessionPointer(), null);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test("legacy cart recovery is bound to the authenticated customer's exact checkout", () => {
+  const action = readFileSync(
+    new URL("../app/auth/actions.ts", import.meta.url),
+    "utf8",
+  );
+  const provider = readFileSync(
+    new URL("../components/CartContext.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(action, /recoverCatalogPaymentSessionAction/);
+  assert.match(action, /supabase\.auth\.getUser\(\)/);
+  assert.match(action, /\.eq\("idempotency_key", checkoutKey\)/);
+  assert.match(action, /\.eq\("orders\.customer_id", customer\.id\)/);
+  assert.match(action, /\.eq\("orders\.test_mode", false\)/);
+  assert.match(action, /Date\.now\(\) - 7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.doesNotMatch(action, /\.order\("created_at"[\s\S]*recoverCatalogPaymentSessionAction/);
+  assert.match(provider, /readCheckoutPaymentSessionPointer\(\)/);
+  assert.match(provider, /recoverCatalogPaymentSessionAction\(session\.checkoutKey\)/);
+  assert.match(provider, /session\.orderId && session\.orderId !== result\.orderId/);
+  assert.match(provider, /attempts < 3/);
+  assert.match(provider, /recoveredCheckoutKeysRef\.current\.delete\(recoveryKey\)/);
+  assert.match(provider, /cartMatchesPurchasedLinesExactly/);
+  assert.match(provider, /!alreadyTracked && !legacyCartIsUnchanged/);
+  assert.doesNotMatch(provider, /if \(session\.orderId\) \{\s*trackPendingPaymentOrder/);
+  assert.match(provider, /bindCheckoutPaymentOrder\(result\.orderId\)/);
+  assert.match(provider, /trackPendingPaymentOrder\(result\.orderId\)/);
+  assert.match(provider, /reconcilePaymentOrder\(\{/);
+});
+
+test("account orders shows an accessible colored payment and fulfillment timeline", () => {
+  const page = readFileSync(
+    new URL("../app/account/orders/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  for (const key of [
+    "payment_confirmed",
+    "order_received",
+    "production_started",
+    "quality_check",
+    "ready_for_delivery",
+    "out_for_delivery",
+    "delivered",
+  ]) {
+    assert.match(page, new RegExp(`key: ["']${key}["']`));
+  }
+
+  assert.match(page, /order_received:\s*1/);
+  assert.match(page, /production_queued:\s*2/);
+  assert.match(page, /in_production:\s*2/);
+  assert.match(page, /quality_check:\s*3/);
+  assert.match(page, /ready_for_delivery:\s*4/);
+  assert.match(page, /out_for_delivery:\s*5/);
+  assert.match(page, /delivered:\s*6/);
+  assert.match(page, /border-emerald-200 bg-emerald-50/);
+  assert.match(page, /border-sky-400 bg-sky-50[\s\S]*font-bold text-sky-950/);
+  assert.match(page, /payment_status === ["']paid["'][\s\S]*border-emerald-200 bg-emerald-50 text-emerald-900/);
+  assert.match(page, /aria-current=\{isCurrent \? ["']step["'] : undefined\}/);
+  assert.match(page, /snap-x[\s\S]*overflow-x-auto[\s\S]*sm:grid/);
+  assert.match(page, /paymentFailed[\s\S]*return ["']failed["']/);
+  assert.match(page, /refunded[\s\S]*return ["']refunded["']/);
+  assert.match(page, /reviewRequired[\s\S]*return ["']review["']/);
+  assert.match(page, /cancelled[\s\S]*შეკვეთა გაუქმებულია/);
 });
