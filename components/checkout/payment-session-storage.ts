@@ -9,6 +9,7 @@ type StoredPaymentSession = {
   version: 2;
   fingerprintSha256: string;
   checkoutKey: string;
+  orderId?: string;
 };
 
 export async function sha256CheckoutFingerprint(value: string) {
@@ -56,6 +57,43 @@ export function clearLegacyCheckoutPaymentSession() {
     window.sessionStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // Storage can be unavailable in hardened/private browser modes.
+  }
+}
+
+export function bindCheckoutPaymentOrder(orderId: string) {
+  if (!uuidPattern.test(orderId)) return false;
+  try {
+    const stored = JSON.parse(
+      window.sessionStorage.getItem(STORAGE_KEY) ?? "null",
+    ) as StoredPaymentSession | null;
+    if (
+      stored?.version !== 2
+      || !sha256Pattern.test(stored.fingerprintSha256)
+      || !uuidPattern.test(stored.checkoutKey)
+      || (stored.orderId !== undefined && stored.orderId !== orderId)
+    ) return false;
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ...stored,
+      orderId,
+    } satisfies StoredPaymentSession));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearCheckoutPaymentSessionForOrder(orderId: string) {
+  if (!uuidPattern.test(orderId)) return false;
+  try {
+    const stored = JSON.parse(
+      window.sessionStorage.getItem(STORAGE_KEY) ?? "null",
+    ) as StoredPaymentSession | null;
+    if (stored?.version !== 2 || stored.orderId !== orderId) return false;
+    window.sessionStorage.removeItem(STORAGE_KEY);
+    window.sessionStorage.removeItem(LEGACY_STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
   }
 }
 

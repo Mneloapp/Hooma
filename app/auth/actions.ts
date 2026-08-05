@@ -28,12 +28,21 @@ type AuthState = {
   message?: string;
 };
 
-type CreateOrderResult = {
-  ok: boolean;
-  message: string;
-  redirectUrl?: string;
-  resetCheckout?: boolean;
-};
+type CreateOrderResult =
+  | {
+    ok: true;
+    message: string;
+    redirectUrl: string;
+    orderId: string;
+    resetCheckout?: never;
+  }
+  | {
+    ok: false;
+    message: string;
+    redirectUrl?: never;
+    orderId?: never;
+    resetCheckout?: boolean;
+  };
 
 export type ProfileActionState = AuthState & { savedAt?: string };
 
@@ -223,9 +232,18 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
       customerId,
     );
     if (recovery.redirectUrl) {
+      if (!recovery.orderId || !uuidPattern.test(recovery.orderId)) {
+        return {
+          ok: false,
+          message: georgian
+            ? "წინა გადახდის სესიის უსაფრთხო იდენტიფიკაცია ვერ დასრულდა. ხელახლა ნუ გადაიხდი; მოგვიანებით სცადე ან დაგვიკავშირდი."
+            : "A previous payment session could not be identified safely. Do not pay again; retry later or contact us.",
+        };
+      }
       return {
         ok: true,
         redirectUrl: recovery.redirectUrl,
+        orderId: recovery.orderId,
         message: georgian
           ? "წინა უსაფრთხო გადახდის სესია აღდგა..."
           : "Your previous secure payment session was recovered...",
@@ -526,6 +544,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
         return {
           ok: true,
           redirectUrl: recoveredRedirect,
+          orderId,
           message: georgian
             ? "უსაფრთხო გადახდის სესია აღდგა..."
             : "Secure payment session recovered...",
@@ -559,6 +578,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
     return {
       ok: true,
       redirectUrl: storedResponse.redirect_url,
+      orderId,
       message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
     };
   }
@@ -594,6 +614,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
         return {
           ok: true,
           redirectUrl: payment.redirectUrl,
+          orderId,
           message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
         };
       }
@@ -610,6 +631,7 @@ export async function createOrderAction(formData: FormData): Promise<CreateOrder
     return {
       ok: true,
       redirectUrl: payment.redirectUrl,
+      orderId,
       message: georgian ? "გადამისამართება უსაფრთხო გადახდაზე..." : "Redirecting to secure payment...",
     };
   } catch (error) {

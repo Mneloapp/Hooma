@@ -4,13 +4,17 @@ import test from "node:test";
 import {
   GUEST_CART_STORAGE_KEY,
   LEGACY_CART_STORAGE_KEY,
+  MAX_PENDING_PAYMENT_ORDERS,
   cartStorageKeyForUser,
   isCartStorageEventForScope,
   mergeCartItems,
   parseStoredCart,
   parseStoredCartSnapshot,
+  reconcileSettledPaymentOrder,
+  rememberPendingPaymentOrder,
   resolveCartScope,
   serializeStoredCart,
+  subtractPurchasedCartItems,
 } from "../lib/cart-storage.ts";
 
 const item = (productId, quantity = 1) => ({
@@ -233,6 +237,99 @@ test("guest transfer marker is persisted atomically with the user cart", () => {
   assert.deepEqual(parsed.consumedGuestCartIds, ["guest-transfer-0001"]);
 });
 
+test("paid orders subtract only exact purchased quantities and settle once", () => {
+  const orderId = "00000000-0000-4000-8000-000000000001";
+  const paymentNow = Date.now();
+  const sameVariant = item("same", 3);
+  const otherVariant = { ...item("same", 2), variant_id: "variant-other" };
+  const unrelated = item("unrelated", 1);
+  const initial = parseStoredCartSnapshot(serializeStoredCart([
+    sameVariant,
+    otherVariant,
+    unrelated,
+  ]));
+  const pending = rememberPendingPaymentOrder(initial, orderId, paymentNow);
+  const settled = reconcileSettledPaymentOrder(pending, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{
+      product_id: sameVariant.product_id,
+      variant_id: sameVariant.variant_id,
+      material: sameVariant.material,
+      color: sameVariant.color,
+      quantity: 2,
+    }],
+    settledAt: paymentNow + 100,
+  });
+
+  assert.deepEqual(
+    settled.items.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })),
+    [
+      { product_id: "same", variant_id: "variant-same", quantity: 1 },
+      { product_id: "same", variant_id: "variant-other", quantity: 2 },
+      { product_id: "unrelated", variant_id: "variant-unrelated", quantity: 1 },
+    ],
+  );
+  assert.equal(settled.pendingPaymentOrders.length, 0);
+  assert.deepEqual(settled.settledPaymentOrders.map((marker) => marker.orderId), [orderId]);
+  assert.equal(reconcileSettledPaymentOrder(settled, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{ ...sameVariant, quantity: 2 }],
+  }), settled);
+});
+
+test("failed and refunded payments keep cart items while closing their marker", () => {
+  const paymentNow = Date.now();
+  const statuses = ["failed", "refunded"];
+  for (const [index, status] of statuses.entries()) {
+    const orderId = `00000000-0000-4000-8000-${String(index + 2).padStart(12, "0")}`;
+    const initial = rememberPendingPaymentOrder(
+      parseStoredCartSnapshot(serializeStoredCart([item("retry")])),
+      orderId,
+      paymentNow,
+    );
+    const settled = reconcileSettledPaymentOrder(initial, {
+      orderId,
+      status,
+      purchasedLines: [],
+      settledAt: paymentNow + 100,
+    });
+    assert.deepEqual(settled.items, initial.items);
+    assert.equal(settled.pendingPaymentOrders.length, 0);
+    assert.equal(settled.settledPaymentOrders.length, 0);
+  }
+});
+
+test("payment markers are bounded and an untracked order cannot change a cart", () => {
+  const paymentNow = Date.now();
+  let snapshot = parseStoredCartSnapshot(serializeStoredCart([item("safe")]));
+  for (let index = 0; index < MAX_PENDING_PAYMENT_ORDERS + 3; index += 1) {
+    snapshot = rememberPendingPaymentOrder(
+      snapshot,
+      `00000000-0000-4000-8000-${String(index + 10).padStart(12, "0")}`,
+      paymentNow + index,
+    );
+  }
+  assert.equal(snapshot.pendingPaymentOrders.length, MAX_PENDING_PAYMENT_ORDERS);
+
+  const untouched = reconcileSettledPaymentOrder(snapshot, {
+    orderId: "00000000-0000-4000-8000-999999999999",
+    status: "paid",
+    purchasedLines: [{ ...item("safe"), quantity: 1 }],
+  });
+  assert.equal(untouched, snapshot);
+  assert.deepEqual(subtractPurchasedCartItems(snapshot.items, []), snapshot.items);
+});
+
+test("payment markers with implausible future timestamps are rejected", () => {
+  const orderId = "00000000-0000-4000-8000-000000000099";
+  const snapshot = parseStoredCartSnapshot(serializeStoredCart([item("future")], {
+    pendingPaymentOrders: [{ orderId, recordedAt: Date.now() + 60 * 60 * 1000 }],
+  }));
+  assert.deepEqual(snapshot.pendingPaymentOrders, []);
+});
+
 test("CartProvider reconciles server-action auth changes and persists mutations synchronously", () => {
   const provider = readFileSync(
     new URL("../components/CartContext.tsx", import.meta.url),
@@ -245,4 +342,10 @@ test("CartProvider reconciles server-action auth changes and persists mutations 
   assert.match(provider, /authEventVersion === getUserVersion/);
   assert.match(provider, /if \(current\.storageKey\) writeCart\(current\.storageKey, next\)/);
   assert.match(provider, /removeItem\(LEGACY_CART_STORAGE_KEY\)/);
+  assert.match(provider, /\.from\("orders"\)/);
+  assert.match(provider, /const source = readable \? stored : current/);
+  assert.match(provider, /\.eq\("test_mode", false\)/);
+  assert.match(provider, /order\.payment_status === "paid"/);
+  assert.match(provider, /\.from\("order_items"\)/);
+  assert.doesNotMatch(provider, /return=success/);
 });

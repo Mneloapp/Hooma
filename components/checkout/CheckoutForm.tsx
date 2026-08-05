@@ -11,6 +11,7 @@ import {
   type HoomaPlusSummary,
 } from "@/lib/commerce/hooma-plus";
 import {
+  bindCheckoutPaymentOrder,
   clearCheckoutPaymentSession,
   getOrCreateCheckoutKey,
   sha256CheckoutFingerprint,
@@ -24,6 +25,8 @@ const deliveryCityLabels: Record<string, { ka: string; en: string }> = {
   poti: { ka: "ფოთი", en: "Poti" }, telavi: { ka: "თელავი", en: "Telavi" },
   other: { ka: "სხვა ქალაქი", en: "Other city" },
 };
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type CheckoutInitialValues = { fullName: string; phone: string; email: string; city: string; addressLine1: string; addressLine2: string; postalCode: string; latitude: number | null; longitude: number | null; googleMapsUrl: string };
 type CheckoutFormProps = {
@@ -57,7 +60,7 @@ export function CheckoutForm({
   const { language } = useLanguage();
   const georgian = language === "ka";
   const money = georgian ? moneyKa : moneyEn;
-  const { items } = useCart();
+  const { items, trackPendingPaymentOrder } = useCart();
   const [message, setMessage] = useState("");
   const [city, setCity] = useState(initialValues.city);
   const [addressLine1, setAddressLine1] = useState(initialValues.addressLine1);
@@ -160,7 +163,17 @@ export function CheckoutForm({
           checkoutKey.current = "";
           checkoutFingerprint.current = "";
         }
-        if (result.ok && result.redirectUrl) window.location.assign(result.redirectUrl);
+        if (result.ok) {
+          if (!uuidPattern.test(result.orderId)) {
+            setMessage(georgian
+              ? "გადახდის სესიის უსაფრთხო იდენტიფიკაცია ვერ დასრულდა. ბანკის გვერდზე არ გადაგიყვანთ — იგივე ღილაკით მოგვიანებით სცადე."
+              : "The payment session could not be identified safely. We will not redirect you to the bank—retry later with the same button.");
+            return;
+          }
+          trackPendingPaymentOrder(result.orderId);
+          bindCheckoutPaymentOrder(result.orderId);
+          window.location.assign(result.redirectUrl);
+        }
       } catch {
         setMessage(georgian
           ? "კავშირი დროებით შეწყდა. თანხის ორჯერ ჩამოჭრის თავიდან ასაცილებლად იგივე გადახდის სესიას შევინარჩუნებთ — სცადე ხელახლა."
