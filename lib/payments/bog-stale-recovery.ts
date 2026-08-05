@@ -17,6 +17,7 @@ import {
 type RecoveryResult = {
   blocked: boolean;
   redirectUrl?: string;
+  orderId?: string;
 };
 
 type RecoveryBasketLine = {
@@ -230,7 +231,7 @@ export async function reconcileCustomerCatalogBogAttempts(
       recoveredRedirect
       && ["created", "processing"].includes(receipt.status)
     ) {
-      return { blocked: true, redirectUrl: recoveredRedirect };
+      return { blocked: true, redirectUrl: recoveredRedirect, orderId };
     }
     return { blocked: true };
   }

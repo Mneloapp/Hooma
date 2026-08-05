@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PaymentResultAutoRefresh } from "@/components/checkout/PaymentResultAutoRefresh";
 import { LocalizedText } from "@/components/LocalizedText";
 import { createClient } from "@/lib/supabase/server";
+import type { PurchasedCartLine } from "@/lib/cart-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,13 @@ export default async function PaymentResultPage({
   const reviewRequired = order.payment_status === "review_required";
   const settled = paid || failed || refunded || reviewRequired;
   const returnedFromFailure = query.return === "fail";
+  const { data: purchasedRows } = paid
+    ? await supabase
+      .from("order_items")
+      .select("product_id,variant_id,material,color,quantity")
+      .eq("order_id", order.id)
+    : { data: [] };
+  const purchasedLines = (purchasedRows ?? []) as PurchasedCartLine[];
 
   const state = paid
     ? {
@@ -92,7 +100,14 @@ export default async function PaymentResultPage({
         <p className="mt-5 text-xs font-semibold uppercase tracking-[0.24em] text-hooma-muted">#{order.tracking_code ?? order.id.slice(0, 8).toUpperCase()}</p>
         <h1 className="mt-3 text-3xl font-semibold"><LocalizedText ka={state.titleKa} en={state.titleEn} /></h1>
         <p className="mt-4 leading-7 text-hooma-muted"><LocalizedText ka={state.bodyKa} en={state.bodyEn} /></p>
-        <PaymentResultAutoRefresh settled={settled} paid={paid} failed={failed} refunded={refunded} />
+        <PaymentResultAutoRefresh
+          orderId={order.id}
+          settled={settled}
+          paid={paid}
+          failed={failed}
+          refunded={refunded}
+          purchasedLines={purchasedLines}
+        />
         <p className="mt-5 text-2xl font-semibold">{money.format(Number(order.total ?? 0))}</p>
         <p className="mt-2 text-xs text-hooma-muted">
           <LocalizedText ka="პროდუქტები" en="Products" /> {money.format(Number(order.subtotal ?? 0))}

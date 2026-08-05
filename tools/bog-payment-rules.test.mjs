@@ -9,6 +9,10 @@ import {
   sanitizeBogPaymentDetails,
   verifyBogCallbackSignature,
 } from "../lib/payments/bog-core.ts";
+import {
+  bindCheckoutPaymentOrder,
+  clearCheckoutPaymentSessionForOrder,
+} from "../components/checkout/payment-session-storage.ts";
 
 test("BOG order payload permits only automatic full payment", () => {
   const payload = buildBogCreateOrderPayload({
@@ -187,4 +191,97 @@ test("browser payment idempotency stores only a SHA-256 fingerprint", () => {
   assert.match(storage, /fingerprintSha256/);
   assert.doesNotMatch(storage, /\bfingerprint:\s*string/);
   assert.match(checkout, /sha256CheckoutFingerprint\(JSON\.stringify\(/);
+});
+
+test("delayed paid callbacks reconcile only their tracked cart quantities", () => {
+  const action = readFileSync(
+    new URL("../app/auth/actions.ts", import.meta.url),
+    "utf8",
+  );
+  const checkout = readFileSync(
+    new URL("../components/checkout/CheckoutForm.tsx", import.meta.url),
+    "utf8",
+  );
+  const result = readFileSync(
+    new URL("../components/checkout/PaymentResultAutoRefresh.tsx", import.meta.url),
+    "utf8",
+  );
+  const provider = readFileSync(
+    new URL("../components/CartContext.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(action, /redirectUrl: payment\.redirectUrl,\s+orderId,/);
+  assert.match(action, /ok: true;\s+message: string;\s+redirectUrl: string;\s+orderId: string;/);
+  assert.match(checkout, /trackPendingPaymentOrder\(result\.orderId\)/);
+  assert.match(checkout, /bindCheckoutPaymentOrder\(result\.orderId\)/);
+  assert.match(checkout, /if \(!uuidPattern\.test\(result\.orderId\)\) \{[\s\S]*?return;[\s\S]*?window\.location\.assign\(result\.redirectUrl\)/);
+  assert.match(provider, /\.select\("id,payment_status"\)/);
+  assert.match(provider, /\.select\("product_id,variant_id,material,color,quantity"\)/);
+  assert.match(provider, /reconcilePaymentOrder\(/);
+  assert.doesNotMatch(result, /clearCart\(\)/);
+  assert.doesNotMatch(result, /return=success/);
+});
+
+test("an authenticated result page registers legacy in-flight orders before settlement", () => {
+  const result = readFileSync(
+    new URL("../components/checkout/PaymentResultAutoRefresh.tsx", import.meta.url),
+    "utf8",
+  );
+  const tracking = result.indexOf("trackPendingPaymentOrder(orderId)");
+  const binding = result.indexOf("bindCheckoutPaymentOrder(orderId)");
+  const reconciliation = result.indexOf("reconcilePaymentOrder({");
+
+  assert.ok(tracking >= 0);
+  assert.ok(binding > tracking);
+  assert.ok(reconciliation > binding);
+  assert.match(result, /trackPendingPaymentOrder\(orderId\);\s+bindCheckoutPaymentOrder\(orderId\);/);
+});
+
+test("checkout never navigates to BOG without a valid server order id", () => {
+  const checkout = readFileSync(
+    new URL("../components/checkout/CheckoutForm.tsx", import.meta.url),
+    "utf8",
+  );
+  const guard = checkout.indexOf("if (!uuidPattern.test(result.orderId))");
+  const tracking = checkout.indexOf("trackPendingPaymentOrder(result.orderId)");
+  const navigation = checkout.indexOf("window.location.assign(result.redirectUrl)");
+
+  assert.ok(guard >= 0);
+  assert.ok(tracking > guard);
+  assert.ok(navigation > tracking);
+  assert.match(checkout.slice(guard, tracking), /return;/);
+});
+
+test("an older order cannot overwrite or clear a newer checkout session", () => {
+  const storageKey = "hooma-bog-checkout-session-v2";
+  const orderA = "00000000-0000-4000-8000-000000000001";
+  const orderB = "00000000-0000-4000-8000-000000000002";
+  const values = new Map();
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    sessionStorage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+  };
+
+  try {
+    values.set(storageKey, JSON.stringify({
+      version: 2,
+      fingerprintSha256: "a".repeat(64),
+      checkoutKey: "00000000-0000-4000-8000-000000000003",
+      orderId: orderB,
+    }));
+
+    assert.equal(bindCheckoutPaymentOrder(orderA), false);
+    assert.equal(clearCheckoutPaymentSessionForOrder(orderA), false);
+    assert.equal(JSON.parse(values.get(storageKey)).orderId, orderB);
+    assert.equal(clearCheckoutPaymentSessionForOrder(orderB), true);
+    assert.equal(values.has(storageKey), false);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
 });
