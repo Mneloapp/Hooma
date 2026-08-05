@@ -11,10 +11,13 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { recoverCatalogPaymentSessionAction } from "@/app/auth/actions";
 import {
   clearCheckoutPaymentSession,
   clearCheckoutPaymentSessionForOrder,
   clearLegacyCheckoutPaymentSession,
+  bindCheckoutPaymentOrder,
+  readCheckoutPaymentSessionPointer,
 } from "@/components/checkout/payment-session-storage";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -23,6 +26,7 @@ import {
   LEGACY_CART_STORAGE_KEY,
   MAX_STORED_CART_ITEMS,
   cartItemKey,
+  cartMatchesPurchasedLinesExactly,
   cartStorageKeyForUser,
   isCartStorageEventForScope,
   mergeCartItems,
@@ -138,6 +142,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     pendingMode: "none",
   });
   const cartRef = useRef(cart);
+  const recoveredCheckoutKeysRef = useRef(new Set<string>());
   const [isOpen, setIsOpen] = useState(false);
 
   const replaceCart = useCallback((next: ScopedCart) => {
@@ -352,6 +357,70 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const pendingPaymentOrderKey = cart.pendingPaymentOrders
     .map((marker) => marker.orderId)
     .join(",");
+
+  useEffect(() => {
+    if (!cart.storageKey || cart.storageKey === GUEST_CART_STORAGE_KEY) return;
+    const session = readCheckoutPaymentSessionPointer();
+    if (!session) return;
+    const recoveryKey = `${cart.storageKey}:${session.checkoutKey}`;
+    if (recoveredCheckoutKeysRef.current.has(recoveryKey)) return;
+    recoveredCheckoutKeysRef.current.add(recoveryKey);
+    let active = true;
+    let retryTimer: number | null = null;
+    let attempts = 0;
+    const recover = async () => {
+      attempts += 1;
+      let result: Awaited<ReturnType<typeof recoverCatalogPaymentSessionAction>> = { ok: false };
+      try {
+        result = await recoverCatalogPaymentSessionAction(session.checkoutKey);
+      } catch {
+        // A bounded retry below handles transient server/network failures.
+      }
+      if (!active) return;
+      if (!result.ok) {
+        if (attempts < 3) {
+          retryTimer = window.setTimeout(() => void recover(), 5_000);
+        } else {
+          recoveredCheckoutKeysRef.current.delete(recoveryKey);
+        }
+        return;
+      }
+      if (session.orderId && session.orderId !== result.orderId) {
+        clearCheckoutPaymentSession();
+        return;
+      }
+
+      const alreadyTracked = cartRef.current.pendingPaymentOrders.some(
+        (marker) => marker.orderId === result.orderId,
+      );
+      const legacyCartIsUnchanged = cartMatchesPurchasedLinesExactly(
+        cartRef.current.items,
+        result.purchasedLines,
+      );
+      if (!alreadyTracked && !legacyCartIsUnchanged) {
+        // Old sessions did not capture cart line generations. If that cart was
+        // changed, fail closed instead of risking removal of newly added units.
+        clearCheckoutPaymentSession();
+        return;
+      }
+
+      bindCheckoutPaymentOrder(result.orderId);
+      trackPendingPaymentOrder(result.orderId);
+      if (["paid", "failed", "refunded"].includes(result.paymentStatus)) {
+        reconcilePaymentOrder({
+          orderId: result.orderId,
+          status: result.paymentStatus as "paid" | "failed" | "refunded",
+          purchasedLines: result.purchasedLines,
+        });
+      }
+    };
+    void recover();
+    return () => {
+      active = false;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      recoveredCheckoutKeysRef.current.delete(recoveryKey);
+    };
+  }, [cart.storageKey, reconcilePaymentOrder, trackPendingPaymentOrder]);
 
   useEffect(() => {
     if (!cart.storageKey || !pendingPaymentOrderKey) return;

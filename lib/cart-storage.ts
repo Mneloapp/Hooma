@@ -250,6 +250,39 @@ export function subtractPurchasedCartItems(
   });
 }
 
+export function cartMatchesPurchasedLinesExactly(
+  items: CartItem[],
+  purchasedLines: PurchasedCartLine[],
+) {
+  const cartQuantities = new Map<string, number>();
+  for (const item of items) {
+    const key = cartItemKey(item);
+    cartQuantities.set(key, (cartQuantities.get(key) ?? 0) + item.quantity);
+  }
+
+  const purchasedQuantities = new Map<string, number>();
+  for (const line of purchasedLines) {
+    if (
+      !isShortString(line.product_id, 128)
+      || !isShortString(line.variant_id, 128)
+      || !isShortString(line.material, 128)
+      || !isShortString(line.color, 128)
+      || !Number.isInteger(line.quantity)
+      || line.quantity < 1
+      || line.quantity > 100
+    ) return false;
+    const key = cartItemKey(line);
+    purchasedQuantities.set(key, (purchasedQuantities.get(key) ?? 0) + line.quantity);
+  }
+
+  if (!purchasedQuantities.size || cartQuantities.size !== purchasedQuantities.size) {
+    return false;
+  }
+  return [...purchasedQuantities].every(
+    ([key, quantity]) => cartQuantities.get(key) === quantity,
+  );
+}
+
 export function rememberPendingPaymentOrder(
   snapshot: CartStorageSnapshot,
   orderId: string,

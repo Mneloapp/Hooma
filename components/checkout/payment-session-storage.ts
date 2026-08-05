@@ -12,6 +12,11 @@ type StoredPaymentSession = {
   orderId?: string;
 };
 
+export type CheckoutPaymentSessionPointer = {
+  checkoutKey: string;
+  orderId?: string;
+};
+
 export async function sha256CheckoutFingerprint(value: string) {
   const bytes = new TextEncoder().encode(value);
   const digest = await window.crypto.subtle.digest("SHA-256", bytes);
@@ -57,6 +62,26 @@ export function clearLegacyCheckoutPaymentSession() {
     window.sessionStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // Storage can be unavailable in hardened/private browser modes.
+  }
+}
+
+export function readCheckoutPaymentSessionPointer(): CheckoutPaymentSessionPointer | null {
+  try {
+    const stored = JSON.parse(
+      window.sessionStorage.getItem(STORAGE_KEY) ?? "null",
+    ) as StoredPaymentSession | null;
+    if (
+      stored?.version !== 2
+      || !sha256Pattern.test(stored.fingerprintSha256)
+      || !uuidPattern.test(stored.checkoutKey)
+      || (stored.orderId !== undefined && !uuidPattern.test(stored.orderId))
+    ) return null;
+    return {
+      checkoutKey: stored.checkoutKey,
+      ...(stored.orderId ? { orderId: stored.orderId } : {}),
+    };
+  } catch {
+    return null;
   }
 }
 

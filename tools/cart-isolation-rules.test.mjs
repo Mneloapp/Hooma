@@ -5,6 +5,7 @@ import {
   GUEST_CART_STORAGE_KEY,
   LEGACY_CART_STORAGE_KEY,
   MAX_PENDING_PAYMENT_ORDERS,
+  cartMatchesPurchasedLinesExactly,
   cartStorageKeyForUser,
   isCartStorageEventForScope,
   mergeCartItems,
@@ -328,6 +329,42 @@ test("payment markers with implausible future timestamps are rejected", () => {
     pendingPaymentOrders: [{ orderId, recordedAt: Date.now() + 60 * 60 * 1000 }],
   }));
   assert.deepEqual(snapshot.pendingPaymentOrders, []);
+});
+
+test("legacy recovery requires the cart to exactly match the purchased lines", () => {
+  const purchased = [{
+    product_id: "same",
+    variant_id: "variant-same",
+    material: "PLA",
+    color: "White",
+    quantity: 1,
+  }];
+  assert.equal(cartMatchesPurchasedLinesExactly([item("same")], purchased), true);
+  assert.equal(cartMatchesPurchasedLinesExactly([item("same", 2)], purchased), false);
+  assert.equal(cartMatchesPurchasedLinesExactly([item("same"), item("new")], purchased), false);
+  assert.equal(cartMatchesPurchasedLinesExactly([], purchased), false);
+});
+
+test("a paid order closes its marker even when the cart has no matching line", () => {
+  const orderId = "00000000-0000-4000-8000-000000000099";
+  const pending = rememberPendingPaymentOrder(
+    parseStoredCartSnapshot(serializeStoredCart([item("different")])),
+    orderId,
+  );
+  const settled = reconcileSettledPaymentOrder(pending, {
+    orderId,
+    status: "paid",
+    purchasedLines: [{
+      product_id: "purchased",
+      variant_id: "variant-purchased",
+      material: "PLA",
+      color: "White",
+      quantity: 1,
+    }],
+  });
+  assert.deepEqual(settled.items, pending.items);
+  assert.equal(settled.pendingPaymentOrders.length, 0);
+  assert.deepEqual(settled.settledPaymentOrders.map((marker) => marker.orderId), [orderId]);
 });
 
 test("CartProvider reconciles server-action auth changes and persists mutations synchronously", () => {
