@@ -14,7 +14,24 @@ const [homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard
   readFile(new URL("../components/ProductGrid.tsx", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260803000100_newest_storefront_products.sql", import.meta.url), "utf8"),
 ]);
-const categoryHeroImage = await stat(new URL("../public/homepage/household-category-hero.webp", import.meta.url));
+const categoryPosterSlugs = [
+  "household",
+  "art",
+  "education",
+  "fashion",
+  "hobbies-diy",
+  "miniatures",
+  "props-cosplay",
+  "tools",
+  "toys-games",
+  "generative-3d-model",
+  "3d-printer",
+];
+const categoryHeroImages = await Promise.all(
+  categoryPosterSlugs.map((slug) =>
+    stat(new URL(`../public/homepage/${slug}-category-hero.webp`, import.meta.url)),
+  ),
+);
 
 test("homepage keeps the popular-products shelf hidden before real sales", () => {
   assert.doesNotMatch(homeClient, /პოპულარული პროდუქტები|Popular products/);
@@ -53,28 +70,69 @@ test("homepage moves the printer-technology category to the final category posit
   assert.match(homePage, /getStorefrontHomeCards\(12\)/);
 });
 
-test("homepage opens with one product-led household category poster", () => {
+test("homepage opens with a scrollable poster for every catalog category", () => {
   assert.match(homeClient, /<HomeCategoryHero \/>/);
   assert.match(homeClient, /-mt-8[\s\S]{0,80}sm:-mt-12/);
   assert.ok(homeClient.indexOf("<HomeCategoryHero />") < homeClient.indexOf('max-w-[1480px]'));
   assert.doesNotMatch(homeClient, /დამზადებულია თბილისში|შემოწმებული ოპერატორის მიერ/);
   assert.doesNotMatch(homeClient, /\[Clock3/);
-  assert.match(homeCategoryHero, /const featuredCategoryHref = "\/shop\?category=household"/);
-  assert.match(homeCategoryHero, /src="\/homepage\/household-category-hero\.webp"/);
+  const posterSlugs = [...homeCategoryHero.matchAll(/slug: "([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(posterSlugs, categoryPosterSlugs);
+  for (const slug of categoryPosterSlugs) {
+    assert.match(homeCategoryHero, new RegExp(`image: "\\/homepage\\/${slug}-category-hero\\.webp"`));
+  }
+  assert.match(homeCategoryHero, /href=\{`\/shop\?category=\$\{poster\.slug\}`\}/);
   assert.match(homeCategoryHero, /sizes="100vw"/);
-  assert.match(homeCategoryHero, /priority/);
-  assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური სივრცისთვის/);
-  assert.match(homeCategoryHero, /Household objects for everyday spaces/);
-  assert.match(homeCategoryHero, /საყოფაცხოვრებო პროდუქტების ნახვა/);
-  assert.match(homeCategoryHero, /aria-label=\{georgian \?/);
+  assert.match(homeCategoryHero, /priority=\{index === 0\}/);
+  assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური ცხოვრებისთვის/);
+  assert.match(homeCategoryHero, /Household objects for everyday life/);
+  assert.match(homeCategoryHero, /ხელოვნება შენი სივრცის გასაცოცხლებლად/);
+  assert.match(homeCategoryHero, /სასწავლო მოდელები აღმოჩენისა და სწავლისთვის/);
+  assert.match(homeCategoryHero, /აქსესუარები გამორჩეული სტილისთვის/);
+  assert.match(homeCategoryHero, /ჰობისა და DIY იდეების გასაცოცხლებლად/);
+  assert.match(homeCategoryHero, /მინიატიურები დიდი ისტორიებისთვის/);
+  assert.match(homeCategoryHero, /რეკვიზიტები შენი პერსონაჟის გასაცოცხლებლად/);
+  assert.match(homeCategoryHero, /პრაქტიკული ხელსაწყოები საქმის გასამარტივებლად/);
+  assert.match(homeCategoryHero, /სათამაშოები მეტი ფანტაზიისა და გართობისთვის/);
+  assert.match(homeCategoryHero, /გენერაციული 3D ფორმები უნიკალური სივრცისთვის/);
+  assert.match(homeCategoryHero, /3D პრინტერის აქსესუარები უკეთესი ბეჭდვისთვის/);
+  assert.match(homeCategoryHero, /aria-label=\{title\}/);
   assert.match(homeCategoryHero, /alt=""/);
   assert.match(homeCategoryHero, /focus-visible:ring-2/);
   assert.match(homeCategoryHero, /h-\[380px\]/);
   assert.match(homeCategoryHero, /xl:object-contain xl:object-right/);
   assert.match(homeCategoryHero, /via-\[#0d1929\]\/80[\s\S]{0,100}sm:via-\[#0d1929\]\/75/);
+  assert.match(homeCategoryHero, /snap-x snap-mandatory overflow-x-auto/);
+  assert.doesNotMatch(homeCategoryHero, /scroll-smooth/);
+  assert.match(homeCategoryHero, /w-full shrink-0 snap-center/);
+  assert.match(homeCategoryHero, /moveByPoster\(-1\)/);
+  assert.match(homeCategoryHero, /moveByPoster\(1\)/);
+  assert.match(homeCategoryHero, /aria-current=\{index === activeIndex \? "true" : undefined\}/);
+  assert.match(homeCategoryHero, /tabIndex=\{index === activeIndex \? 0 : -1\}/);
+  assert.match(homeCategoryHero, /aria-hidden=\{index !== activeIndex\}/);
+  assert.match(homeCategoryHero, /aria-live="polite"/);
+  assert.match(homeCategoryHero, /sm:hidden[\s\S]{0,100}\{activeIndex \+ 1\} \/ \{categoryPosters\.length\}/);
+  assert.match(homeCategoryHero, /hidden items-center[\s\S]{0,120}sm:flex/);
+  assert.match(homeCategoryHero, /inline-flex size-6 items-center justify-center/);
+  assert.match(homeCategoryHero, /ResizeObserver/);
+  assert.match(homeCategoryHero, /observer\.disconnect\(\)/);
+  assert.match(homeCategoryHero, /activeIndexRef\.current \* nextWidth/);
+  assert.match(homeCategoryHero, /hidden size-11[\s\S]{0,160}sm:inline-flex/);
+  const scrollToPosterSource = homeCategoryHero.slice(
+    homeCategoryHero.indexOf("const scrollToPoster"),
+    homeCategoryHero.indexOf("const moveByPoster"),
+  );
+  assert.doesNotMatch(scrollToPosterSource, /setActiveIndex/);
+  assert.equal(homeCategoryHero.match(/<h1\b/g)?.length, 1);
+  assert.equal(homeCategoryHero.match(/<h2\b/g)?.length, 1);
+  assert.match(homeCategoryHero, /<h1 className="sr-only">/);
+  assert.doesNotMatch(homeCategoryHero, /setInterval|autoPlay|autoplay/);
+  assert.doesNotMatch(homeCategoryHero, /<p|რჩეული კატეგორია|Featured category|Shop Household|დეკორი და პრაქტიკული/);
   assert.doesNotMatch(homeCategoryHero, /\/72/);
   assert.doesNotMatch(homeCategoryHero, /ProductCardData|posterProducts|grid-cols-12/);
-  assert.ok(categoryHeroImage.size > 10_000 && categoryHeroImage.size < 200_000);
+  for (const image of categoryHeroImages) {
+    assert.ok(image.size > 10_000 && image.size < 200_000);
+  }
 });
 
 test("homepage category cards are dense and omit price while Daily Deals keeps it", () => {
