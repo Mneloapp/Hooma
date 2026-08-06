@@ -1,12 +1,18 @@
 "use client";
 
 import { Fragment } from "react";
-import { ArrowRight, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
+import { ArrowRight, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
 import { catalogCategories } from "@/data/catalog";
 import type { ProductCardData } from "@/lib/product-card";
 import { Button } from "@/components/Button";
-import { ProductShelf } from "@/components/ProductShelf";
+import { HomeCategoryHero } from "@/components/home/HomeCategoryHero";
+import { HomeProductShelf } from "@/components/home/HomeProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
+
+const homepageCategories = [
+  ...catalogCategories.filter((category) => category.slug !== "3d-printer"),
+  ...catalogCategories.filter((category) => category.slug === "3d-printer"),
+];
 
 export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dailyDealDiscountPercent }: { categoryProducts: Record<string, ProductCardData[]>; dailyDealProducts: ProductCardData[]; dailyDealDiscountPercent: number }) {
   const { language } = useLanguage();
@@ -14,25 +20,19 @@ export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dail
 
   return (
     <main className="bg-hooma-panel/60 pb-16">
-      <div className="mx-auto max-w-[1480px] space-y-5 px-4 pt-5 sm:px-6 lg:px-8">
-        <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-gradient-to-r from-[#FFE0D6] via-[#FFF1C7] to-[#DDEBFF] sm:grid-cols-3">
-          {[
-            [Clock3, georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery", georgian ? "სტანდარტული კატალოგის შეკვეთებისთვის" : "For standard catalog orders"],
-            [MapPin, georgian ? "დამზადებულია თბილისში" : "Made in Tbilisi", georgian ? "ადგილობრივი წარმოება" : "Local production"],
-            [ShieldCheck, georgian ? "შემოწმებული ოპერატორის მიერ" : "Operator checked", georgian ? "ხარისხის კონტროლი ყველა შეკვეთაზე" : "Quality control on every order"],
-          ].map(([Icon, title, copy], index) => { const InfoIcon = Icon as typeof Clock3; return <div key={String(title)} className={`flex items-center gap-3 px-5 py-4 ${index ? "border-t border-hooma-text/10 sm:border-l sm:border-t-0" : ""}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-hooma-accent"><InfoIcon size={18} /></span><div><h2 className="text-sm font-semibold">{String(title)}</h2><p className="mt-0.5 text-xs text-hooma-muted">{String(copy)}</p></div></div>; })}
-        </section>
-
+      <HomeCategoryHero />
+      <div className="relative z-10 mx-auto -mt-8 max-w-[1480px] space-y-5 px-4 sm:-mt-12 sm:px-6 lg:px-8">
         <div className="space-y-5">
-          {catalogCategories.map((category) => (
+          {homepageCategories.map((category) => (
             <Fragment key={category.slug}>
-              <ProductShelf eyebrow={georgian ? "კატეგორია" : "Category"} title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
+              <HomeProductShelf title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
               {category.slug === "fashion" ? <>
-                <ProductShelf
+                <HomeProductShelf
                   eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}
                   title={georgian ? "დღის შეთავაზებები" : "Daily deals"}
                   products={dailyDealProducts}
                   href="/deals"
+                  showPrice
                 />
                 <section className="grid gap-5 rounded-[1.25rem] bg-hooma-text p-6 text-white md:grid-cols-[1fr_auto] md:items-center lg:p-8">
                   <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-hooma-secondary">{georgian ? "ინდივიდუალურად დამზადებული Hooma-სგან" : "Custom made by Hooma"}</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{georgian ? "ვერ იპოვე საჭირო დეტალი? დაგიმზადებთ." : "Can’t find the part you need? We’ll make it."}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">{georgian ? "გამოგვიგზავნე ფოტო, ზომები ან არსებული მოდელი — ოპერატორი შეაფასებს დამზადების შესაძლებლობას და ვადას." : "Send a photo, dimensions, or an existing model and our operator will review feasibility and timing."}</p></div>
