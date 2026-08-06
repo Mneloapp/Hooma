@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [homePage, homeClient, homeProductShelf, homeProductCard, storefrontCatalog, shopPage, shopSort, productGrid, newestMigration] = await Promise.all([
+const [homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard, storefrontCatalog, shopPage, shopSort, productGrid, newestMigration] = await Promise.all([
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/home/HomeStorefrontClient.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../components/home/HomeCategoryHero.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/home/HomeProductShelf.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/home/HomeProductCard.tsx", import.meta.url), "utf8"),
   readFile(new URL("../lib/storefront-catalog.ts", import.meta.url), "utf8"),
@@ -49,6 +50,20 @@ test("homepage moves the printer-technology category to the final category posit
   assert.match(homeClient, /catalogCategories\.filter\(\(category\) => category\.slug === "3d-printer"\)/);
   assert.match(homeClient, /homepageCategories\.map\(\(category\)/);
   assert.match(homePage, /getStorefrontHomeCards\(12\)/);
+});
+
+test("homepage opens with one product-led household category poster", () => {
+  assert.match(homeClient, /<HomeCategoryHero products=\{categoryProducts\.household \?\? \[\]\} \/>/);
+  assert.doesNotMatch(homeClient, /დამზადებულია თბილისში|შემოწმებული ოპერატორის მიერ/);
+  assert.doesNotMatch(homeClient, /\[Clock3/);
+  assert.match(homeCategoryHero, /const featuredCategoryHref = "\/shop\?category=household"/);
+  assert.match(homeCategoryHero, /const posterProducts = products\.slice\(0, 2\)/);
+  assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური სივრცისთვის/);
+  assert.match(homeCategoryHero, /Household objects for everyday spaces/);
+  assert.match(homeCategoryHero, /საყოფაცხოვრებო პროდუქტების ნახვა/);
+  assert.match(homeCategoryHero, /alt=""/);
+  assert.match(homeCategoryHero, /focus-visible:ring-2/);
+  assert.match(homeCategoryHero, /\/catalog-placeholders\/home\.svg/);
 });
 
 test("homepage category cards are dense and omit price while Daily Deals keeps it", () => {

@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment } from "react";
-import { ArrowRight, Clock3, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
+import { ArrowRight, MapPin, PackageCheck, Printer, ShieldCheck } from "lucide-react";
 import { catalogCategories } from "@/data/catalog";
 import type { ProductCardData } from "@/lib/product-card";
 import { Button } from "@/components/Button";
+import { HomeCategoryHero } from "@/components/home/HomeCategoryHero";
 import { HomeProductShelf } from "@/components/home/HomeProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
 
@@ -20,13 +21,7 @@ export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dail
   return (
     <main className="bg-hooma-panel/60 pb-16">
       <div className="mx-auto max-w-[1480px] space-y-5 px-4 pt-5 sm:px-6 lg:px-8">
-        <section className="grid overflow-hidden rounded-[1.25rem] border border-hooma-text/10 bg-gradient-to-r from-[#FFE0D6] via-[#FFF1C7] to-[#DDEBFF] sm:grid-cols-3">
-          {[
-            [Clock3, georgian ? "3 სამუშაო დღე შეკვეთიდან მიწოდებამდე" : "3 business days from order to delivery", georgian ? "სტანდარტული კატალოგის შეკვეთებისთვის" : "For standard catalog orders"],
-            [MapPin, georgian ? "დამზადებულია თბილისში" : "Made in Tbilisi", georgian ? "ადგილობრივი წარმოება" : "Local production"],
-            [ShieldCheck, georgian ? "შემოწმებული ოპერატორის მიერ" : "Operator checked", georgian ? "ხარისხის კონტროლი ყველა შეკვეთაზე" : "Quality control on every order"],
-          ].map(([Icon, title, copy], index) => { const InfoIcon = Icon as typeof Clock3; return <div key={String(title)} className={`flex items-center gap-3 px-5 py-4 ${index ? "border-t border-hooma-text/10 sm:border-l sm:border-t-0" : ""}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-hooma-accent"><InfoIcon size={18} /></span><div><h2 className="text-sm font-semibold">{String(title)}</h2><p className="mt-0.5 text-xs text-hooma-muted">{String(copy)}</p></div></div>; })}
-        </section>
+        <HomeCategoryHero products={categoryProducts.household ?? []} />
 
         <div className="space-y-5">
           {homepageCategories.map((category) => (
