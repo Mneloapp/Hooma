@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
 const [homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard, storefrontCatalog, shopPage, shopSort, productGrid, newestMigration] = await Promise.all([
@@ -14,6 +14,7 @@ const [homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard
   readFile(new URL("../components/ProductGrid.tsx", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260803000100_newest_storefront_products.sql", import.meta.url), "utf8"),
 ]);
+const categoryHeroImage = await stat(new URL("../public/homepage/household-category-hero.webp", import.meta.url));
 
 test("homepage keeps the popular-products shelf hidden before real sales", () => {
   assert.doesNotMatch(homeClient, /პოპულარული პროდუქტები|Popular products/);
@@ -53,17 +54,27 @@ test("homepage moves the printer-technology category to the final category posit
 });
 
 test("homepage opens with one product-led household category poster", () => {
-  assert.match(homeClient, /<HomeCategoryHero products=\{categoryProducts\.household \?\? \[\]\} \/>/);
+  assert.match(homeClient, /<HomeCategoryHero \/>/);
+  assert.match(homeClient, /-mt-8[\s\S]{0,80}sm:-mt-12/);
+  assert.ok(homeClient.indexOf("<HomeCategoryHero />") < homeClient.indexOf('max-w-[1480px]'));
   assert.doesNotMatch(homeClient, /დამზადებულია თბილისში|შემოწმებული ოპერატორის მიერ/);
   assert.doesNotMatch(homeClient, /\[Clock3/);
   assert.match(homeCategoryHero, /const featuredCategoryHref = "\/shop\?category=household"/);
-  assert.match(homeCategoryHero, /const posterProducts = products\.slice\(0, 2\)/);
+  assert.match(homeCategoryHero, /src="\/homepage\/household-category-hero\.webp"/);
+  assert.match(homeCategoryHero, /sizes="100vw"/);
+  assert.match(homeCategoryHero, /priority/);
   assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური სივრცისთვის/);
   assert.match(homeCategoryHero, /Household objects for everyday spaces/);
   assert.match(homeCategoryHero, /საყოფაცხოვრებო პროდუქტების ნახვა/);
+  assert.match(homeCategoryHero, /aria-label=\{georgian \?/);
   assert.match(homeCategoryHero, /alt=""/);
   assert.match(homeCategoryHero, /focus-visible:ring-2/);
-  assert.match(homeCategoryHero, /\/catalog-placeholders\/home\.svg/);
+  assert.match(homeCategoryHero, /h-\[380px\]/);
+  assert.match(homeCategoryHero, /xl:object-contain xl:object-right/);
+  assert.match(homeCategoryHero, /via-\[#0d1929\]\/80[\s\S]{0,100}sm:via-\[#0d1929\]\/75/);
+  assert.doesNotMatch(homeCategoryHero, /\/72/);
+  assert.doesNotMatch(homeCategoryHero, /ProductCardData|posterProducts|grid-cols-12/);
+  assert.ok(categoryHeroImage.size > 10_000 && categoryHeroImage.size < 200_000);
 });
 
 test("homepage category cards are dense and omit price while Daily Deals keeps it", () => {

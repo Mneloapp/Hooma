@@ -20,9 +20,8 @@ export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dail
 
   return (
     <main className="bg-hooma-panel/60 pb-16">
-      <div className="mx-auto max-w-[1480px] space-y-5 px-4 pt-5 sm:px-6 lg:px-8">
-        <HomeCategoryHero products={categoryProducts.household ?? []} />
-
+      <HomeCategoryHero />
+      <div className="relative z-10 mx-auto -mt-8 max-w-[1480px] space-y-5 px-4 sm:-mt-12 sm:px-6 lg:px-8">
         <div className="space-y-5">
           {homepageCategories.map((category) => (
             <Fragment key={category.slug}>
