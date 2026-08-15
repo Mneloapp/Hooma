@@ -16,6 +16,9 @@ export const metadata: Metadata = {
     template: "%s | Hooma",
   },
   description: DEFAULT_DESCRIPTION,
+  icons: {
+    icon: "/brand/hooma-symbol.png",
+  },
   openGraph: {
     type: "website",
     locale: "ka_GE",
