@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { LocalizedText } from "@/components/LocalizedText";
+import { privatePageMetadata } from "@/lib/seo";
+
+export const metadata = privatePageMetadata;
 
 export default function SignupPage() {
   return (

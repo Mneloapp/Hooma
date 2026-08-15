@@ -4,6 +4,9 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { defaultAdminPath, isStaffRole } from "@/lib/auth/permissions";
 import { getProfile } from "@/lib/supabase/server";
 import { LocalizedText } from "@/components/LocalizedText";
+import { privatePageMetadata } from "@/lib/seo";
+
+export const metadata = privatePageMetadata;
 
 const errorMessages: Record<string, { ka: string; en: string }> = {
   google: { ka: "Google-ით შესვლა ვერ დაიწყო. სცადე ხელახლა.", en: "Google sign-in could not start. Please try again." },

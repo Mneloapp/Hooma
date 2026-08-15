@@ -47,6 +47,13 @@ export type StorefrontHomeCards = {
   categoryProducts: Record<string, ProductCardData[]>;
 };
 
+export type StorefrontSitemapEntry = {
+  slug: string;
+  categorySlug: string;
+  image?: string;
+  refreshedAt: Date;
+};
+
 const categoryNames: Record<string, ProductCategory> = {
   "3d-printer": "3D Printer",
   art: "Art",
@@ -231,6 +238,58 @@ export async function getStorefrontProductCardsByIds(productIds: string[]): Prom
     const card = cardsById.get(id);
     return card ? [card] : [];
   });
+}
+
+export async function getStorefrontSitemapEntries(): Promise<StorefrontSitemapEntry[]> {
+  const admin = createAdminClient() as any;
+  if (!admin) return [];
+
+  const pageSize = 1000;
+  const entries: StorefrontSitemapEntry[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin
+      .from("storefront_product_cards")
+      .select("product_id,slug,category_slug,hero_image,refreshed_at")
+      .order("product_id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      console.error("[storefront-catalog] Failed to load sitemap products.", error.message);
+      return entries;
+    }
+
+    const rows = (data ?? []) as Array<{
+      slug: string;
+      category_slug: string;
+      hero_image: string | null;
+      refreshed_at: string;
+    }>;
+    entries.push(...rows.map((row) => ({
+      slug: row.slug,
+      categorySlug: row.category_slug,
+      image: safeCatalogImage(row.hero_image, "") || undefined,
+      refreshedAt: new Date(row.refreshed_at),
+    })));
+    if (rows.length < pageSize) break;
+  }
+  return entries;
+}
+
+export async function getStorefrontPublicCategorySlugs(): Promise<string[]> {
+  const admin = createAdminClient() as any;
+  if (!admin) return [];
+  const { data, error } = await admin
+    .from("categories")
+    .select("slug")
+    .eq("is_active", true)
+    .is("parent_id", null)
+    .order("sort_order", { ascending: true });
+  if (error) {
+    console.error("[storefront-catalog] Failed to load public sitemap categories.", error.message);
+    return [];
+  }
+  return (data ?? []).flatMap((row: { slug?: unknown }) => (
+    typeof row.slug === "string" ? [row.slug] : []
+  ));
 }
 
 export async function getStorefrontProductBySlug(slug: string): Promise<Product | undefined> {
