@@ -158,7 +158,7 @@ test("recording RPCs accept only materially exact event-key replays", () => {
     assert.match(body, /replay_receipt\.attempt_number = selected_job\.attempts/);
     assert.match(body, /replay_receipt\.provider_request_id[\s\S]*is not distinct from requested_provider_request_id/);
     assert.match(body, /replay_receipt\.provider_publish_id[\s\S]*is not distinct from/);
-    assert.match(body, /replay_receipt\.payload @> \(/);
+    assert.match(body, /replay_receipt\.payload = \(/);
     assert.match(body, /raise exception 'INSTAGRAM_LIFECYCLE_EVENT_IDEMPOTENCY_CONFLICT'/);
   }
 
@@ -168,12 +168,16 @@ test("recording RPCs accept only materially exact event-key replays", () => {
   assert.match(created, /raise exception 'INSTAGRAM_CONTAINER_CREATED_REPLAY_CONFLICT'/);
   assert.match(status, /'operation_id', requested_operation_id/);
   assert.match(status, /'provider_container_status', requested_provider_status/);
+  assert.match(status, /replay_receipt\.payload \? 'poll_count'/);
+  assert.match(status, /jsonb_typeof\(replay_receipt\.payload -> 'poll_count'\) = 'number'/);
+  assert.match(status, /'poll_count', replay_receipt\.payload -> 'poll_count'/);
   assert.match(status, /if selected_lifecycle\.phase <> 'CONTAINER_PROCESSING' then\s+raise exception/);
   assert.match(outcome, /replay_receipt\.provider_post_id[\s\S]*is not distinct from requested_provider_post_id/);
   assert.match(outcome, /'outcome', requested_outcome/);
   assert.match(outcome, /'provider_permalink', requested_provider_permalink/);
   assert.match(outcome, /if selected_lifecycle\.media_publish_outcome in \('CONFIRMED', 'REJECTED_NO_SIDE_EFFECT'\) then\s+raise exception/);
   assert.doesNotMatch(migration, /replay_job_id|replay_event_type/);
+  assert.doesNotMatch(migration, /replay_receipt\.payload\s*@>/);
 });
 
 test("all evidence is redacted, append-only, and service-RPC only", () => {
