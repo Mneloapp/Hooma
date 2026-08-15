@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/components/LanguageProvider";
+import { categoryPath } from "@/lib/seo";
 
 type CategoryPoster = {
   slug: string;
@@ -181,7 +182,7 @@ export function HomeCategoryHero() {
               className="w-full shrink-0 snap-center"
             >
               <Link
-                href={`/shop?category=${poster.slug}`}
+                href={categoryPath(poster.slug)}
                 aria-label={title}
                 tabIndex={index === activeIndex ? 0 : -1}
                 className="group relative block h-[380px] overflow-hidden bg-[#111622] text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-hooma-secondary sm:h-[420px] lg:h-[480px]"

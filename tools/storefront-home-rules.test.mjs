@@ -81,7 +81,8 @@ test("homepage opens with a scrollable poster for every catalog category", () =>
   for (const slug of categoryPosterSlugs) {
     assert.match(homeCategoryHero, new RegExp(`image: "\\/homepage\\/${slug}-category-hero\\.webp"`));
   }
-  assert.match(homeCategoryHero, /href=\{`\/shop\?category=\$\{poster\.slug\}`\}/);
+  assert.match(homeCategoryHero, /import \{ categoryPath \} from "@\/lib\/seo"/);
+  assert.match(homeCategoryHero, /href=\{categoryPath\(poster\.slug\)\}/);
   assert.match(homeCategoryHero, /sizes="100vw"/);
   assert.match(homeCategoryHero, /priority=\{index === 0\}/);
   assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური ცხოვრებისთვის/);

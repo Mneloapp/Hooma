@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronRight, Filter, Search, SlidersHorizontal, X } from "lucide-react";
 import { catalogCategories, getCategory } from "@/data/catalog";
@@ -8,6 +9,7 @@ import { getStorefrontCatalogPage } from "@/lib/storefront-catalog";
 import { cn } from "@/lib/utils";
 import { LocalizedText } from "@/components/LocalizedText";
 import { ShopSearchInput, ShopSortSelect } from "@/components/ShopSortSelect";
+import { categoryMetadata, categoryPath, privatePageMetadata, publicPageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +17,34 @@ type ShopParams = { category?: string; subcategory?: string; q?: string; materia
 
 const PRODUCTS_PER_PAGE = 36;
 
+export async function generateMetadata({ searchParams }: { searchParams: Promise<ShopParams> }): Promise<Metadata> {
+  const params = await searchParams;
+  const hasFilters = Object.values(params).some(Boolean);
+  if (!hasFilters) {
+    return publicPageMetadata({
+      title: "მაღაზია",
+      description: "დაათვალიერე Hooma-ს შეკვეთით დამზადებული პრაქტიკული ნივთების სრული კატალოგი.",
+      path: "/shop",
+    });
+  }
+
+  const category = params.category ? getCategory(params.category) : undefined;
+  const filteredMetadata = category
+    ? categoryMetadata(category, false)
+    : publicPageMetadata({
+      title: "კატალოგის შედეგები",
+      description: "Hooma-ს კატალოგის გაფილტრული შედეგები.",
+      path: "/shop",
+      index: false,
+    });
+  return { ...filteredMetadata, robots: privatePageMetadata.robots };
+}
+
 export default async function Shop({ searchParams }: { searchParams: Promise<ShopParams> }) {
   const params = await searchParams;
   const { category, subcategory, q = "", material, sort = "newest" } = params;
   const selectedCategory = category ? getCategory(category) : undefined;
+  const catalogBasePath = selectedCategory ? categoryPath(selectedCategory.slug) : "/shop";
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const safeRequestedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   let [catalogPage, dailyDeals] = await Promise.all([
@@ -33,9 +59,12 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
     clear.forEach((key) => delete merged[key]);
     const changesCatalogView = [...Object.keys(changes), ...clear].some((key) => key !== "page");
     if (changesCatalogView) delete merged.page;
+    const nextCategory = merged.category ? getCategory(merged.category) : undefined;
+    delete merged.category;
     Object.entries(merged).forEach(([key, value]) => { if (value) next.set(key, value); });
     const value = next.toString();
-    return value ? `/shop?${value}` : "/shop";
+    const basePath = nextCategory ? categoryPath(nextCategory.slug) : "/shop";
+    return value ? `${basePath}?${value}` : basePath;
   };
 
   const selectedSubcategory = subcategory ? selectedCategory?.subcategories.find((item) => item.slug === subcategory) : undefined;
@@ -86,8 +115,7 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-hooma-secondary"><LocalizedText ka="Hooma-ს კატალოგი" en="Hooma catalog" /></p>
         <div className="mt-3 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl"><LocalizedText ka={q ? `ძიების შედეგები: “${q}”` : selectedCategory?.nameKa ?? "ყველა პროდუქტი"} en={q ? `Search results: “${q}”` : selectedCategory?.name ?? "All products"} /></h1><p className="mt-3 max-w-2xl text-sm leading-6 text-white/60"><LocalizedText ka="კატალოგის ნივთები მზადდება შეკვეთის შემდეგ და გადის ოპერატორის ხარისხის კონტროლს." en="Catalog items are made after you order and pass operator quality control." /></p></div>
-          <form action="/shop" className="flex w-full max-w-md overflow-hidden rounded-xl bg-white text-hooma-text">
-            {category ? <input type="hidden" name="category" value={category} /> : null}
+          <form action={catalogBasePath} className="flex w-full max-w-md overflow-hidden rounded-xl bg-white text-hooma-text">
             <ShopSearchInput defaultValue={q} />
             <button className="grid w-12 place-items-center bg-hooma-accent text-white" aria-label="Search"><Search size={18} /></button>
           </form>
@@ -126,8 +154,8 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
                   <div className="mt-3 flex flex-wrap gap-2">{["PLA+", "PETG", "ASA", "TPU"].map((item) => <Link key={item} href={material === item ? buildHref({}, ["material"]) : buildHref({ material: item })} className={cn("rounded-full border px-3 py-1.5 text-xs", material === item ? "border-hooma-accent bg-hooma-accent text-white" : "border-hooma-text/10 text-hooma-muted")}>{item}</Link>)}</div>
                 </div>
               </details>
-              <form action="/shop" className="relative">
-                {q ? <input type="hidden" name="q" value={q} /> : null}{category ? <input type="hidden" name="category" value={category} /> : null}{subcategory ? <input type="hidden" name="subcategory" value={subcategory} /> : null}{material ? <input type="hidden" name="material" value={material} /> : null}
+              <form action={catalogBasePath} className="relative">
+                {q ? <input type="hidden" name="q" value={q} /> : null}{subcategory ? <input type="hidden" name="subcategory" value={subcategory} /> : null}{material ? <input type="hidden" name="material" value={material} /> : null}
                 <div className="flex items-center gap-2"><ShopSortSelect defaultValue={sort} /><button className="h-10 rounded-xl bg-hooma-text px-3 text-xs font-medium text-white"><LocalizedText ka="დალაგება" en="Sort" /></button></div>
               </form>
             </div>
