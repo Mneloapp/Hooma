@@ -56,7 +56,9 @@ export async function GET(request: Request) {
     const authorizationCode = boundedOAuthParameter(url.searchParams.get("code"));
     if (!authorizationCode) throw new Error("AUTHORIZATION_CODE_MISSING");
     const token = await exchangeInstagramAuthorizationCode(authorizationCode);
-    const identity = await getInstagramIdentity(token.accessToken, token.userId);
+    const identity = await getInstagramIdentity(token.accessToken, {
+      appScopedUserId: token.appScopedUserId,
+    });
     await storeSocialConnection({
       provider: "instagram",
       tokenType: token.tokenType,
@@ -70,6 +72,7 @@ export async function GET(request: Request) {
         username: identity.username,
         snapshot: {
           account_id: identity.accountId,
+          app_scoped_user_id: identity.appScopedUserId,
           username: identity.username,
           account_type: identity.accountType,
         },
