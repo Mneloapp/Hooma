@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { pathToFileURL } from "node:url";
 
 const baseUrl = (process.env.SEO_BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
 const canonicalOrigin = "https://hooma.ge";
@@ -32,7 +33,7 @@ function tags(html, name) {
 
 function attributes(tag) {
   return Object.fromEntries(
-    [...tag.matchAll(/([:\w-]+)=(?:"([^"]*)"|'([^']*)')/g)]
+    [...tag.matchAll(/([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)]
       .map((match) => [match[1].toLowerCase(), decodeHtml(match[2] ?? match[3] ?? "")]),
   );
 }
@@ -45,12 +46,38 @@ function meta(html, key) {
   return "";
 }
 
-function canonical(html) {
+export function canonicalUrls(html) {
+  const values = [];
   for (const tag of tags(html, "link")) {
     const attrs = attributes(tag);
-    if (attrs.rel?.split(/\s+/).includes("canonical")) return attrs.href || "";
+    const rel = attrs.rel?.split(/\s+/).map((value) => value.toLowerCase());
+    if (rel?.includes("canonical")) values.push(attrs.href ?? "");
   }
-  return "";
+  return values;
+}
+
+export function canonical(html, label = "page") {
+  const values = canonicalUrls(html);
+  assert.equal(values.length, 1, `${label} must emit exactly one canonical`);
+
+  const value = values[0].trim();
+  assert.ok(value, `${label} canonical must not be empty`);
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    assert.fail(`${label} canonical must be an absolute URL`);
+  }
+
+  assert.equal(url.search, "", `${label} canonical must not include a query`);
+  assert.equal(url.hash, "", `${label} canonical must not include a hash`);
+  return url.href;
+}
+
+export function assertCanonical(html, expectedCanonical, label = "page") {
+  const expected = new URL(expectedCanonical).href;
+  assert.equal(canonical(html, label), expected, `${label} canonical must use the apex host`);
 }
 
 function title(html) {
@@ -75,7 +102,7 @@ function assertNoindex(html, label) {
 }
 
 function assertPublicMetadata(html, expectedCanonical, label) {
-  assert.equal(canonical(html), expectedCanonical, `${label} canonical must use the apex host`);
+  assertCanonical(html, expectedCanonical, label);
   assert.ok(title(html), `${label} must have a title`);
   assert.ok(meta(html, "description"), `${label} must have a description`);
   assert.ok(meta(html, "og:title"), `${label} must have an Open Graph title`);
@@ -177,11 +204,11 @@ async function main() {
   const filteredCategory = await request(`${categoryPath}?q=holder&sort=price-asc`);
   assert.equal(filteredCategory.response.status, 200);
   assertNoindex(filteredCategory.body, "filtered category");
-  assert.equal(canonical(filteredCategory.body), categoryUrl);
+  assertCanonical(filteredCategory.body, categoryUrl, "filtered category");
   const searchResult = await request("/shop?q=holder");
   assert.equal(searchResult.response.status, 200);
   assertNoindex(searchResult.body, "internal search");
-  assert.equal(canonical(searchResult.body), `${canonicalOrigin}/shop`);
+  assertCanonical(searchResult.body, `${canonicalOrigin}/shop`, "internal search");
   pass("search and filter noindex/canonical policy");
 
   for (const privatePath of ["/cart", "/login"]) {
@@ -240,7 +267,9 @@ async function main() {
   console.log(`Samples: ${categoryPath}, ${categoryProductPaths.slice(0, 3).join(", ")}`);
 }
 
-main().catch((error) => {
-  console.error("SEO regression failed:", error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error("SEO regression failed:", error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
