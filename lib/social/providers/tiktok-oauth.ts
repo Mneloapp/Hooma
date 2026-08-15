@@ -3,7 +3,6 @@ import "server-only";
 import { providerConfig } from "../config";
 import {
   asRecord,
-  assertRequiredScopes,
   normalizedUsername,
   positiveInteger,
   providerFetchJson,
@@ -83,6 +82,26 @@ export function parseTikTokReturnedScopes(value: unknown) {
   return [...new Set(entries)].sort();
 }
 
+function assertExactApprovedScopes(
+  granted: string[],
+  approved: string[],
+  stage: "token_exchange" | "token_refresh",
+) {
+  const exactGranted = [...new Set(granted)].sort();
+  const exactApproved = [...new Set(approved)].sort();
+  if (
+    exactApproved.length === 0
+    || exactGranted.length !== exactApproved.length
+    || exactGranted.some((scope, index) => scope !== exactApproved[index])
+  ) {
+    throw new SocialProviderError({
+      provider: "tiktok",
+      stage,
+      code: "APPROVED_SCOPE_SET_MISMATCH",
+    });
+  }
+}
+
 export function parseTikTokTokenResponse(
   body: unknown,
   stage: "token_exchange" | "token_refresh" = "token_exchange",
@@ -111,12 +130,7 @@ export function parseTikTokTokenResponse(
       requestId,
     });
   }
-  assertRequiredScopes(
-    "tiktok",
-    stage,
-    scopes,
-    providerConfig("tiktok").requiredScopes,
-  );
+  assertExactApprovedScopes(scopes, providerConfig("tiktok").requiredScopes, stage);
   return {
     accessToken,
     refreshToken,

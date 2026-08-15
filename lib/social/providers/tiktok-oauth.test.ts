@@ -98,9 +98,16 @@ test("token parsing accepts only the configured approved returned identifiers", 
   assert.throws(
     () => parseTikTokTokenResponse(tokenResponse("approved.account.read")),
     (error: unknown) => error instanceof Error
-      && error.message === "SOCIAL_PROVIDER_ERROR:tiktok:token_exchange:REQUIRED_SCOPE_MISSING"
+      && error.message === "SOCIAL_PROVIDER_ERROR:tiktok:token_exchange:APPROVED_SCOPE_SET_MISMATCH"
       && !error.message.includes("sensitive-access-token")
       && !error.message.includes("test-client-secret"),
+  );
+
+  assert.throws(
+    () => parseTikTokTokenResponse(tokenResponse(
+      "approved.account.read,approved.content.publish,unexpected.extra.scope",
+    )),
+    /SOCIAL_PROVIDER_ERROR:tiktok:token_exchange:APPROVED_SCOPE_SET_MISMATCH/,
   );
 });
 
@@ -196,9 +203,22 @@ test("token refresh rejects account drift, missing scopes, and invalid token pai
     ).then(() => null, (error: unknown) => error);
     assert.match(
       String(missingScope),
-      /SOCIAL_PROVIDER_ERROR:tiktok:token_refresh:REQUIRED_SCOPE_MISSING/,
+      /SOCIAL_PROVIDER_ERROR:tiktok:token_refresh:APPROVED_SCOPE_SET_MISMATCH/,
     );
     assert.equal(isProviderAuthenticationFailure(missingScope), true);
+
+    globalThis.fetch = async () => Response.json(tokenResponse(
+      "approved.account.read,approved.content.publish,unexpected.extra.scope",
+    ));
+    const extraScope = await refreshTikTokAccessToken(
+      "previous-refresh-token",
+      "account-open-id",
+    ).then(() => null, (error: unknown) => error);
+    assert.match(
+      String(extraScope),
+      /SOCIAL_PROVIDER_ERROR:tiktok:token_refresh:APPROVED_SCOPE_SET_MISMATCH/,
+    );
+    assert.equal(isProviderAuthenticationFailure(extraScope), true);
 
     const invalidPair = tokenResponse();
     invalidPair.data.refresh_token = invalidPair.data.access_token;

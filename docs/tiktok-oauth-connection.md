@@ -58,13 +58,26 @@ accepted.
 
 The same TikTok OAuth gate enables token maintenance without enabling content
 publishing. TikTok access tokens expire after roughly one day, so the existing
-authenticated social-token cron claims due TikTok connections and exchanges
+authenticated social-token cron can claim due TikTok connections and exchange
 their encrypted refresh token. The returned account ID and exact approved scope
-identifiers are revalidated, the owned-account identity is fetched again, and
-both returned tokens are persisted through the existing atomic rotation path.
-The old refresh token is never reused after TikTok returns a replacement. The
-maintenance cron runs every four hours so the six-hour pre-expiry refresh margin
-does not leave an avoidable access-token outage window.
+set are revalidated, the owned-account identity is fetched again, and both
+returned tokens are persisted through the existing atomic rotation path. The
+old refresh token is never reused after TikTok returns a replacement.
+
+The current Vercel Hobby project permits only one cron invocation per day. That
+is not frequent enough to guarantee uninterrupted one-day TikTok access-token
+coverage for an OAuth connection started at an arbitrary time. Keep
+`HOOMA_TIKTOK_OAUTH_ENABLED=0` in production until one of these is verified:
+
+1. the project moves to a plan that permits the authenticated refresh route at
+   least every four hours;
+2. a separate authenticated scheduler invokes the route at least every four
+   hours; or
+3. the publishing worker performs a leased, identity-checked token refresh
+   before every TikTok operation when the access token is near expiry.
+
+The daily cron remains valid for Instagram and as a TikTok catch-up path, but it
+must not be treated as the TikTok production-activation gate.
 
 ## Threat review
 

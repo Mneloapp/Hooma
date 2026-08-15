@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/social-tokens",
-      "schedule": "15 */4 * * *"
+      "schedule": "15 3 * * *"
     }
   ]
 }

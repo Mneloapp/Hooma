@@ -113,6 +113,7 @@ export function isProviderAuthenticationFailure(error: unknown) {
   if ([
     "ACCOUNT_IDENTITY_MISMATCH",
     "REFRESH_IDENTITY_MISMATCH",
+    "APPROVED_SCOPE_SET_MISMATCH",
     "REQUIRED_SCOPE_MISSING",
   ].includes(error.code)) return true;
   if (error.provider === "instagram") {
