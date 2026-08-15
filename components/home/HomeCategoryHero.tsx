@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
@@ -13,6 +12,9 @@ type CategoryPoster = {
   titleKa: string;
   titleEn: string;
 };
+
+const HERO_IMAGE_WIDTH = 1774;
+const HERO_IMAGE_HEIGHT = 887;
 
 const categoryPosters: CategoryPoster[] = [
   {
@@ -172,6 +174,7 @@ export function HomeCategoryHero() {
       >
         {categoryPosters.map((poster, index) => {
           const title = georgian ? poster.titleKa : poster.titleEn;
+          const isInitialPoster = index === 0;
 
           return (
             <li
@@ -187,13 +190,18 @@ export function HomeCategoryHero() {
                 tabIndex={index === activeIndex ? 0 : -1}
                 className="group relative block h-[380px] overflow-hidden bg-[#111622] text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-hooma-secondary sm:h-[420px] lg:h-[480px]"
               >
-                <Image
+                {/* Global image unoptimization strips `sizes` from next/image output. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={poster.image}
                   alt=""
-                  fill
-                  priority={index === 0}
+                  width={HERO_IMAGE_WIDTH}
+                  height={HERO_IMAGE_HEIGHT}
                   sizes="100vw"
-                  className="object-cover object-[45%_center] transition duration-700 group-hover:scale-[1.015] sm:object-center xl:object-contain xl:object-right"
+                  loading={isInitialPoster ? "eager" : "lazy"}
+                  fetchPriority={isInitialPoster ? "high" : "auto"}
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover object-[45%_center] transition duration-700 group-hover:scale-[1.015] sm:object-center xl:object-contain xl:object-right"
                 />
                 <span
                   aria-hidden="true"

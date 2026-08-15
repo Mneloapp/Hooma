@@ -85,7 +85,9 @@ test("homepage opens with a scrollable poster for every catalog category", () =>
   assert.match(homeCategoryHero, /import \{ categoryPath \} from "@\/lib\/seo"/);
   assert.match(homeCategoryHero, /href=\{categoryPath\(poster\.slug\)\}/);
   assert.match(homeCategoryHero, /sizes="100vw"/);
-  assert.match(homeCategoryHero, /priority=\{index === 0\}/);
+  assert.match(homeCategoryHero, /const isInitialPoster = index === 0/);
+  assert.match(homeCategoryHero, /loading=\{isInitialPoster \? "eager" : "lazy"\}/);
+  assert.match(homeCategoryHero, /fetchPriority=\{isInitialPoster \? "high" : "auto"\}/);
   assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური ცხოვრებისთვის/);
   assert.match(homeCategoryHero, /Household objects for everyday life/);
   assert.match(homeCategoryHero, /ხელოვნება შენი სივრცის გასაცოცხლებლად/);
