@@ -4,7 +4,10 @@ import type {
   NewSocialConnection,
   SocialConnectionRefreshClaim,
 } from "./connections";
-import type { InstagramIdentity } from "./providers/instagram-login";
+import type {
+  InstagramIdentity,
+  InstagramIdentityExpectation,
+} from "./providers/instagram-login";
 import type {
   TikTokOAuthIdentity,
   TikTokOAuthToken,
@@ -23,7 +26,7 @@ export type SocialTokenRefreshDependencies = {
   refreshInstagram: (accessToken: string) => Promise<InstagramRefreshToken>;
   getInstagramIdentity: (
     accessToken: string,
-    expectedUserId: string,
+    expected: InstagramIdentityExpectation,
   ) => Promise<InstagramIdentity>;
   refreshTikTok: (
     refreshToken: string,
@@ -48,7 +51,7 @@ export async function refreshClaimedSocialConnection(
     const token = await dependencies.refreshInstagram(currentToken);
     const identity = await dependencies.getInstagramIdentity(
       token.accessToken,
-      claim.externalAccountId,
+      { accountId: claim.externalAccountId },
     );
     await dependencies.complete(claim, {
       provider: "instagram",
@@ -63,6 +66,7 @@ export async function refreshClaimedSocialConnection(
         username: identity.username,
         snapshot: {
           account_id: identity.accountId,
+          app_scoped_user_id: identity.appScopedUserId,
           username: identity.username,
           account_type: identity.accountType,
         },

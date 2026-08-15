@@ -24,14 +24,19 @@ export type InstagramLongLivedToken = {
   tokenType: "Bearer";
   scopes: string[];
   expiresIn: number;
-  userId: string;
+  appScopedUserId: string;
 };
 
 export type InstagramIdentity = {
   accountId: string;
+  appScopedUserId: string;
   username: string;
   accountType: string | null;
 };
+
+export type InstagramIdentityExpectation =
+  | { accountId: string; appScopedUserId?: never }
+  | { accountId?: never; appScopedUserId: string };
 
 function boundedString(value: unknown, maximum = 4_096) {
   return typeof value === "string" && value.length > 0 && value.length <= maximum
@@ -46,6 +51,87 @@ function responseEntry(body: unknown) {
   return Array.isArray(record.data) && record.data.length === 1
     ? asRecord(record.data[0])
     : null;
+}
+
+function parseInstagramJsonWithLosslessIds(
+  text: string,
+  propertyNames: ReadonlySet<string>,
+) {
+  const replacements: Array<{ start: number; end: number; value: string }> = [];
+  const propertyCounts = new Map<string, number>();
+  let index = 0;
+
+  while (index < text.length) {
+    if (text[index] !== '"') {
+      index += 1;
+      continue;
+    }
+
+    const stringStart = index;
+    index += 1;
+    let escaped = false;
+    while (index < text.length) {
+      const character = text[index];
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        break;
+      }
+      index += 1;
+    }
+    if (index >= text.length) return JSON.parse(text) as unknown;
+
+    const stringEnd = index + 1;
+    const decoded = JSON.parse(text.slice(stringStart, stringEnd)) as unknown;
+    index = stringEnd;
+    if (typeof decoded !== "string" || !propertyNames.has(decoded)) continue;
+
+    let cursor = stringEnd;
+    while (/\s/.test(text[cursor] ?? "")) cursor += 1;
+    if (text[cursor] !== ":") continue;
+    const propertyCount = (propertyCounts.get(decoded) ?? 0) + 1;
+    propertyCounts.set(decoded, propertyCount);
+    if (propertyCount > 1) {
+      throw new SyntaxError(`AMBIGUOUS_INSTAGRAM_${decoded.toUpperCase()}_FIELDS`);
+    }
+    cursor += 1;
+    while (/\s/.test(text[cursor] ?? "")) cursor += 1;
+
+    const numberStart = cursor;
+    while (/\d/.test(text[cursor] ?? "")) cursor += 1;
+    if (cursor === numberStart) continue;
+
+    let terminator = cursor;
+    while (/\s/.test(text[terminator] ?? "")) terminator += 1;
+    if (text[terminator] !== "," && text[terminator] !== "}") continue;
+    const digits = text.slice(numberStart, cursor);
+    if (digits.length > 1 && digits.startsWith("0")) continue;
+    replacements.push({
+      start: numberStart,
+      end: cursor,
+      value: `"${digits}"`,
+    });
+  }
+
+  if (!replacements.length) return JSON.parse(text) as unknown;
+
+  let rewritten = text;
+  for (const replacement of replacements.reverse()) {
+    rewritten = rewritten.slice(0, replacement.start)
+      + replacement.value
+      + rewritten.slice(replacement.end);
+  }
+  return JSON.parse(rewritten) as unknown;
+}
+
+export function parseInstagramShortTokenJson(text: string) {
+  return parseInstagramJsonWithLosslessIds(text, new Set(["user_id"]));
+}
+
+export function parseInstagramIdentityJson(text: string) {
+  return parseInstagramJsonWithLosslessIds(text, new Set(["user_id", "id"]));
 }
 
 export function instagramGraphApiVersion() {
@@ -76,24 +162,41 @@ export function parseInstagramUserId(value: unknown) {
 export function parseInstagramShortTokenResponse(body: unknown) {
   const entry = responseEntry(body);
   const accessToken = boundedString(entry?.access_token, 16_384);
-  const userId = parseInstagramUserId(entry?.user_id);
-  if (!accessToken || !userId) return null;
+  const appScopedUserId = parseInstagramUserId(entry?.user_id);
+  if (!accessToken || !appScopedUserId) return null;
   return {
     accessToken,
-    userId,
+    appScopedUserId,
     scopes: parseProviderScopes(entry?.permissions),
   };
 }
 
-export function parseInstagramIdentityResponse(body: unknown, expectedUserId: string) {
-  if (parseInstagramUserId(expectedUserId) !== expectedUserId) return null;
+export function parseInstagramIdentityResponse(
+  body: unknown,
+  expected: InstagramIdentityExpectation,
+) {
   const entry = responseEntry(body);
-  const rawAccountId = entry && "user_id" in entry ? entry.user_id : entry?.id;
-  const accountId = parseInstagramUserId(rawAccountId);
+  const appScopedUserId = parseInstagramUserId(entry?.id);
+  const accountId = parseInstagramUserId(entry?.user_id);
   const username = normalizedUsername(entry?.username);
   const accountType = boundedString(entry?.account_type, 80);
-  if (accountId !== expectedUserId || !username) return null;
-  return { accountId, username, accountType } satisfies InstagramIdentity;
+  if (!appScopedUserId || !accountId || !username) return null;
+  if (
+    (expected.appScopedUserId
+      && parseInstagramUserId(expected.appScopedUserId) !== expected.appScopedUserId)
+    || (expected.accountId
+      && parseInstagramUserId(expected.accountId) !== expected.accountId)
+    || (expected.appScopedUserId && appScopedUserId !== expected.appScopedUserId)
+    || (expected.accountId && accountId !== expected.accountId)
+  ) {
+    return null;
+  }
+  return {
+    accountId,
+    appScopedUserId,
+    username,
+    accountType,
+  } satisfies InstagramIdentity;
 }
 
 export function buildInstagramAuthorizationUrl(state: string) {
@@ -134,6 +237,7 @@ export async function exchangeInstagramAuthorizationCode(code: string) {
     "token_exchange",
     SHORT_TOKEN_URL,
     { method: "POST", body: form },
+    parseInstagramShortTokenJson,
   );
   const shortToken = parseInstagramShortTokenResponse(shortBody);
   if (!shortToken) {
@@ -143,7 +247,7 @@ export async function exchangeInstagramAuthorizationCode(code: string) {
       code: "INVALID_SHORT_TOKEN_RESPONSE",
     });
   }
-  const { accessToken: shortAccessToken, userId, scopes } = shortToken;
+  const { accessToken: shortAccessToken, appScopedUserId, scopes } = shortToken;
   assertRequiredScopes("instagram", "token_exchange", scopes, config.requiredScopes);
 
   const longUrl = new URL(LONG_TOKEN_URL);
@@ -170,7 +274,7 @@ export async function exchangeInstagramAuthorizationCode(code: string) {
     tokenType: "Bearer",
     scopes,
     expiresIn,
-    userId,
+    appScopedUserId,
   } satisfies InstagramLongLivedToken;
 }
 
@@ -203,10 +307,15 @@ export async function refreshInstagramLongLivedToken(accessToken: string) {
   return { accessToken: refreshedAccessToken, expiresIn };
 }
 
-export async function getInstagramIdentity(accessToken: string, expectedUserId: string) {
+export async function getInstagramIdentity(
+  accessToken: string,
+  expected: InstagramIdentityExpectation,
+) {
   if (
     !boundedString(accessToken, 16_384)
-    || parseInstagramUserId(expectedUserId) !== expectedUserId
+    || (expected.appScopedUserId
+      ? parseInstagramUserId(expected.appScopedUserId) !== expected.appScopedUserId
+      : parseInstagramUserId(expected.accountId) !== expected.accountId)
   ) {
     throw new SocialProviderError({
       provider: "instagram",
@@ -215,12 +324,18 @@ export async function getInstagramIdentity(accessToken: string, expectedUserId: 
     });
   }
   const url = buildInstagramIdentityEndpoint();
-  url.searchParams.set("fields", "user_id,username,account_type");
-  const body = await providerFetchJson("instagram", "identity", url, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const identity = parseInstagramIdentityResponse(body, expectedUserId);
+  url.searchParams.set("fields", "id,user_id,username,account_type");
+  const body = await providerFetchJson(
+    "instagram",
+    "identity",
+    url,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+    parseInstagramIdentityJson,
+  );
+  const identity = parseInstagramIdentityResponse(body, expected);
   if (!identity) {
     throw new SocialProviderError({
       provider: "instagram",

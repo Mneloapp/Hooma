@@ -23,6 +23,77 @@ function tiktokClaim() {
   } satisfies SocialConnectionRefreshClaim;
 }
 
+function instagramClaim() {
+  return {
+    provider: "instagram",
+    externalAccountId: "17941405793187219",
+    username: "hooma.ge",
+    scopes: ["instagram_business_basic", "instagram_business_content_publish"],
+    accessTokenEnvelope: {} as SocialConnectionRefreshClaim["accessTokenEnvelope"],
+    refreshTokenEnvelope: null,
+    tokenVersion: 2,
+    refreshLeaseId: "00000000-0000-4000-8000-000000000002",
+  } satisfies SocialConnectionRefreshClaim;
+}
+
+test("Instagram refresh verifies the professional account ID and preserves both ID namespaces", async () => {
+  const claim = instagramClaim();
+  const completed: NewSocialConnection[] = [];
+  const dependencies: SocialTokenRefreshDependencies = {
+    decrypt: (claimed, kind) => {
+      assert.equal(claimed, claim);
+      assert.equal(kind, "access");
+      return "previous-access-token";
+    },
+    refreshInstagram: async (accessToken) => {
+      assert.equal(accessToken, "previous-access-token");
+      return { accessToken: "refreshed-access-token", expiresIn: 5_184_000 };
+    },
+    getInstagramIdentity: async (accessToken, expected) => {
+      assert.equal(accessToken, "refreshed-access-token");
+      assert.deepEqual(expected, { accountId: claim.externalAccountId });
+      return {
+        accountId: claim.externalAccountId,
+        appScopedUserId: "17841405793187218",
+        username: "hooma.ge",
+        accountType: "Business",
+      };
+    },
+    refreshTikTok: async () => {
+      throw new Error("TIKTOK_REFRESH_MUST_NOT_RUN");
+    },
+    getTikTokIdentity: async () => {
+      throw new Error("TIKTOK_IDENTITY_MUST_NOT_RUN");
+    },
+    complete: async (completedClaim, input) => {
+      assert.equal(completedClaim, claim);
+      completed.push(input);
+    },
+  };
+
+  await refreshClaimedSocialConnection(claim, dependencies);
+
+  assert.deepEqual(completed, [{
+    provider: "instagram",
+    tokenType: "Bearer",
+    scopes: ["instagram_business_basic", "instagram_business_content_publish"],
+    accessToken: "refreshed-access-token",
+    refreshToken: null,
+    expiresIn: 5_184_000,
+    refreshTokenExpiresIn: null,
+    identity: {
+      accountId: claim.externalAccountId,
+      username: "hooma.ge",
+      snapshot: {
+        account_id: claim.externalAccountId,
+        app_scoped_user_id: "17841405793187218",
+        username: "hooma.ge",
+        account_type: "Business",
+      },
+    },
+  }]);
+});
+
 test("TikTok refresh worker persists the returned rotated refresh token", async () => {
   const claim = tiktokClaim();
   const completed: NewSocialConnection[] = [];
