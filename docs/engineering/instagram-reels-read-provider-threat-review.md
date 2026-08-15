@@ -21,7 +21,7 @@ The client requires an exact v25.0 activation object with immutable SHA-256 refe
 
 ## Deliberately absent
 
-There are no POST requests or publishing methods, no provider adapter registration, no cron route, no media staging URL, no delete/comment/boost/promote/Facebook operation, and no production activation object. Publishing remains controlled by the independent `HOOMA_SOCIAL_PUBLISHING_ENABLED` kill switch and the still-missing mutating provider adapter.
+There are no POST requests or publishing methods, no provider adapter registration, no cron route, no media staging URL, no delete/comment/boost/promote/Facebook operation, and no production activation object. Future publishing requires both `HOOMA_SOCIAL_PUBLISHING_ENABLED=1` and `HOOMA_INSTAGRAM_PUBLISHING_ENABLED=1`, plus the still-missing mutating provider adapter. Instagram OAuth/token maintenance is governed separately and cannot satisfy either publishing gate.
 
 ## Documentation reviewed
 
