@@ -12,7 +12,8 @@ import {
   parseInstagramUserId,
 } from "./instagram-login";
 
-const DOCUMENTED_USER_ID = "17841405793187218";
+const APP_SCOPED_USER_ID = "17841405793187218";
+const PROFESSIONAL_ACCOUNT_ID = "17941405793187219";
 const REQUIRED_SCOPES = [
   "instagram_business_basic",
   "instagram_business_content_publish",
@@ -28,7 +29,7 @@ function installInstagramEnvironment() {
 }
 
 test("Instagram user IDs preserve documented strings and safe JSON numbers", () => {
-  assert.equal(parseInstagramUserId(DOCUMENTED_USER_ID), DOCUMENTED_USER_ID);
+  assert.equal(parseInstagramUserId(APP_SCOPED_USER_ID), APP_SCOPED_USER_ID);
   assert.equal(parseInstagramUserId(1_234_567_890_123_456), "1234567890123456");
   assert.equal(parseInstagramUserId(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER));
 });
@@ -45,12 +46,12 @@ test("short token parser accepts the documented data envelope", () => {
   assert.deepEqual(parseInstagramShortTokenResponse({
     data: [{
       access_token: "short-token",
-      user_id: DOCUMENTED_USER_ID,
+      user_id: APP_SCOPED_USER_ID,
       permissions: REQUIRED_SCOPES.join(","),
     }],
   }), {
     accessToken: "short-token",
-    userId: DOCUMENTED_USER_ID,
+    appScopedUserId: APP_SCOPED_USER_ID,
     scopes: [...REQUIRED_SCOPES].sort(),
   });
 });
@@ -62,7 +63,7 @@ test("short token parser accepts the direct legacy response and safe numeric ID"
     permissions: [...REQUIRED_SCOPES].reverse(),
   }), {
     accessToken: "short-token",
-    userId: "1234567890123456",
+    appScopedUserId: "1234567890123456",
     scopes: [...REQUIRED_SCOPES].sort(),
   });
 });
@@ -115,58 +116,68 @@ test("short token parser rejects ambiguous envelopes and unsafe numeric IDs", ()
   }), null);
 });
 
-test("identity parser accepts documented and legacy response shapes", () => {
+test("identity parser separates the documented app-scoped and professional account IDs", () => {
   assert.deepEqual(parseInstagramIdentityResponse({
     data: [{
-      user_id: DOCUMENTED_USER_ID,
+      id: APP_SCOPED_USER_ID,
+      user_id: PROFESSIONAL_ACCOUNT_ID,
       username: "@Hooma.Ge",
       account_type: "Business",
     }],
-  }, DOCUMENTED_USER_ID), {
-    accountId: DOCUMENTED_USER_ID,
+  }, { appScopedUserId: APP_SCOPED_USER_ID }), {
+    accountId: PROFESSIONAL_ACCOUNT_ID,
+    appScopedUserId: APP_SCOPED_USER_ID,
     username: "hooma.ge",
     accountType: "Business",
   });
 
   assert.deepEqual(parseInstagramIdentityResponse({
-    id: DOCUMENTED_USER_ID,
+    id: APP_SCOPED_USER_ID,
+    user_id: PROFESSIONAL_ACCOUNT_ID,
     username: "hooma.ge",
-  }, DOCUMENTED_USER_ID), {
-    accountId: DOCUMENTED_USER_ID,
+  }, { accountId: PROFESSIONAL_ACCOUNT_ID }), {
+    accountId: PROFESSIONAL_ACCOUNT_ID,
+    appScopedUserId: APP_SCOPED_USER_ID,
     username: "hooma.ge",
     accountType: null,
   });
 });
 
-test("identity JSON parser preserves unsafe numeric user_id and legacy id values", () => {
+test("identity JSON parser preserves unsafe numeric account and app-scoped IDs", () => {
   assert.equal(
     (parseInstagramIdentityJson(
-      '{"user_id":17841405793187218,"username":"hooma.ge"}',
+      '{"user_id":17941405793187219,"username":"hooma.ge"}',
     ) as { user_id: unknown }).user_id,
-    DOCUMENTED_USER_ID,
+    PROFESSIONAL_ACCOUNT_ID,
   );
   assert.equal(
     (parseInstagramIdentityJson(
       '{"id":17841405793187218,"username":"hooma.ge"}',
     ) as { id: unknown }).id,
-    DOCUMENTED_USER_ID,
+    APP_SCOPED_USER_ID,
   );
 });
 
-test("identity parser treats user_id as authoritative and requires an exact match", () => {
+test("identity parser validates the expected ID namespace and requires both IDs", () => {
+  assert.equal(parseInstagramIdentityResponse({
+    user_id: PROFESSIONAL_ACCOUNT_ID,
+    id: "999",
+    username: "hooma.ge",
+  }, { appScopedUserId: APP_SCOPED_USER_ID }), null);
   assert.equal(parseInstagramIdentityResponse({
     user_id: "999",
-    id: DOCUMENTED_USER_ID,
+    id: APP_SCOPED_USER_ID,
     username: "hooma.ge",
-  }, DOCUMENTED_USER_ID), null);
+  }, { accountId: PROFESSIONAL_ACCOUNT_ID }), null);
   assert.equal(parseInstagramIdentityResponse({
-    user_id: Number.MAX_SAFE_INTEGER + 1,
-    username: "hooma.ge",
-  }, DOCUMENTED_USER_ID), null);
-  assert.equal(parseInstagramIdentityResponse({
-    user_id: DOCUMENTED_USER_ID,
+    user_id: PROFESSIONAL_ACCOUNT_ID,
+    id: APP_SCOPED_USER_ID,
     username: "not a username",
-  }, DOCUMENTED_USER_ID), null);
+  }, { appScopedUserId: APP_SCOPED_USER_ID }), null);
+  assert.equal(parseInstagramIdentityResponse({
+    user_id: PROFESSIONAL_ACCOUNT_ID,
+    username: "hooma.ge",
+  }, { accountId: PROFESSIONAL_ACCOUNT_ID }), null);
 });
 
 test("identity requests use the required frozen Graph API version", async () => {
@@ -183,18 +194,25 @@ test("identity requests use the required frozen Graph API version", async () => 
     observedUrls.push(new URL(String(input)));
     observedAuthorizations.push(new Headers(init?.headers).get("authorization"));
     return new Response(
-      '{"data":[{"user_id":17841405793187218,"username":"hooma.ge","account_type":"Business"}]}',
+      '{"data":[{"id":17841405793187218,"user_id":17941405793187219,"username":"hooma.ge","account_type":"Business"}]}',
       { headers: { "content-type": "application/json" } },
     );
   };
   try {
-    assert.deepEqual(await getInstagramIdentity("identity-token", DOCUMENTED_USER_ID), {
-      accountId: DOCUMENTED_USER_ID,
+    assert.deepEqual(await getInstagramIdentity(
+      "identity-token",
+      { appScopedUserId: APP_SCOPED_USER_ID },
+    ), {
+      accountId: PROFESSIONAL_ACCOUNT_ID,
+      appScopedUserId: APP_SCOPED_USER_ID,
       username: "hooma.ge",
       accountType: "Business",
     });
     assert.equal(observedUrls[0]?.pathname, "/v25.0/me");
-    assert.equal(observedUrls[0]?.searchParams.get("fields"), "user_id,username,account_type");
+    assert.equal(
+      observedUrls[0]?.searchParams.get("fields"),
+      "id,user_id,username,account_type",
+    );
     assert.equal(observedAuthorizations[0], "Bearer identity-token");
   } finally {
     globalThis.fetch = originalFetch;
@@ -229,7 +247,7 @@ test("token exchange preserves required scopes and redacts missing-scope failure
     Response.json({
       data: [{
         access_token: "sensitive-short-token",
-        user_id: DOCUMENTED_USER_ID,
+        user_id: APP_SCOPED_USER_ID,
         permissions: REQUIRED_SCOPES.join(","),
       }],
     }),
@@ -247,7 +265,7 @@ test("token exchange preserves required scopes and redacts missing-scope failure
       tokenType: "Bearer",
       scopes: [...REQUIRED_SCOPES].sort(),
       expiresIn: 5_184_000,
-      userId: DOCUMENTED_USER_ID,
+      appScopedUserId: APP_SCOPED_USER_ID,
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -256,7 +274,7 @@ test("token exchange preserves required scopes and redacts missing-scope failure
   globalThis.fetch = async () => Response.json({
     data: [{
       access_token: "sensitive-short-token",
-      user_id: DOCUMENTED_USER_ID,
+      user_id: APP_SCOPED_USER_ID,
       permissions: "instagram_business_basic",
     }],
   });
@@ -290,7 +308,7 @@ test("token exchange preserves an unquoted unsafe Instagram user ID end to end",
   globalThis.fetch = async () => responses.shift() ?? Response.json({}, { status: 500 });
   try {
     const token = await exchangeInstagramAuthorizationCode("authorization-code");
-    assert.equal(token.userId, DOCUMENTED_USER_ID);
+    assert.equal(token.appScopedUserId, APP_SCOPED_USER_ID);
   } finally {
     globalThis.fetch = originalFetch;
   }
