@@ -110,10 +110,10 @@ Run `npm run test:social:tiktok` and a production build. Then verify that the
 admin settings page shows TikTok as unavailable while the OAuth switch is off,
 without exposing any application identifiers or secrets.
 
-Before rollout, verify that the selected Vercel plan accepts the four-hour cron
-schedule in `vercel.json`. If it does not, keep TikTok OAuth disabled until an
-equally frequent authenticated scheduler is configured; do not fall back to a
-once-daily refresh for a one-day access token.
+Before rollout, do not rely on the daily Hobby cron in `vercel.json` for
+uninterrupted TikTok access-token maintenance. Keep TikTok OAuth disabled until
+a verified four-hour authenticated scheduler or an equivalent leased,
+near-expiry refresh before every TikTok operation is active.
 
 Official references:
 
