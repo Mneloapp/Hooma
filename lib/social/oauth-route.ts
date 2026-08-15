@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { providerConfig, socialPublishingEnabled, type SocialProvider } from "./config";
+import { providerConfig, type SocialProvider } from "./config";
 
 export type OAuthResult = "connected" | "denied" | "failed" | "state_rejected";
 
@@ -10,10 +10,6 @@ export function socialFeatureUnavailable() {
     { ok: false, message: "Social publishing is unavailable." },
     { status: 503 },
   );
-}
-
-export function requireSocialFeature() {
-  return socialPublishingEnabled();
 }
 
 export function oauthResultRedirect(provider: SocialProvider, result: OAuthResult) {

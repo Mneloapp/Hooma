@@ -84,6 +84,30 @@ export function socialPublishingEnabled() {
   return process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED === "1";
 }
 
+/**
+ * Keep Instagram connection maintenance independent from content publishing.
+ *
+ * The legacy publishing flag is accepted only while the dedicated OAuth flag
+ * is absent so the already-connected production account is not stranded
+ * during rollout. Once HOOMA_INSTAGRAM_OAUTH_ENABLED is configured, its value
+ * is authoritative and every value other than "1" fails closed.
+ */
+export function instagramOAuthEnabled() {
+  const configured = process.env.HOOMA_INSTAGRAM_OAUTH_ENABLED;
+  if (configured !== undefined) return configured === "1";
+  return socialPublishingEnabled();
+}
+
+/**
+ * Instagram publishing requires both the global emergency switch and the
+ * provider-specific switch. OAuth, connection state, and token refresh never
+ * satisfy either publishing gate implicitly.
+ */
+export function instagramPublishingEnabled() {
+  return socialPublishingEnabled()
+    && process.env.HOOMA_INSTAGRAM_PUBLISHING_ENABLED === "1";
+}
+
 export function tiktokOAuthEnabled() {
   return process.env.HOOMA_TIKTOK_OAUTH_ENABLED === "1";
 }

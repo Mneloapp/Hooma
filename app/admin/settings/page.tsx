@@ -1,5 +1,5 @@
 import { CostSettingsEditor, type MaterialCostProfile, type PricingProfile } from "@/components/admin/CostSettingsEditor";
-import { tiktokOAuthEnabled } from "@/lib/social/config";
+import { instagramOAuthEnabled, tiktokOAuthEnabled } from "@/lib/social/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient, getProfile } from "@/lib/supabase/server";
 
@@ -51,6 +51,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const connections = (connectionResult.data ?? []) as SocialConnectionRow[];
   const instagramConnection = connections.find((connection) => connection.provider === "instagram") ?? null;
   const tiktokConnection = connections.find((connection) => connection.provider === "tiktok") ?? null;
+  const canConnectInstagram = instagramOAuthEnabled();
   const canConnectTikTok = tiktokOAuthEnabled();
 
   return <div className="space-y-6">
@@ -73,12 +74,14 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
               {validProvider === "instagram" && validResult === "connected" ? <p className="mt-2 text-sm text-emerald-700">Instagram წარმატებით დაუკავშირდა.</p> : null}
               {validProvider === "instagram" && validResult && validResult !== "connected" ? <p className="mt-2 text-sm text-rose-700">Instagram-ის ავტორიზაცია ვერ დასრულდა ({validResult}). ხელახლა სცადე მხოლოდ ამავე ანგარიშით.</p> : null}
             </div>
-            <a
+            {canConnectInstagram ? <a
               href="https://hooma.ge/api/social/oauth/instagram/start"
               className="inline-flex min-h-11 items-center justify-center rounded-full bg-hooma-ink px-5 py-3 text-sm font-medium text-white"
             >
               {instagramConnection?.status === "active" ? "Instagram-ის ხელახლა დაკავშირება" : "Instagram-ის დაკავშირება"}
-            </a>
+            </a> : <span className="inline-flex min-h-11 items-center justify-center rounded-full bg-hooma-line px-5 py-3 text-sm font-medium text-hooma-muted" aria-disabled="true">
+              Instagram-ის დაკავშირება გამორთულია
+            </span>}
           </div>
         </div>
         <div className="rounded-2xl border border-hooma-line p-5">

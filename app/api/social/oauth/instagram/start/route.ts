@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/supabase/server";
-import { providerConfig } from "@/lib/social/config";
+import { instagramOAuthEnabled, providerConfig } from "@/lib/social/config";
 import { issueOAuthState } from "@/lib/social/oauth-state";
-import { requireSocialFeature, socialFeatureUnavailable } from "@/lib/social/oauth-route";
+import { socialFeatureUnavailable } from "@/lib/social/oauth-route";
 import { providerErrorCode } from "@/lib/social/provider-client";
 import { buildInstagramAuthorizationUrl } from "@/lib/social/providers/instagram-login";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  if (!requireSocialFeature()) return socialFeatureUnavailable();
+  if (!instagramOAuthEnabled()) return socialFeatureUnavailable();
   const requestUrl = new URL(request.url);
   if (requestUrl.origin !== "https://hooma.ge") {
     return NextResponse.redirect(
