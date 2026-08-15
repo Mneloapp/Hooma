@@ -620,7 +620,7 @@ begin
       and replay_receipt.provider_publish_id
         is not distinct from requested_provider_container_id
       and replay_receipt.provider_post_id is null
-      and replay_receipt.payload @> (
+      and replay_receipt.payload = (
         requested_receipt_payload || jsonb_build_object(
           'stage', 'container_create_result',
           'operation_id', requested_operation_id,
@@ -818,12 +818,15 @@ begin
       and replay_receipt.provider_publish_id
         is not distinct from requested_provider_container_id
       and replay_receipt.provider_post_id is null
-      and replay_receipt.payload @> (
+      and replay_receipt.payload ? 'poll_count'
+      and jsonb_typeof(replay_receipt.payload -> 'poll_count') = 'number'
+      and replay_receipt.payload = (
         requested_receipt_payload || jsonb_build_object(
           'stage', 'container_status',
           'operation_id', requested_operation_id,
           'provider_container_id', requested_provider_container_id,
           'provider_container_status', requested_provider_status,
+          'poll_count', replay_receipt.payload -> 'poll_count',
           'next_poll_at', requested_next_poll_at
         )
       )
@@ -1205,7 +1208,7 @@ begin
         is not distinct from selected_lifecycle.provider_container_id
       and replay_receipt.provider_post_id
         is not distinct from requested_provider_post_id
-      and replay_receipt.payload @> (
+      and replay_receipt.payload = (
         requested_receipt_payload || jsonb_build_object(
           'stage', 'media_publish_result',
           'operation_id', requested_operation_id,
