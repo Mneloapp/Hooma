@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/supabase/server";
 import { providerConfig } from "@/lib/social/config";
 import { issueOAuthState } from "@/lib/social/oauth-state";
 import { requireSocialFeature, socialFeatureUnavailable } from "@/lib/social/oauth-route";
+import { providerErrorCode } from "@/lib/social/provider-client";
 import { buildInstagramAuthorizationUrl } from "@/lib/social/providers/instagram-login";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,13 @@ export async function GET(request: Request) {
     const config = providerConfig("instagram");
     const state = await issueOAuthState("instagram", actor.id, config.redirectUri);
     return NextResponse.redirect(buildInstagramAuthorizationUrl(state), { status: 303 });
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({
+      level: "error",
+      message: "social_oauth_start_failed",
+      provider: "instagram",
+      error_code: providerErrorCode(error),
+    }));
     return NextResponse.json(
       { ok: false, message: "Instagram connection could not be started." },
       { status: 503 },
