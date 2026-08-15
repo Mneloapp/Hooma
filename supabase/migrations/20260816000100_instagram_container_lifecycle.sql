@@ -352,23 +352,15 @@ begin
     raise exception 'SOCIAL_JOB_NOT_FOUND';
   end if;
   if selected_job.provider <> 'instagram'
-    or selected_job.state <> 'publishing'
-    or selected_job.publishing_allowed is not true
     or selected_job.claim_id is distinct from requested_claim_id
-    or selected_job.approval_status <> 'APPROVED_EXACT'
-    or selected_job.approval_fingerprint <> selected_job.content_fingerprint
-    or selected_job.remote_duplicate_status <> 'CLEAR'
-    or not exists (
-      select 1
-      from public.social_publish_receipts receipt
-      where receipt.job_id = selected_job.id
-        and receipt.attempt_number = selected_job.attempts
-        and receipt.event_type = 'PREFLIGHT_PASSED'
-    )
   then
     raise exception 'INSTAGRAM_CONTAINER_CREATE_NOT_AUTHORIZED';
   end if;
 
+  -- Resolve an already-persisted exact intent before evaluating transient
+  -- dispatch gates. A crashed worker must be able to reconcile it after the
+  -- claim, schedule, token, product, or approval becomes stale, but this path
+  -- always returns dispatch_allowed=false.
   select * into selected_lifecycle
   from public.social_instagram_publish_lifecycles lifecycle
   where lifecycle.job_id = selected_job.id
@@ -384,6 +376,45 @@ begin
     end if;
 
     return public.social_instagram_lifecycle_response(selected_lifecycle, false);
+  end if;
+
+  -- These gates are intentionally fresh and apply only to the first remote
+  -- dispatch. Passing authorize_social_publish_job earlier is not sufficient.
+  if selected_job.state <> 'publishing'
+    or selected_job.publishing_allowed is not true
+    or selected_job.claim_expires_at is null
+    or selected_job.claim_expires_at <= now()
+    or selected_job.scheduled_at > now()
+    or selected_job.publish_not_after < now()
+    or selected_job.approval_status <> 'APPROVED_EXACT'
+    or selected_job.approval_fingerprint <> selected_job.content_fingerprint
+    or selected_job.rights_status <> 'CLEARED'
+    or selected_job.visual_claims_status <> 'CLEARED'
+    or selected_job.remote_duplicate_status <> 'CLEAR'
+    or selected_job.provider_post_id is not null
+    or not exists (
+      select 1
+      from public.products product
+      where product.id = selected_job.product_id
+        and product.status = 'active'
+    )
+    or not exists (
+      select 1
+      from public.social_connections connection
+      where connection.provider = 'instagram'
+        and connection.external_account_id = selected_job.account_id
+        and connection.status = 'active'
+        and connection.access_expires_at > now() + interval '5 minutes'
+    )
+    or not exists (
+      select 1
+      from public.social_publish_receipts receipt
+      where receipt.job_id = selected_job.id
+        and receipt.attempt_number = selected_job.attempts
+        and receipt.event_type = 'PREFLIGHT_PASSED'
+    )
+  then
+    raise exception 'INSTAGRAM_CONTAINER_CREATE_NOT_AUTHORIZED';
   end if;
 
   if exists (
@@ -515,9 +546,8 @@ as $$
 declare
   selected_job public.social_publish_jobs%rowtype;
   selected_lifecycle public.social_instagram_publish_lifecycles%rowtype;
+  replay_receipt public.social_publish_receipts%rowtype;
   next_phase text;
-  replay_job_id uuid;
-  replay_event_type text;
 begin
   if coalesce(
       requested_provider_container_id ~ '^[1-9][0-9]{0,255}$',
@@ -543,11 +573,7 @@ begin
     or public.social_json_is_redacted(requested_receipt_payload) is not true
     or (
       requested_provider_status = 'IN_PROGRESS'
-      and (
-        requested_next_poll_at is null
-        or requested_next_poll_at <= now()
-        or requested_next_poll_at > now() + interval '24 hours'
-      )
+      and requested_next_poll_at is null
     )
     or (requested_provider_status <> 'IN_PROGRESS' and requested_next_poll_at is not null)
   then
@@ -580,22 +606,48 @@ begin
     raise exception 'INSTAGRAM_CONTAINER_CREATE_OPERATION_MISMATCH';
   end if;
 
-  if selected_lifecycle.provider_container_id is not null then
-    if selected_lifecycle.provider_container_id
-      is distinct from requested_provider_container_id
-    then
-      raise exception 'INSTAGRAM_PROVIDER_CONTAINER_CONFLICT';
-    end if;
-    return public.social_instagram_lifecycle_response(selected_lifecycle, false);
-  end if;
-
-  select receipt.job_id, receipt.event_type
-  into replay_job_id, replay_event_type
+  select receipt.*
+  into replay_receipt
   from public.social_publish_receipts receipt
   where receipt.event_idempotency_key = requested_event_idempotency_key;
 
-  if replay_job_id is not null then
+  if replay_receipt.id is not null then
+    if replay_receipt.job_id = selected_job.id
+      and replay_receipt.attempt_number = selected_job.attempts
+      and replay_receipt.event_type = 'INSTAGRAM_CONTAINER_CREATED'
+      and replay_receipt.provider_request_id
+        is not distinct from requested_provider_request_id
+      and replay_receipt.provider_publish_id
+        is not distinct from requested_provider_container_id
+      and replay_receipt.provider_post_id is null
+      and replay_receipt.payload @> (
+        requested_receipt_payload || jsonb_build_object(
+          'stage', 'container_create_result',
+          'operation_id', requested_operation_id,
+          'provider_container_id', requested_provider_container_id,
+          'provider_container_status', requested_provider_status,
+          'next_poll_at', requested_next_poll_at
+        )
+      )
+    then
+      return public.social_instagram_lifecycle_response(selected_lifecycle, false);
+    end if;
     raise exception 'INSTAGRAM_LIFECYCLE_EVENT_IDEMPOTENCY_CONFLICT';
+  end if;
+
+  -- Once a create result exists, only an exact replay of its original event
+  -- key and material payload is accepted; a new key cannot silently restate it.
+  if selected_lifecycle.provider_container_id is not null then
+    raise exception 'INSTAGRAM_CONTAINER_CREATED_REPLAY_CONFLICT';
+  end if;
+
+  if requested_provider_status = 'IN_PROGRESS'
+    and (
+      requested_next_poll_at <= now()
+      or requested_next_poll_at > now() + interval '24 hours'
+    )
+  then
+    raise exception 'INSTAGRAM_CONTAINER_CREATED_RESULT_INVALID';
   end if;
 
   next_phase := case requested_provider_status
@@ -690,9 +742,8 @@ as $$
 declare
   selected_job public.social_publish_jobs%rowtype;
   selected_lifecycle public.social_instagram_publish_lifecycles%rowtype;
+  replay_receipt public.social_publish_receipts%rowtype;
   next_phase text;
-  replay_job_id uuid;
-  replay_event_type text;
 begin
   if coalesce(
       requested_provider_container_id ~ '^[1-9][0-9]{0,255}$',
@@ -718,11 +769,7 @@ begin
     or public.social_json_is_redacted(requested_receipt_payload) is not true
     or (
       requested_provider_status = 'IN_PROGRESS'
-      and (
-        requested_next_poll_at is null
-        or requested_next_poll_at <= now()
-        or requested_next_poll_at > now() + interval '24 hours'
-      )
+      and requested_next_poll_at is null
     )
     or (requested_provider_status <> 'IN_PROGRESS' and requested_next_poll_at is not null)
   then
@@ -757,14 +804,29 @@ begin
     raise exception 'INSTAGRAM_CONTAINER_STATUS_OPERATION_MISMATCH';
   end if;
 
-  select receipt.job_id, receipt.event_type
-  into replay_job_id, replay_event_type
+  select receipt.*
+  into replay_receipt
   from public.social_publish_receipts receipt
   where receipt.event_idempotency_key = requested_event_idempotency_key;
 
-  if replay_job_id is not null then
-    if replay_job_id = selected_job.id
-      and replay_event_type = 'INSTAGRAM_CONTAINER_STATUS'
+  if replay_receipt.id is not null then
+    if replay_receipt.job_id = selected_job.id
+      and replay_receipt.attempt_number = selected_job.attempts
+      and replay_receipt.event_type = 'INSTAGRAM_CONTAINER_STATUS'
+      and replay_receipt.provider_request_id
+        is not distinct from requested_provider_request_id
+      and replay_receipt.provider_publish_id
+        is not distinct from requested_provider_container_id
+      and replay_receipt.provider_post_id is null
+      and replay_receipt.payload @> (
+        requested_receipt_payload || jsonb_build_object(
+          'stage', 'container_status',
+          'operation_id', requested_operation_id,
+          'provider_container_id', requested_provider_container_id,
+          'provider_container_status', requested_provider_status,
+          'next_poll_at', requested_next_poll_at
+        )
+      )
     then
       return public.social_instagram_lifecycle_response(selected_lifecycle, false);
     end if;
@@ -772,10 +834,16 @@ begin
   end if;
 
   if selected_lifecycle.phase <> 'CONTAINER_PROCESSING' then
-    if selected_lifecycle.provider_container_status = requested_provider_status then
-      return public.social_instagram_lifecycle_response(selected_lifecycle, false);
-    end if;
     raise exception 'INSTAGRAM_CONTAINER_STATUS_IS_TERMINAL';
+  end if;
+
+  if requested_provider_status = 'IN_PROGRESS'
+    and (
+      requested_next_poll_at <= now()
+      or requested_next_poll_at > now() + interval '24 hours'
+    )
+  then
+    raise exception 'INSTAGRAM_CONTAINER_STATUS_INVALID';
   end if;
 
   next_phase := case requested_provider_status
@@ -893,14 +961,13 @@ begin
 
   if selected_job.id is null
     or selected_job.provider <> 'instagram'
-    or selected_job.state <> 'publishing'
-    or selected_job.publishing_allowed is not true
     or selected_job.claim_id is distinct from requested_claim_id
-    or selected_job.remote_duplicate_status <> 'CLEAR'
   then
     raise exception 'INSTAGRAM_MEDIA_PUBLISH_NOT_AUTHORIZED';
   end if;
 
+  -- As with container creation, exact persisted intent is reconciliation-only
+  -- and must remain readable when transient authorization gates have expired.
   select * into selected_lifecycle
   from public.social_instagram_publish_lifecycles lifecycle
   where lifecycle.job_id = selected_job.id
@@ -920,6 +987,45 @@ begin
     end if;
 
     return public.social_instagram_lifecycle_response(selected_lifecycle, false);
+  end if;
+
+  -- Re-check every mutable authorization input immediately before the first
+  -- and only media_publish dispatch.
+  if selected_job.state <> 'publishing'
+    or selected_job.publishing_allowed is not true
+    or selected_job.claim_expires_at is null
+    or selected_job.claim_expires_at <= now()
+    or selected_job.scheduled_at > now()
+    or selected_job.publish_not_after < now()
+    or selected_job.approval_status <> 'APPROVED_EXACT'
+    or selected_job.approval_fingerprint <> selected_job.content_fingerprint
+    or selected_job.rights_status <> 'CLEARED'
+    or selected_job.visual_claims_status <> 'CLEARED'
+    or selected_job.remote_duplicate_status <> 'CLEAR'
+    or selected_job.provider_post_id is not null
+    or not exists (
+      select 1
+      from public.products product
+      where product.id = selected_job.product_id
+        and product.status = 'active'
+    )
+    or not exists (
+      select 1
+      from public.social_connections connection
+      where connection.provider = 'instagram'
+        and connection.external_account_id = selected_job.account_id
+        and connection.status = 'active'
+        and connection.access_expires_at > now() + interval '5 minutes'
+    )
+    or not exists (
+      select 1
+      from public.social_publish_receipts receipt
+      where receipt.job_id = selected_job.id
+        and receipt.attempt_number = selected_job.attempts
+        and receipt.event_type = 'PREFLIGHT_PASSED'
+    )
+  then
+    raise exception 'INSTAGRAM_MEDIA_PUBLISH_NOT_AUTHORIZED';
   end if;
 
   if selected_lifecycle.phase <> 'CONTAINER_READY'
@@ -1019,9 +1125,8 @@ as $$
 declare
   selected_job public.social_publish_jobs%rowtype;
   selected_lifecycle public.social_instagram_publish_lifecycles%rowtype;
+  replay_receipt public.social_publish_receipts%rowtype;
   next_phase text;
-  replay_job_id uuid;
-  replay_event_type text;
 begin
   if coalesce(
       requested_outcome in ('CONFIRMED', 'UNKNOWN', 'REJECTED_NO_SIDE_EFFECT'),
@@ -1085,14 +1190,31 @@ begin
     raise exception 'INSTAGRAM_MEDIA_PUBLISH_OPERATION_MISMATCH';
   end if;
 
-  select receipt.job_id, receipt.event_type
-  into replay_job_id, replay_event_type
+  select receipt.*
+  into replay_receipt
   from public.social_publish_receipts receipt
   where receipt.event_idempotency_key = requested_event_idempotency_key;
 
-  if replay_job_id is not null then
-    if replay_job_id = selected_job.id
-      and replay_event_type = 'INSTAGRAM_MEDIA_PUBLISH_RESULT'
+  if replay_receipt.id is not null then
+    if replay_receipt.job_id = selected_job.id
+      and replay_receipt.attempt_number = selected_job.attempts
+      and replay_receipt.event_type = 'INSTAGRAM_MEDIA_PUBLISH_RESULT'
+      and replay_receipt.provider_request_id
+        is not distinct from requested_provider_request_id
+      and replay_receipt.provider_publish_id
+        is not distinct from selected_lifecycle.provider_container_id
+      and replay_receipt.provider_post_id
+        is not distinct from requested_provider_post_id
+      and replay_receipt.payload @> (
+        requested_receipt_payload || jsonb_build_object(
+          'stage', 'media_publish_result',
+          'operation_id', requested_operation_id,
+          'provider_container_id', selected_lifecycle.provider_container_id,
+          'outcome', requested_outcome,
+          'provider_permalink', requested_provider_permalink,
+          'requires_reconciliation', requested_outcome = 'UNKNOWN'
+        )
+      )
     then
       return public.social_instagram_lifecycle_response(selected_lifecycle, false);
     end if;
@@ -1100,12 +1222,6 @@ begin
   end if;
 
   if selected_lifecycle.media_publish_outcome in ('CONFIRMED', 'REJECTED_NO_SIDE_EFFECT') then
-    if selected_lifecycle.media_publish_outcome = requested_outcome
-      and selected_lifecycle.provider_post_id is not distinct from requested_provider_post_id
-      and selected_lifecycle.provider_permalink is not distinct from requested_provider_permalink
-    then
-      return public.social_instagram_lifecycle_response(selected_lifecycle, false);
-    end if;
     raise exception 'INSTAGRAM_MEDIA_PUBLISH_OUTCOME_CONFLICT';
   end if;
 

@@ -62,6 +62,42 @@ test("container create is exact-once dispatch with idempotent resume", () => {
   );
 });
 
+test("first dispatches re-check every mutable authorization gate after replay detection", () => {
+  const beginCreate = functionBody(
+    "begin_instagram_container_create_v1",
+    "get_instagram_publish_resume_v1",
+  );
+  const beginPublish = functionBody(
+    "begin_instagram_media_publish_v1",
+    "record_instagram_media_publish_outcome_v1",
+  );
+
+  for (const body of [beginCreate, beginPublish]) {
+    const reconciliationReturn = body.indexOf(
+      "return public.social_instagram_lifecycle_response(selected_lifecycle, false);",
+    );
+    const freshGate = body.indexOf("selected_job.claim_expires_at is null");
+    const firstDispatch = body.lastIndexOf(
+      "return public.social_instagram_lifecycle_response(selected_lifecycle, true);",
+    );
+
+    assert.ok(reconciliationReturn >= 0);
+    assert.ok(freshGate > reconciliationReturn);
+    assert.ok(firstDispatch > freshGate);
+    assert.match(body, /selected_job\.claim_expires_at <= now\(\)/);
+    assert.match(body, /selected_job\.scheduled_at > now\(\)/);
+    assert.match(body, /selected_job\.publish_not_after < now\(\)/);
+    assert.match(body, /selected_job\.approval_status <> 'APPROVED_EXACT'/);
+    assert.match(body, /selected_job\.approval_fingerprint <> selected_job\.content_fingerprint/);
+    assert.match(body, /selected_job\.rights_status <> 'CLEARED'/);
+    assert.match(body, /selected_job\.visual_claims_status <> 'CLEARED'/);
+    assert.match(body, /from public\.products product[\s\S]*product\.status = 'active'/);
+    assert.match(body, /connection\.provider = 'instagram'/);
+    assert.match(body, /connection\.status = 'active'/);
+    assert.match(body, /connection\.access_expires_at > now\(\) \+ interval '5 minutes'/);
+  }
+});
+
 test("container ID and status are persisted and polled monotonically", () => {
   const created = functionBody(
     "record_instagram_container_created_v1",
@@ -104,6 +140,40 @@ test("media_publish ambiguity is a separate non-replayable operation", () => {
   assert.match(outcome, /selected_lifecycle\.phase not in \([\s\S]*'MEDIA_PUBLISH_OUTCOME_UNKNOWN'/);
   assert.match(migration, /when 'MEDIA_PUBLISH_OUTCOME_UNKNOWN' then 'RECONCILE_MEDIA_PUBLISH'/);
   assert.match(migration, /when 'MEDIA_PUBLISH_CONFIRMED' then 'COMPLETE_EXISTING_SOCIAL_JOB'/);
+});
+
+test("recording RPCs accept only materially exact event-key replays", () => {
+  const created = functionBody(
+    "record_instagram_container_created_v1",
+    "record_instagram_container_status_v1",
+  );
+  const status = functionBody(
+    "record_instagram_container_status_v1",
+    "begin_instagram_media_publish_v1",
+  );
+  const outcome = functionBody("record_instagram_media_publish_outcome_v1");
+
+  for (const body of [created, status, outcome]) {
+    assert.match(body, /replay_receipt public\.social_publish_receipts%rowtype/);
+    assert.match(body, /replay_receipt\.attempt_number = selected_job\.attempts/);
+    assert.match(body, /replay_receipt\.provider_request_id[\s\S]*is not distinct from requested_provider_request_id/);
+    assert.match(body, /replay_receipt\.provider_publish_id[\s\S]*is not distinct from/);
+    assert.match(body, /replay_receipt\.payload @> \(/);
+    assert.match(body, /raise exception 'INSTAGRAM_LIFECYCLE_EVENT_IDEMPOTENCY_CONFLICT'/);
+  }
+
+  assert.match(created, /'operation_id', requested_operation_id/);
+  assert.match(created, /'provider_container_status', requested_provider_status/);
+  assert.match(created, /'next_poll_at', requested_next_poll_at/);
+  assert.match(created, /raise exception 'INSTAGRAM_CONTAINER_CREATED_REPLAY_CONFLICT'/);
+  assert.match(status, /'operation_id', requested_operation_id/);
+  assert.match(status, /'provider_container_status', requested_provider_status/);
+  assert.match(status, /if selected_lifecycle\.phase <> 'CONTAINER_PROCESSING' then\s+raise exception/);
+  assert.match(outcome, /replay_receipt\.provider_post_id[\s\S]*is not distinct from requested_provider_post_id/);
+  assert.match(outcome, /'outcome', requested_outcome/);
+  assert.match(outcome, /'provider_permalink', requested_provider_permalink/);
+  assert.match(outcome, /if selected_lifecycle\.media_publish_outcome in \('CONFIRMED', 'REJECTED_NO_SIDE_EFFECT'\) then\s+raise exception/);
+  assert.doesNotMatch(migration, /replay_job_id|replay_event_type/);
 });
 
 test("all evidence is redacted, append-only, and service-RPC only", () => {
