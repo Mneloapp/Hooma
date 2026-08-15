@@ -108,6 +108,15 @@ export function instagramPublishingEnabled() {
     && process.env.HOOMA_INSTAGRAM_PUBLISHING_ENABLED === "1";
 }
 
+export function instagramApiNetworkEnabled() {
+  return process.env.HOOMA_INSTAGRAM_API_NETWORK_ENABLED === "1";
+}
+
+export function instagramInsightsEnabled() {
+  return instagramApiNetworkEnabled()
+    && process.env.HOOMA_INSTAGRAM_INSIGHTS_ENABLED === "1";
+}
+
 export function tiktokOAuthEnabled() {
   return process.env.HOOMA_TIKTOK_OAUTH_ENABLED === "1";
 }
