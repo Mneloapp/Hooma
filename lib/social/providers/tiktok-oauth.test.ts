@@ -6,6 +6,7 @@ import {
   socialPublishingEnabled,
   tiktokOAuthEnabled,
 } from "../config";
+import { isProviderAuthenticationFailure } from "../provider-client";
 import {
   buildTikTokAuthorizationUrl,
   exchangeTikTokAuthorizationCode,
@@ -13,6 +14,7 @@ import {
   parseTikTokIdentityResponse,
   parseTikTokReturnedScopes,
   parseTikTokTokenResponse,
+  refreshTikTokAccessToken,
 } from "./tiktok-oauth";
 
 const APPROVED_SCOPES = ["approved.account.read", "approved.content.publish"];
@@ -126,6 +128,84 @@ test("token exchange sends the exact callback and no scope override", async () =
       redirect_uri: "https://hooma.ge/api/social/oauth/tiktok/callback/",
     });
     assert.equal("scope" in (observedBodies[0] ?? {}), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("token refresh validates identity and returns TikTok's rotated token pair", async () => {
+  installTikTokEnvironment();
+  const originalFetch = globalThis.fetch;
+  const observedUrls: URL[] = [];
+  const observedBodies: Array<Record<string, unknown>> = [];
+  globalThis.fetch = async (input, init) => {
+    observedUrls.push(new URL(String(input)));
+    observedBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    const response = tokenResponse();
+    response.data.access_token = "rotated-access-token";
+    response.data.refresh_token = "rotated-refresh-token";
+    return Response.json(response);
+  };
+  try {
+    const token = await refreshTikTokAccessToken(
+      "previous-refresh-token",
+      "account-open-id",
+    );
+    assert.equal(
+      observedUrls[0]?.toString(),
+      "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/refresh_token/",
+    );
+    assert.deepEqual(observedBodies[0], {
+      client_id: "test-app-id",
+      client_secret: "test-client-secret",
+      grant_type: "refresh_token",
+      refresh_token: "previous-refresh-token",
+    });
+    assert.equal(token.accessToken, "rotated-access-token");
+    assert.equal(token.refreshToken, "rotated-refresh-token");
+    assert.equal(token.openId, "account-open-id");
+    assert.deepEqual(token.scopes, [...APPROVED_SCOPES].sort());
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("token refresh rejects account drift, missing scopes, and invalid token pairs", async () => {
+  installTikTokEnvironment();
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => {
+      const response = tokenResponse();
+      response.data.open_id = "another-account";
+      return Response.json(response);
+    };
+    const identityMismatch = await refreshTikTokAccessToken(
+      "previous-refresh-token",
+      "account-open-id",
+    ).then(() => null, (error: unknown) => error);
+    assert.match(
+      String(identityMismatch),
+      /SOCIAL_PROVIDER_ERROR:tiktok:token_refresh:REFRESH_IDENTITY_MISMATCH/,
+    );
+    assert.equal(isProviderAuthenticationFailure(identityMismatch), true);
+
+    globalThis.fetch = async () => Response.json(tokenResponse("approved.account.read"));
+    const missingScope = await refreshTikTokAccessToken(
+      "previous-refresh-token",
+      "account-open-id",
+    ).then(() => null, (error: unknown) => error);
+    assert.match(
+      String(missingScope),
+      /SOCIAL_PROVIDER_ERROR:tiktok:token_refresh:REQUIRED_SCOPE_MISSING/,
+    );
+    assert.equal(isProviderAuthenticationFailure(missingScope), true);
+
+    const invalidPair = tokenResponse();
+    invalidPair.data.refresh_token = invalidPair.data.access_token;
+    assert.throws(
+      () => parseTikTokTokenResponse(invalidPair, "token_refresh"),
+      /SOCIAL_PROVIDER_ERROR:tiktok:token_refresh:INVALID_TOKEN_RESPONSE/,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

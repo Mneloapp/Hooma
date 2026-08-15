@@ -18,7 +18,7 @@
     "test:payments": "node --experimental-strip-types --test tools/bog-payment-rules.test.mjs tools/order-cancellation-rules.test.mjs",
     "test:hooma-plus": "node --experimental-strip-types --test tools/hooma-plus-rules.test.mjs",
     "test:social:instagram": "tsc --noEmit --pretty false && node tests/support/run-typescript-tests.cjs lib/social/providers/instagram-login.test.ts",
-    "test:social:tiktok": "tsc --noEmit --pretty false && node tests/support/run-typescript-tests.cjs lib/social/providers/tiktok-oauth.test.ts"
+    "test:social:tiktok": "tsc --noEmit --pretty false && node tests/support/run-typescript-tests.cjs lib/social/providers/tiktok-oauth.test.ts lib/social/token-refresh-orchestrator.test.ts lib/social/token-refresh-worker.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

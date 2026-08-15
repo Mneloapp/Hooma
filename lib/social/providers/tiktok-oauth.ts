@@ -11,6 +11,7 @@ import {
 } from "../provider-client";
 
 const TOKEN_URL = "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/token/";
+const REFRESH_URL = "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/refresh_token/";
 const IDENTITY_URL = "https://business-api.tiktok.com/open_api/v1.3/business/get/";
 const SCOPE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{2,120}$/;
 
@@ -39,7 +40,10 @@ function boundedString(value: unknown, maximum = 4_096) {
     : null;
 }
 
-function responseData(body: unknown, stage: "token_exchange" | "identity") {
+function responseData(
+  body: unknown,
+  stage: "token_exchange" | "token_refresh" | "identity",
+) {
   const record = asRecord(body);
   const requestId = boundedString(record?.request_id, 256);
   if (record?.code !== 0) {
@@ -79,8 +83,11 @@ export function parseTikTokReturnedScopes(value: unknown) {
   return [...new Set(entries)].sort();
 }
 
-export function parseTikTokTokenResponse(body: unknown) {
-  const { data, requestId } = responseData(body, "token_exchange");
+export function parseTikTokTokenResponse(
+  body: unknown,
+  stage: "token_exchange" | "token_refresh" = "token_exchange",
+) {
+  const { data, requestId } = responseData(body, stage);
   const accessToken = boundedString(data.access_token, 16_384);
   const refreshToken = boundedString(data.refresh_token, 16_384);
   const expiresIn = positiveInteger(data.expires_in);
@@ -90,6 +97,7 @@ export function parseTikTokTokenResponse(body: unknown) {
   if (
     !accessToken
     || !refreshToken
+    || accessToken === refreshToken
     || data.token_type !== "Bearer"
     || !expiresIn
     || !refreshTokenExpiresIn
@@ -98,14 +106,14 @@ export function parseTikTokTokenResponse(body: unknown) {
   ) {
     throw new SocialProviderError({
       provider: "tiktok",
-      stage: "token_exchange",
+      stage,
       code: "INVALID_TOKEN_RESPONSE",
       requestId,
     });
   }
   assertRequiredScopes(
     "tiktok",
-    "token_exchange",
+    stage,
     scopes,
     providerConfig("tiktok").requiredScopes,
   );
@@ -182,6 +190,41 @@ export async function exchangeTikTokAuthorizationCode(authCode: string) {
     }),
   });
   return parseTikTokTokenResponse(body);
+}
+
+export async function refreshTikTokAccessToken(
+  refreshToken: string,
+  expectedOpenId: string,
+) {
+  if (!boundedString(refreshToken, 16_384) || !boundedString(expectedOpenId, 256)) {
+    throw new SocialProviderError({
+      provider: "tiktok",
+      stage: "token_refresh",
+      code: "INVALID_REFRESH_INPUT",
+    });
+  }
+  const config = providerConfig("tiktok");
+  const body = await providerFetchJson("tiktok", "token_refresh", REFRESH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+  const token = parseTikTokTokenResponse(body, "token_refresh");
+  if (token.openId !== expectedOpenId) {
+    throw new SocialProviderError({
+      provider: "tiktok",
+      stage: "token_refresh",
+      code: "REFRESH_IDENTITY_MISMATCH",
+    });
+  }
+  // Always return TikTok's response token pair. The refresh token may rotate,
+  // and callers must persist this returned value rather than the input token.
+  return token;
 }
 
 export async function getTikTokOAuthIdentity(

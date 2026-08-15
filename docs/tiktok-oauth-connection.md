@@ -51,9 +51,20 @@ TIKTOK_BUSINESS_APPROVED_SCOPES=
 ```
 
 After configuration is verified, set `HOOMA_TIKTOK_OAUTH_ENABLED=1` to expose
-the owner-only connect action. Leave `HOOMA_SOCIAL_PUBLISHING_ENABLED=0` until
-the independent publishing, music-receipt, idempotency, and approval gates are
-all accepted.
+the owner-only connect action and keep it on while the connection is active so
+token maintenance can run. Leave `HOOMA_SOCIAL_PUBLISHING_ENABLED=0` until the
+independent publishing, music-receipt, idempotency, and approval gates are all
+accepted.
+
+The same TikTok OAuth gate enables token maintenance without enabling content
+publishing. TikTok access tokens expire after roughly one day, so the existing
+authenticated social-token cron claims due TikTok connections and exchanges
+their encrypted refresh token. The returned account ID and exact approved scope
+identifiers are revalidated, the owned-account identity is fetched again, and
+both returned tokens are persisted through the existing atomic rotation path.
+The old refresh token is never reused after TikTok returns a replacement. The
+maintenance cron runs every four hours so the six-hour pre-expiry refresh margin
+does not leave an avoidable access-token outage window.
 
 ## Threat review
 
@@ -70,6 +81,10 @@ all accepted.
   Returned machine identifiers must contain the frozen approval-derived set.
 - **Token disclosure:** token responses are never logged. Access and refresh
   tokens pass directly into the existing AES-256-GCM envelope storage path.
+- **Refresh-token rotation:** every refresh must return a complete token pair,
+  the same app-specific account ID, and the frozen approved scopes. The worker
+  stores TikTok's returned refresh token and increments the database token
+  version atomically; identity or scope drift fails the leased claim.
 - **Unauthorized operator:** both start and callback routes require an
   authenticated Hooma owner with `team.manage` permission.
 - **Accidental publication:** OAuth has an independent switch and connecting an
@@ -81,6 +96,11 @@ all accepted.
 Run `npm run test:social:tiktok` and a production build. Then verify that the
 admin settings page shows TikTok as unavailable while the OAuth switch is off,
 without exposing any application identifiers or secrets.
+
+Before rollout, verify that the selected Vercel plan accepts the four-hour cron
+schedule in `vercel.json`. If it does not, keep TikTok OAuth disabled until an
+equally frequent authenticated scheduler is configured; do not fall back to a
+once-daily refresh for a one-day access token.
 
 Official references:
 

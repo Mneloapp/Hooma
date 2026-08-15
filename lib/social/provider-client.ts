@@ -110,6 +110,11 @@ export function providerErrorCode(error: unknown) {
 export function isProviderAuthenticationFailure(error: unknown) {
   if (!(error instanceof SocialProviderError)) return false;
   if (error.httpStatus === 401 || error.httpStatus === 403) return true;
+  if ([
+    "ACCOUNT_IDENTITY_MISMATCH",
+    "REFRESH_IDENTITY_MISMATCH",
+    "REQUIRED_SCOPE_MISSING",
+  ].includes(error.code)) return true;
   if (error.provider === "instagram") {
     return error.code === "190" || error.code === "INVALID_TOKEN";
   }
