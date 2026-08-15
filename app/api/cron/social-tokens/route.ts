@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { socialPublishingEnabled } from "@/lib/social/config";
+import { socialPublishingEnabled, tiktokOAuthEnabled } from "@/lib/social/config";
 import {
   claimSocialConnectionRefresh,
   completeSocialConnectionRefresh,
@@ -12,62 +12,61 @@ import {
   getInstagramIdentity,
   refreshInstagramLongLivedToken,
 } from "@/lib/social/providers/instagram-login";
+import {
+  getTikTokOAuthIdentity,
+  refreshTikTokAccessToken,
+} from "@/lib/social/providers/tiktok-oauth";
+import {
+  enabledSocialRefreshProviders,
+  runSocialTokenRefreshes,
+} from "@/lib/social/token-refresh-orchestrator";
+import { refreshClaimedSocialConnection } from "@/lib/social/token-refresh-worker";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_REFRESHES_PER_RUN = 3;
+const MAX_REFRESHES_PER_PROVIDER_PER_RUN = 3;
+
+const refreshDependencies = {
+  decrypt: decryptClaimedSocialToken,
+  refreshInstagram: refreshInstagramLongLivedToken,
+  getInstagramIdentity,
+  refreshTikTok: refreshTikTokAccessToken,
+  getTikTokIdentity: getTikTokOAuthIdentity,
+  complete: completeSocialConnectionRefresh,
+};
 
 export async function GET(request: Request) {
   if (!authenticateSocialCronRequest(request)) {
     return NextResponse.json({ ok: false, status: "UNAUTHORIZED" }, { status: 401 });
   }
-  if (!socialPublishingEnabled()) {
+  const providers = enabledSocialRefreshProviders({
+    publishingEnabled: socialPublishingEnabled(),
+    tiktokOAuthEnabled: tiktokOAuthEnabled(),
+  });
+  if (providers.length === 0) {
     return NextResponse.json(
       { ok: true, status: "DISABLED", refreshed: 0, failed: 0 },
       { headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  let refreshed = 0;
-  let failed = 0;
-  const failures: string[] = [];
-  for (let index = 0; index < MAX_REFRESHES_PER_RUN; index += 1) {
-    const claim = await claimSocialConnectionRefresh("instagram");
-    if (!claim) break;
-    try {
-      const currentToken = decryptClaimedSocialToken(claim, "access");
-      const token = await refreshInstagramLongLivedToken(currentToken);
-      const identity = await getInstagramIdentity(token.accessToken, claim.externalAccountId);
-      await completeSocialConnectionRefresh(claim, {
-        provider: "instagram",
-        tokenType: "Bearer",
-        scopes: claim.scopes,
-        accessToken: token.accessToken,
-        refreshToken: null,
-        expiresIn: token.expiresIn,
-        refreshTokenExpiresIn: null,
-        identity: {
-          accountId: identity.accountId,
-          username: identity.username,
-          snapshot: {
-            account_id: identity.accountId,
-            username: identity.username,
-            account_type: identity.accountType,
-          },
-        },
-      });
-      refreshed += 1;
-    } catch (error) {
-      failed += 1;
-      failures.push(providerErrorCode(error));
+  const { refreshed, failed, failures } = await runSocialTokenRefreshes({
+    providers,
+    maxPerProvider: MAX_REFRESHES_PER_PROVIDER_PER_RUN,
+    claim: claimSocialConnectionRefresh,
+    refresh: async (claim) => {
+      await refreshClaimedSocialConnection(claim, refreshDependencies);
+    },
+    markFailed: async (claim, error) => {
       await failSocialConnectionRefresh(
         claim,
         error,
         isProviderAuthenticationFailure(error),
       );
-    }
-  }
+    },
+    errorCode: providerErrorCode,
+  });
 
   return NextResponse.json(
     {

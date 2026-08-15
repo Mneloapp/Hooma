@@ -52,6 +52,20 @@ function requiredOAuthRedirect(name: string, pathname: string) {
   return url.toString();
 }
 
+function requiredTikTokAuthorizationUrl() {
+  const value = requiredHttps("TIKTOK_BUSINESS_AUTH_URL");
+  const url = new URL(value);
+  if (
+    url.origin !== "https://ads.tiktok.com"
+    || !new Set(["/marketing_api/auth", "/marketing_api/auth/"]).has(url.pathname)
+    || url.search
+    || url.hash
+  ) {
+    throw new Error("SOCIAL_CONFIG_INVALID_AUTHORIZATION_URL:TIKTOK_BUSINESS_AUTH_URL");
+  }
+  return url.toString();
+}
+
 function scopes(name: string) {
   const parsed = required(name)
     .split(",")
@@ -70,27 +84,32 @@ export function socialPublishingEnabled() {
   return process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED === "1";
 }
 
+export function tiktokOAuthEnabled() {
+  return process.env.HOOMA_TIKTOK_OAUTH_ENABLED === "1";
+}
+
 export function providerConfig(provider: "tiktok"): TikTokProviderConfig;
 export function providerConfig(provider: "instagram"): InstagramProviderConfig;
 export function providerConfig(provider: SocialProvider): SocialProviderConfig;
 export function providerConfig(provider: SocialProvider): SocialProviderConfig {
   if (provider === "tiktok") {
-    const authorizationUrl = requiredHttps("TIKTOK_BUSINESS_AUTH_URL");
-    const authorizationHost = new URL(authorizationUrl).hostname;
-    if (!new Set(["business-api.tiktok.com", "ads.tiktok.com"]).has(authorizationHost)) {
-      throw new Error("SOCIAL_CONFIG_INVALID_AUTHORIZATION_HOST:TIKTOK_BUSINESS_AUTH_URL");
+    const expectedUsername = required("TIKTOK_BUSINESS_EXPECTED_USERNAME")
+      .replace(/^@/, "")
+      .toLowerCase();
+    if (expectedUsername !== "hooma.ge") {
+      throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:TIKTOK_BUSINESS_EXPECTED_USERNAME");
     }
     return {
       provider,
       clientId: required("TIKTOK_BUSINESS_CLIENT_ID"),
       clientSecret: required("TIKTOK_BUSINESS_CLIENT_SECRET"),
-      authorizationUrl,
+      authorizationUrl: requiredTikTokAuthorizationUrl(),
       redirectUri: requiredOAuthRedirect(
         "TIKTOK_BUSINESS_REDIRECT_URI",
-        "/api/social/oauth/tiktok/callback",
+        "/api/social/oauth/tiktok/callback/",
       ),
-      requiredScopes: scopes("TIKTOK_BUSINESS_REQUIRED_SCOPES"),
-      expectedUsername: required("TIKTOK_BUSINESS_EXPECTED_USERNAME").replace(/^@/, "").toLowerCase(),
+      requiredScopes: scopes("TIKTOK_BUSINESS_APPROVED_SCOPES"),
+      expectedUsername,
     };
   }
 
