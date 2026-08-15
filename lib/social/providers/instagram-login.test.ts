@@ -5,7 +5,9 @@ import {
   buildInstagramIdentityEndpoint,
   exchangeInstagramAuthorizationCode,
   getInstagramIdentity,
+  parseInstagramIdentityJson,
   parseInstagramIdentityResponse,
+  parseInstagramShortTokenJson,
   parseInstagramShortTokenResponse,
   parseInstagramUserId,
 } from "./instagram-login";
@@ -65,6 +67,39 @@ test("short token parser accepts the direct legacy response and safe numeric ID"
   });
 });
 
+test("short token JSON parser preserves unsafe numeric Instagram user IDs exactly", () => {
+  const direct = parseInstagramShortTokenJson(
+    '{"access_token":"short-token","user_id":17841405793187218,"permissions":"instagram_business_basic"}',
+  );
+  assert.equal(
+    (direct as { user_id: unknown }).user_id,
+    "17841405793187218",
+  );
+
+  const enveloped = parseInstagramShortTokenJson(
+    '{"data":[{"access_token":"short-token","user_id":17841405793187218,"permissions":"instagram_business_basic"}]}',
+  );
+  assert.equal(
+    (enveloped as { data: Array<{ user_id: unknown }> }).data[0]?.user_id,
+    "17841405793187218",
+  );
+});
+
+test("short token JSON parser fails closed for ambiguous user ID fields", () => {
+  assert.throws(
+    () => parseInstagramShortTokenJson(
+      '{"user_id":17841405793187218,"nested":{"user_id":17841405793187219}}',
+    ),
+    /AMBIGUOUS_INSTAGRAM_USER_ID_FIELDS/,
+  );
+  assert.throws(
+    () => parseInstagramShortTokenJson(
+      '{"user_id":"999","user_id":17841405793187218}',
+    ),
+    /AMBIGUOUS_INSTAGRAM_USER_ID_FIELDS/,
+  );
+});
+
 test("short token parser rejects ambiguous envelopes and unsafe numeric IDs", () => {
   assert.equal(parseInstagramShortTokenResponse({ data: [] }), null);
   assert.equal(parseInstagramShortTokenResponse({
@@ -103,6 +138,21 @@ test("identity parser accepts documented and legacy response shapes", () => {
   });
 });
 
+test("identity JSON parser preserves unsafe numeric user_id and legacy id values", () => {
+  assert.equal(
+    (parseInstagramIdentityJson(
+      '{"user_id":17841405793187218,"username":"hooma.ge"}',
+    ) as { user_id: unknown }).user_id,
+    DOCUMENTED_USER_ID,
+  );
+  assert.equal(
+    (parseInstagramIdentityJson(
+      '{"id":17841405793187218,"username":"hooma.ge"}',
+    ) as { id: unknown }).id,
+    DOCUMENTED_USER_ID,
+  );
+});
+
 test("identity parser treats user_id as authoritative and requires an exact match", () => {
   assert.equal(parseInstagramIdentityResponse({
     user_id: "999",
@@ -132,13 +182,10 @@ test("identity requests use the required frozen Graph API version", async () => 
   globalThis.fetch = async (input, init) => {
     observedUrls.push(new URL(String(input)));
     observedAuthorizations.push(new Headers(init?.headers).get("authorization"));
-    return Response.json({
-      data: [{
-        user_id: DOCUMENTED_USER_ID,
-        username: "hooma.ge",
-        account_type: "Business",
-      }],
-    });
+    return new Response(
+      '{"data":[{"user_id":17841405793187218,"username":"hooma.ge","account_type":"Business"}]}',
+      { headers: { "content-type": "application/json" } },
+    );
   };
   try {
     assert.deepEqual(await getInstagramIdentity("identity-token", DOCUMENTED_USER_ID), {
@@ -221,6 +268,29 @@ test("token exchange preserves required scopes and redacts missing-scope failure
         && !error.message.includes("sensitive-short-token")
         && !error.message.includes("test-client-secret"),
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("token exchange preserves an unquoted unsafe Instagram user ID end to end", async () => {
+  installInstagramEnvironment();
+  const originalFetch = globalThis.fetch;
+  const responses = [
+    new Response(
+      '{"data":[{"access_token":"sensitive-short-token","user_id":17841405793187218,"permissions":"instagram_business_basic,instagram_business_content_publish"}]}',
+      { headers: { "content-type": "application/json" } },
+    ),
+    Response.json({
+      access_token: "long-token",
+      token_type: "bearer",
+      expires_in: 5_184_000,
+    }),
+  ];
+  globalThis.fetch = async () => responses.shift() ?? Response.json({}, { status: 500 });
+  try {
+    const token = await exchangeInstagramAuthorizationCode("authorization-code");
+    assert.equal(token.userId, DOCUMENTED_USER_ID);
   } finally {
     globalThis.fetch = originalFetch;
   }

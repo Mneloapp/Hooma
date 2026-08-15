@@ -147,6 +147,7 @@ export async function providerFetchJson(
   stage: SocialProviderStage,
   input: string | URL,
   init: RequestInit,
+  parseBody: (text: string) => unknown = JSON.parse,
 ) {
   let response: Response;
   try {
@@ -188,7 +189,7 @@ export async function providerFetchJson(
   let body: unknown = null;
   if (text) {
     try {
-      body = JSON.parse(text) as unknown;
+      body = parseBody(text);
     } catch {
       throw new SocialProviderError({
         provider,
