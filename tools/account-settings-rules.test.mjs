@@ -32,7 +32,7 @@ test("confirmed auth email is synchronized from the trusted callback user", asyn
   const emailTemplate = await read("../supabase/templates/email-change.html");
   const actions = await read("../app/account/settings/actions.ts");
 
-  assert.match(actions, /new URL\("\/auth\/email-change\/confirm", await siteOrigin\(\)\)/);
+  assert.match(actions, /new URL\("\/auth\/email-change\/confirm", trustedSiteOrigin\(\)\)/);
   assert.match(emailTemplate, /\{\{ \.RedirectTo \}\}\?token_hash=\{\{ \.TokenHash \}\}&amp;type=email_change/);
   assert.match(emailChange, /type !== "email_change"/);
   assert.match(emailChange, /verifyOtp\(\{[\s\S]*type: "email_change"/);

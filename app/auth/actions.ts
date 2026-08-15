@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { products } from "@/data/products";
@@ -22,6 +21,7 @@ import {
   sanitizeBogPaymentDetails,
 } from "@/lib/payments/bog-core";
 import { reconcileCustomerCatalogBogAttempts } from "@/lib/payments/bog-stale-recovery";
+import { trustedSiteOrigin } from "@/lib/site-origin";
 
 type AuthState = {
   ok?: boolean;
@@ -124,14 +124,6 @@ const safeNextPath = (value: string, fallback = "/account") => {
   return safePath === "/" ? fallback : safePath;
 };
 
-async function siteOrigin() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
-}
-
 export async function recoverCatalogPaymentSessionAction(
   checkoutKey: string,
 ): Promise<CatalogPaymentSessionRecovery> {
@@ -219,7 +211,7 @@ export async function googleLoginAction(formData: FormData) {
   const next = safeNextPath(getString(formData, "next"));
   if (!supabase) redirect(`/login?error=config&next=${encodeURIComponent(next)}`);
 
-  const callback = new URL("/auth/callback", await siteOrigin());
+  const callback = new URL("/auth/callback", trustedSiteOrigin());
   callback.searchParams.set("next", next);
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -239,7 +231,7 @@ export async function signupAction(_state: AuthState, formData: FormData): Promi
   const password = getString(formData, "password");
   const fullName = getString(formData, "full_name");
   const phone = getString(formData, "phone");
-  const callback = new URL("/auth/callback", await siteOrigin());
+  const callback = new URL("/auth/callback", trustedSiteOrigin());
   callback.searchParams.set("next", "/account");
   callback.searchParams.set("flow", "email");
 

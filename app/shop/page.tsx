@@ -47,10 +47,11 @@ export default async function Shop({ searchParams }: { searchParams: Promise<Sho
   const catalogBasePath = selectedCategory ? categoryPath(selectedCategory.slug) : "/shop";
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const safeRequestedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  let [catalogPage, dailyDeals] = await Promise.all([
+  const [initialCatalogPage, dailyDeals] = await Promise.all([
     getStorefrontCatalogPage({ category, subcategory, query: q, material, sort, page: safeRequestedPage, pageSize: PRODUCTS_PER_PAGE }),
     getDailyDeals(),
   ]);
+  let catalogPage = initialCatalogPage;
   const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
 
   const buildHref = (changes: Partial<ShopParams>, clear: Array<keyof ShopParams> = []) => {

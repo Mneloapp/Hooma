@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 import { canAccessAdminPath, defaultAdminPath, isStaffRole, isUserRole } from "@/lib/auth/permissions";
+import { trustedSiteOrigin } from "@/lib/site-origin";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -10,9 +11,7 @@ export async function middleware(request: NextRequest) {
   if (!protectedPath) return response;
 
   const redirectToLogin = () => {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
+    const url = new URL("/login", trustedSiteOrigin());
     url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   };
@@ -25,7 +24,7 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
@@ -41,21 +40,15 @@ export async function middleware(request: NextRequest) {
     return redirectToLogin();
   }
   if (pathname.startsWith("/admin") && (!isStaffRole(profile.role) || !canAccessAdminPath(profile.role, pathname))) {
-    const url = request.nextUrl.clone();
-    url.pathname = isStaffRole(profile.role) ? defaultAdminPath(profile.role) : "/account";
-    url.search = "";
+    const url = new URL(isStaffRole(profile.role) ? defaultAdminPath(profile.role) : "/account", trustedSiteOrigin());
     return NextResponse.redirect(url);
   }
   if (pathname.startsWith("/account") && isStaffRole(profile.role)) {
-    const url = request.nextUrl.clone();
-    url.pathname = defaultAdminPath(profile.role);
-    url.search = "";
+    const url = new URL(defaultAdminPath(profile.role), trustedSiteOrigin());
     return NextResponse.redirect(url);
   }
   if (pathname.startsWith("/checkout") && isStaffRole(profile.role)) {
-    const url = request.nextUrl.clone();
-    url.pathname = defaultAdminPath(profile.role);
-    url.search = "";
+    const url = new URL(defaultAdminPath(profile.role), trustedSiteOrigin());
     return NextResponse.redirect(url);
   }
 
