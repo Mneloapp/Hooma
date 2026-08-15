@@ -9,6 +9,9 @@ import { absoluteUrl, DEFAULT_DESCRIPTION, DEFAULT_SOCIAL_IMAGE, SITE_NAME } fro
 
 export const dynamic = "force-dynamic";
 
+const HOME_CATEGORY_PRODUCTS = 6;
+const HOME_DAILY_DEALS = 6;
+
 export const metadata: Metadata = {
   title: { absolute: "Hooma — პრაქტიკული ნივთები ყოველდღიურობისთვის" },
   description: DEFAULT_DESCRIPTION,
@@ -32,11 +35,11 @@ export const metadata: Metadata = {
 
 export default async function Home() {
   const [homeCards, dailyDeals] = await Promise.all([
-    getStorefrontHomeCards(12),
+    getStorefrontHomeCards(HOME_CATEGORY_PRODUCTS),
     getDailyDeals(),
   ]);
   const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
-  const dailyDealCards = await getStorefrontProductCardsByIds(dailyDeals.deals.slice(0, 12).map((deal) => deal.productId));
+  const dailyDealCards = await getStorefrontProductCardsByIds(dailyDeals.deals.slice(0, HOME_DAILY_DEALS).map((deal) => deal.productId));
   const dailyDealProducts = dailyDealCards.map((product) => applyProductCardDeal(product, dailyDealByProductId.get(product.id)));
   const applyDeals = (products: ProductCardData[]) => products.map((product) => applyProductCardDeal(product, dailyDealByProductId.get(product.id)));
   const categoryProducts = Object.fromEntries(

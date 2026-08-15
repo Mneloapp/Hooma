@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { catalogImageUrl } from "@/lib/catalog-media";
 
 export function ProductImageGallery({ images, name }: { images: string[]; name: string }) {
   const uniqueImages = useMemo(() => Array.from(new Set(images)).filter(Boolean), [images]);
@@ -12,10 +13,10 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const hasMultiple = uniqueImages.length > 1;
 
-  const goTo = (index: number) => {
+  const goTo = useCallback((index: number) => {
     if (!uniqueImages.length) return;
     setActive((index + uniqueImages.length) % uniqueImages.length);
-  };
+  }, [uniqueImages.length]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -26,7 +27,7 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [active]);
+  }, [active, goTo]);
 
   const handleTouchEnd = (x: number) => {
     if (touchStart === null || !hasMultiple) return;
@@ -49,7 +50,7 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
           className={cn("relative h-full w-full", hasMultiple && "cursor-pointer")}
         >
           <Image
-            src={uniqueImages[active]}
+            src={catalogImageUrl(uniqueImages[active], 1400)}
             alt={`${name} image ${active + 1}`}
             fill
             priority
@@ -99,7 +100,7 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
                 active === index ? "border-hooma-accent" : "border-transparent opacity-70 hover:opacity-100",
               )}
             >
-              <Image src={image} alt={`${name} thumbnail ${index + 1}`} fill className="object-cover" sizes="128px" />
+              <Image src={catalogImageUrl(image, 320)} alt={`${name} thumbnail ${index + 1}`} fill className="object-cover" sizes="128px" />
             </button>
           ))}
         </div>
@@ -115,7 +116,7 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
             <X size={20} />
           </button>
           <div className="relative h-full w-full">
-            <Image src={uniqueImages[active]} alt={`${name} large image ${active + 1}`} fill className="object-contain" sizes="100vw" />
+            <Image src={catalogImageUrl(uniqueImages[active], 1600)} alt={`${name} large image ${active + 1}`} fill className="object-contain" sizes="100vw" />
           </div>
           {hasMultiple ? (
             <>

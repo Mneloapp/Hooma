@@ -1,9 +1,21 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import type { Product, ProductCategory, ProductVariant } from "@/data/products";
 import type { ProductCardData } from "@/lib/product-card";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/supabase/server";
+import {
+  STOREFRONT_CATALOG_CACHE_TAG,
+  STOREFRONT_CATEGORIES_CACHE_TAG,
+  STOREFRONT_DISPLAY_CACHE_SECONDS,
+  STOREFRONT_HOME_CACHE_TAG,
+  STOREFRONT_PRODUCTS_CACHE_TAG,
+  STOREFRONT_SITEMAP_CACHE_SECONDS,
+  STOREFRONT_SITEMAP_CACHE_TAG,
+  storefrontCategoryCacheTag,
+  storefrontProductCacheTag,
+} from "@/lib/storefront-cache";
 
 type CategoryRow = { id: string; parent_id: string | null; slug: string; name_en: string; name_ka: string };
 
@@ -170,7 +182,7 @@ function storefrontCardSelect() {
   return "id:product_id,slug,hooma_name,name_ka,category_slug,category_name_en,category_name_ka,subcategory_slug,subcategory_name_en,subcategory_name_ka,hero_image,price,price_placeholder,lead_time_days,rating_average,rating_count,sales_count,popularity_score";
 }
 
-export async function getStorefrontCatalogPage(options: StorefrontCatalogPageOptions = {}): Promise<StorefrontCatalogPage> {
+async function loadStorefrontCatalogPage(options: StorefrontCatalogPageOptions = {}): Promise<StorefrontCatalogPage> {
   const admin = createAdminClient() as any;
   if (!admin) return { products: [], totalCount: 0 };
 
@@ -196,7 +208,32 @@ export async function getStorefrontCatalogPage(options: StorefrontCatalogPageOpt
   };
 }
 
-export async function getStorefrontHomeCards(perSection = 12): Promise<StorefrontHomeCards> {
+export async function getStorefrontCatalogPage(options: StorefrontCatalogPageOptions = {}): Promise<StorefrontCatalogPage> {
+  const normalizedOptions = {
+    category: options.category?.trim() || undefined,
+    subcategory: options.subcategory?.trim() || undefined,
+    query: options.query?.trim() || undefined,
+    material: options.material?.trim() || undefined,
+    sort: options.sort?.trim() || "newest",
+    page: Math.max(1, Math.trunc(options.page || 1)),
+    pageSize: Math.min(60, Math.max(1, Math.trunc(options.pageSize || 36))),
+  } satisfies StorefrontCatalogPageOptions;
+
+  // Search text is unbounded and user-specific, so shared caching is limited
+  // to standard catalog/filter pages with a short, display-only TTL.
+  if (normalizedOptions.query) return loadStorefrontCatalogPage(normalizedOptions);
+
+  const cacheKey = JSON.stringify(normalizedOptions);
+  const tags = [STOREFRONT_CATALOG_CACHE_TAG];
+  if (normalizedOptions.category) tags.push(storefrontCategoryCacheTag(normalizedOptions.category));
+  return unstable_cache(
+    () => loadStorefrontCatalogPage(normalizedOptions),
+    ["storefront-catalog-page-v1", cacheKey],
+    { revalidate: STOREFRONT_DISPLAY_CACHE_SECONDS, tags },
+  )();
+}
+
+async function loadStorefrontHomeCards(perSection = 12): Promise<StorefrontHomeCards> {
   const admin = createAdminClient() as any;
   if (!admin) return { categoryProducts: {} };
 
@@ -217,7 +254,19 @@ export async function getStorefrontHomeCards(perSection = 12): Promise<Storefron
   return { categoryProducts };
 }
 
-export async function getStorefrontProductCardsByIds(productIds: string[]): Promise<ProductCardData[]> {
+export async function getStorefrontHomeCards(perSection = 12): Promise<StorefrontHomeCards> {
+  const normalizedCount = Math.min(12, Math.max(1, Math.trunc(perSection)));
+  return unstable_cache(
+    () => loadStorefrontHomeCards(normalizedCount),
+    ["storefront-home-cards-v1", String(normalizedCount)],
+    {
+      revalidate: STOREFRONT_DISPLAY_CACHE_SECONDS,
+      tags: [STOREFRONT_HOME_CACHE_TAG, STOREFRONT_CATALOG_CACHE_TAG],
+    },
+  )();
+}
+
+async function loadStorefrontProductCardsByIds(productIds: string[]): Promise<ProductCardData[]> {
   const uniqueIds = Array.from(new Set(productIds)).slice(0, 60);
   if (!uniqueIds.length) return [];
   const admin = createAdminClient() as any;
@@ -240,7 +289,24 @@ export async function getStorefrontProductCardsByIds(productIds: string[]): Prom
   });
 }
 
-export async function getStorefrontSitemapEntries(): Promise<StorefrontSitemapEntry[]> {
+export async function getStorefrontProductCardsByIds(productIds: string[]): Promise<ProductCardData[]> {
+  const uniqueIds = Array.from(new Set(productIds.filter(Boolean))).slice(0, 60);
+  if (!uniqueIds.length) return [];
+  return unstable_cache(
+    () => loadStorefrontProductCardsByIds(uniqueIds),
+    ["storefront-product-cards-v1", ...uniqueIds],
+    {
+      revalidate: STOREFRONT_DISPLAY_CACHE_SECONDS,
+      tags: [
+        STOREFRONT_PRODUCTS_CACHE_TAG,
+        STOREFRONT_CATALOG_CACHE_TAG,
+        ...uniqueIds.map(storefrontProductCacheTag),
+      ],
+    },
+  )();
+}
+
+async function loadStorefrontSitemapEntries(): Promise<StorefrontSitemapEntry[]> {
   const admin = createAdminClient() as any;
   if (!admin) return [];
 
@@ -274,7 +340,18 @@ export async function getStorefrontSitemapEntries(): Promise<StorefrontSitemapEn
   return entries;
 }
 
-export async function getStorefrontPublicCategorySlugs(): Promise<string[]> {
+export async function getStorefrontSitemapEntries(): Promise<StorefrontSitemapEntry[]> {
+  return unstable_cache(
+    loadStorefrontSitemapEntries,
+    ["storefront-sitemap-products-v1"],
+    {
+      revalidate: STOREFRONT_SITEMAP_CACHE_SECONDS,
+      tags: [STOREFRONT_SITEMAP_CACHE_TAG, STOREFRONT_PRODUCTS_CACHE_TAG],
+    },
+  )();
+}
+
+async function loadStorefrontPublicCategorySlugs(): Promise<string[]> {
   const admin = createAdminClient() as any;
   if (!admin) return [];
   const { data, error } = await admin
@@ -292,7 +369,18 @@ export async function getStorefrontPublicCategorySlugs(): Promise<string[]> {
   ));
 }
 
-export async function getStorefrontProductBySlug(slug: string): Promise<Product | undefined> {
+export async function getStorefrontPublicCategorySlugs(): Promise<string[]> {
+  return unstable_cache(
+    loadStorefrontPublicCategorySlugs,
+    ["storefront-public-categories-v1"],
+    {
+      revalidate: STOREFRONT_SITEMAP_CACHE_SECONDS,
+      tags: [STOREFRONT_CATEGORIES_CACHE_TAG, STOREFRONT_SITEMAP_CACHE_TAG],
+    },
+  )();
+}
+
+async function loadStorefrontProductBySlug(slug: string): Promise<Product | undefined> {
   const admin = createAdminClient() as any;
   if (!admin) return undefined;
 
@@ -394,6 +482,23 @@ export async function getStorefrontProductBySlug(slug: string): Promise<Product 
     salesCount: card.salesCount,
     popularityScore: card.popularityScore,
   };
+}
+
+export async function getStorefrontProductBySlug(slug: string): Promise<Product | undefined> {
+  const normalizedSlug = slug.trim().toLowerCase().slice(0, 160);
+  if (!normalizedSlug) return undefined;
+  return unstable_cache(
+    () => loadStorefrontProductBySlug(normalizedSlug),
+    ["storefront-product-by-slug-v1", normalizedSlug],
+    {
+      revalidate: STOREFRONT_DISPLAY_CACHE_SECONDS,
+      tags: [
+        STOREFRONT_PRODUCTS_CACHE_TAG,
+        STOREFRONT_CATALOG_CACHE_TAG,
+        storefrontProductCacheTag(normalizedSlug),
+      ],
+    },
+  )();
 }
 
 export async function getAdminPreviewProductById(productId: string): Promise<Product | null> {

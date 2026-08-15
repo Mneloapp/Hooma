@@ -7,6 +7,7 @@ import type { ProductCardData } from "@/lib/product-card";
 import { useLanguage } from "./LanguageProvider";
 import { ProductRatingSummary } from "@/components/reviews/ProductRatingSummary";
 import { getCategory } from "@/data/catalog";
+import { catalogImageUrl } from "@/lib/catalog-media";
 
 export function ProductCard({ product, compact = false, imageSizes }: { product: ProductCardData; compact?: boolean; imageSizes?: string }) {
   const { language } = useLanguage();
@@ -29,7 +30,7 @@ export function ProductCard({ product, compact = false, imageSizes }: { product:
       <div className={`overflow-hidden border border-hooma-text/10 bg-white/80 transition duration-300 group-hover:-translate-y-1.5 group-hover:border-hooma-accent/35 group-hover:shadow-soft ${compact ? "rounded-2xl" : "rounded-[1.5rem]"}`}>
         <div className="relative aspect-[4/3] overflow-hidden bg-hooma-panel">
           <Image
-            src={product.heroImage}
+            src={catalogImageUrl(product.heroImage, compact ? 640 : 960)}
             alt={language === "ka" ? product.nameKa : product.hoomaName}
             fill
             className="object-cover transition duration-700 group-hover:scale-[1.025]"

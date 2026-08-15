@@ -6,6 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 import { getCategory } from "@/data/catalog";
 import type { ProductCardData } from "@/lib/product-card";
 import { useLanguage } from "@/components/LanguageProvider";
+import { catalogImageUrl } from "@/lib/catalog-media";
 
 const homeImageSizes = "(min-width: 1280px) calc((100vw - 192px) / 6), (min-width: 1024px) calc((100vw - 160px) / 4), (min-width: 640px) calc((100vw - 128px) / 3), calc((100vw - 68px) / 2)";
 
@@ -35,7 +36,7 @@ export function HomeProductCard({ product, showPrice = false }: { product: Produ
       <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-hooma-text/10 bg-white/85 transition duration-300 group-hover:-translate-y-1 group-hover:border-hooma-accent/35 group-hover:shadow-soft">
         <div className="relative aspect-[4/3] overflow-hidden bg-hooma-panel">
           <Image
-            src={product.heroImage}
+            src={catalogImageUrl(product.heroImage, 640)}
             alt=""
             fill
             className="object-cover transition duration-500 group-hover:scale-[1.035]"
