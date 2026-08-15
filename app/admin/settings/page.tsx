@@ -63,7 +63,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
           {connectionResult.error ? <p className="mt-2 text-sm text-amber-800">Social connection-ის საცავი ჯერ არ არის გააქტიურებული.</p> : null}
         </div>
         <a
-          href="/api/social/oauth/instagram/start"
+          href="https://hooma.ge/api/social/oauth/instagram/start"
           className="inline-flex min-h-11 items-center justify-center rounded-full bg-hooma-ink px-5 py-3 text-sm font-medium text-white"
         >
           {instagramConnection?.status === "active" ? "Instagram-ის ხელახლა დაკავშირება" : "Instagram-ის დაკავშირება"}

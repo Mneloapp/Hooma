@@ -8,8 +8,15 @@ import { buildInstagramAuthorizationUrl } from "@/lib/social/providers/instagram
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!requireSocialFeature()) return socialFeatureUnavailable();
+  const requestUrl = new URL(request.url);
+  if (requestUrl.origin !== "https://hooma.ge") {
+    return NextResponse.redirect(
+      "https://hooma.ge/api/social/oauth/instagram/start",
+      { status: 303 },
+    );
+  }
   const actor = await requirePermission("team.manage");
   if (!actor) {
     return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
