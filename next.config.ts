@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 
+const projectRoot = process.cwd();
+
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: projectRoot,
+  turbopack: { root: projectRoot },
+  async headers() {
+    if (process.env.VERCEL_ENV !== "preview") return [];
+    return [{
+      source: "/:path*",
+      headers: [{
+        key: "X-Robots-Tag",
+        value: "noindex, nofollow, noarchive",
+      }],
+    }];
+  },
   images: {
     // Hooma serves catalog media directly from the source CDN/Supabase.
     // This keeps the storefront independent of Vercel image-transformation quotas.

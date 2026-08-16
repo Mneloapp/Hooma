@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LocalizedText } from "@/components/LocalizedText";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "გამოყენების პირობები | Hooma",
+export const metadata: Metadata = publicPageMetadata({
+  title: "გამოყენების პირობები",
   description: "Hooma-ს ონლაინ პლატფორმისა და შეკვეთით დამზადების სერვისის გამოყენების ძირითადი პირობები.",
-};
+  path: "/terms",
+});
 
 const sections = [
   {

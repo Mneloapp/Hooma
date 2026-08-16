@@ -9,6 +9,7 @@ import { useCart } from "./CartContext";
 import { BrandLogo } from "./BrandLogo";
 import { LanguageToggle } from "./LanguageToggle";
 import { useLanguage } from "./LanguageProvider";
+import { categoryPath } from "@/lib/seo";
 import { createClient } from "@/lib/supabase/client";
 import NotificationBell from "./notifications/NotificationBell";
 
@@ -174,12 +175,12 @@ export function Header() {
               <nav className="divide-y divide-hooma-text/10">
                 {catalogCategories.map((category) => (
                   <div key={category.slug} className="px-5 py-5">
-                    <Link href={`/shop?category=${category.slug}`} onClick={() => setOpen(false)} className="group flex items-center gap-3 font-semibold transition hover:text-hooma-accent">
+                    <Link href={categoryPath(category.slug)} onClick={() => setOpen(false)} className="group flex items-center gap-3 font-semibold transition hover:text-hooma-accent">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-hooma-panel text-hooma-accent"><category.icon size={18} /></span>
                       {georgian ? category.nameKa : category.name}
                     </Link>
                     <div className="ml-12 mt-3 grid gap-2.5">
-                      {category.subcategories.map((subcategory) => <Link key={subcategory.slug} href={subcategory.slug === "request-part" ? "/account/custom-orders" : `/shop?category=${category.slug}&subcategory=${subcategory.slug}`} onClick={() => setOpen(false)} className="text-sm text-hooma-muted transition hover:text-hooma-accent">{georgian ? subcategory.nameKa : subcategory.name}</Link>)}
+                      {category.subcategories.map((subcategory) => <Link key={subcategory.slug} href={subcategory.slug === "request-part" ? "/account/custom-orders" : `${categoryPath(category.slug)}?subcategory=${encodeURIComponent(subcategory.slug)}`} onClick={() => setOpen(false)} className="text-sm text-hooma-muted transition hover:text-hooma-accent">{georgian ? subcategory.nameKa : subcategory.name}</Link>)}
                     </div>
                   </div>
                 ))}

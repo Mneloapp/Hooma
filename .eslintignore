@@ -1,0 +1,5 @@
+.next
+node_modules
+public
+tools/hooma-catalog-agent/dist
+tools/hooma-catalog-clipper

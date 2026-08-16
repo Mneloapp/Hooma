@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import { defaultAdminPath, isStaffRole, isUserRole } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-
-function requestOrigin(request: Request) {
-  const requestUrl = new URL(request.url);
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProtocol = request.headers.get("x-forwarded-proto") ?? "https";
-  return forwardedHost ? `${forwardedProtocol}://${forwardedHost}` : requestUrl.origin;
-}
+import { trustedSiteOrigin } from "@/lib/site-origin";
 
 function failureRedirect(origin: string) {
   return NextResponse.redirect(new URL("/login?error=confirmation", origin));
@@ -21,7 +15,7 @@ function failureRedirect(origin: string) {
  */
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const origin = requestOrigin(request);
+  const origin = trustedSiteOrigin();
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type");
   const code = requestUrl.searchParams.get("code");

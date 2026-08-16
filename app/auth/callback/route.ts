@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { defaultAdminPath, isStaffRole, isUserRole } from "@/lib/auth/permissions";
+import { trustedSiteOrigin } from "@/lib/site-origin";
 
 const safeNextPath = (value: string | null) => {
   const safePath = value?.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/account";
@@ -12,9 +13,7 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const requestedNext = safeNextPath(requestUrl.searchParams.get("next"));
   const failureCode = requestUrl.searchParams.get("flow") === "email" ? "confirmation" : "oauth";
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProtocol = request.headers.get("x-forwarded-proto") ?? "https";
-  const origin = forwardedHost ? `${forwardedProtocol}://${forwardedHost}` : requestUrl.origin;
+  const origin = trustedSiteOrigin();
   const supabase = await createClient();
 
   if (!code || !supabase) return NextResponse.redirect(new URL(`/login?error=${failureCode}`, origin));

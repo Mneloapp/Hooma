@@ -6,8 +6,10 @@ import {
 } from "@/lib/commerce/hooma-plus";
 import { getBogCheckoutAvailability } from "@/lib/payments/bog";
 import { createClient, getProfile } from "@/lib/supabase/server";
+import { privatePageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+export const metadata = privatePageMetadata;
 
 type AddressRow = { full_name: string | null; phone: string | null; city: string | null; address_line_1: string | null; address_line_2: string | null; postal_code: string | null; latitude: number | null; longitude: number | null; google_maps_url: string | null };
 

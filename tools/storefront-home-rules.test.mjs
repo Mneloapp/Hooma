@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
-const [homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard, storefrontCatalog, shopPage, shopSort, productGrid, newestMigration] = await Promise.all([
+const [rootLayout, homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard, storefrontCatalog, shopPage, shopSort, productGrid, newestMigration] = await Promise.all([
+  readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/home/HomeStorefrontClient.tsx", import.meta.url), "utf8"),
   readFile(new URL("../components/home/HomeCategoryHero.tsx", import.meta.url), "utf8"),
@@ -14,6 +15,10 @@ const [homePage, homeClient, homeCategoryHero, homeProductShelf, homeProductCard
   readFile(new URL("../components/ProductGrid.tsx", import.meta.url), "utf8"),
   readFile(new URL("../supabase/migrations/20260803000100_newest_storefront_products.sql", import.meta.url), "utf8"),
 ]);
+
+test("root metadata uses the real Hooma symbol instead of a missing default favicon", () => {
+  assert.match(rootLayout, /icons:\s*\{[\s\S]*?icon:\s*"\/brand\/hooma-symbol\.png"/);
+});
 const categoryPosterSlugs = [
   "household",
   "art",
@@ -67,7 +72,8 @@ test("homepage moves the printer-technology category to the final category posit
   assert.match(homeClient, /catalogCategories\.filter\(\(category\) => category\.slug !== "3d-printer"\)/);
   assert.match(homeClient, /catalogCategories\.filter\(\(category\) => category\.slug === "3d-printer"\)/);
   assert.match(homeClient, /homepageCategories\.map\(\(category\)/);
-  assert.match(homePage, /getStorefrontHomeCards\(12\)/);
+  assert.match(homePage, /const HOME_CATEGORY_PRODUCTS = 6/);
+  assert.match(homePage, /getStorefrontHomeCards\(HOME_CATEGORY_PRODUCTS\)/);
 });
 
 test("homepage opens with a scrollable poster for every catalog category", () => {
@@ -81,9 +87,12 @@ test("homepage opens with a scrollable poster for every catalog category", () =>
   for (const slug of categoryPosterSlugs) {
     assert.match(homeCategoryHero, new RegExp(`image: "\\/homepage\\/${slug}-category-hero\\.webp"`));
   }
-  assert.match(homeCategoryHero, /href=\{`\/shop\?category=\$\{poster\.slug\}`\}/);
+  assert.match(homeCategoryHero, /import \{ categoryPath \} from "@\/lib\/seo"/);
+  assert.match(homeCategoryHero, /href=\{categoryPath\(poster\.slug\)\}/);
   assert.match(homeCategoryHero, /sizes="100vw"/);
-  assert.match(homeCategoryHero, /priority=\{index === 0\}/);
+  assert.match(homeCategoryHero, /const isInitialPoster = index === 0/);
+  assert.match(homeCategoryHero, /loading=\{isInitialPoster \? "eager" : "lazy"\}/);
+  assert.match(homeCategoryHero, /fetchPriority=\{isInitialPoster \? "high" : "auto"\}/);
   assert.match(homeCategoryHero, /საყოფაცხოვრებო ნივთები ყოველდღიური ცხოვრებისთვის/);
   assert.match(homeCategoryHero, /Household objects for everyday life/);
   assert.match(homeCategoryHero, /ხელოვნება შენი სივრცის გასაცოცხლებლად/);

@@ -8,6 +8,7 @@ import { Button } from "@/components/Button";
 import { HomeCategoryHero } from "@/components/home/HomeCategoryHero";
 import { HomeProductShelf } from "@/components/home/HomeProductShelf";
 import { useLanguage } from "@/components/LanguageProvider";
+import { categoryPath } from "@/lib/seo";
 
 const homepageCategories = [
   ...catalogCategories.filter((category) => category.slug !== "3d-printer"),
@@ -25,7 +26,7 @@ export function HomeStorefrontClient({ categoryProducts, dailyDealProducts, dail
         <div className="space-y-5">
           {homepageCategories.map((category) => (
             <Fragment key={category.slug}>
-              <HomeProductShelf title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={`/shop?category=${category.slug}`} />
+              <HomeProductShelf title={georgian ? category.nameKa : category.name} products={categoryProducts[category.slug] ?? []} href={categoryPath(category.slug)} />
               {category.slug === "fashion" ? <>
                 <HomeProductShelf
                   eyebrow={georgian ? `დღევანდელი ფასდაკლება −${dailyDealDiscountPercent}%` : `Today's discount −${dailyDealDiscountPercent}%`}

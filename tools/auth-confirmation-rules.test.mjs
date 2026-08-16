@@ -36,3 +36,28 @@ test("legacy signup callback failures are not labeled as Google OAuth failures",
     /requestUrl\.searchParams\.get\("flow"\) === "email" \? "confirmation" : "oauth"/,
   );
 });
+
+test("auth and email-change redirects ignore hostile request Host headers", async () => {
+  const paths = [
+    "../app/auth/actions.ts",
+    "../app/account/settings/actions.ts",
+    "../app/auth/callback/route.ts",
+    "../app/auth/complete/route.ts",
+    "../app/auth/confirm/route.ts",
+    "../app/auth/email-change/confirm/route.ts",
+    "../middleware.ts",
+  ];
+  const [originHelper, ...redirectSources] = await Promise.all([
+    read("../lib/site-origin.ts"),
+    ...paths.map(read),
+  ]);
+
+  assert.match(originHelper, /const CANONICAL_SITE_ORIGIN = "https:\/\/hooma\.ge"/);
+  assert.match(originHelper, /process\.env\.VERCEL_ENV !== "preview"/);
+  assert.match(originHelper, /hostname\.endsWith\("\.vercel\.app"\)/);
+  assert.doesNotMatch(originHelper, /headers\(|x-forwarded-host|request\.headers/);
+  for (const source of redirectSources) {
+    assert.match(source, /trustedSiteOrigin/);
+    assert.doesNotMatch(source, /x-forwarded-host|x-forwarded-proto/);
+  }
+});

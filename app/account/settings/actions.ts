@@ -1,9 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { trustedSiteOrigin } from "@/lib/site-origin";
 
 export type AccountSettingsActionState = {
   ok?: boolean;
@@ -30,14 +30,6 @@ function hasPasswordIdentity(user: {
   return user.app_metadata?.provider === "email"
     || providers.includes("email")
     || Boolean(user.identities?.some((identity) => identity.provider === "email"));
-}
-
-async function siteOrigin() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
 }
 
 async function authenticatedPasswordUser(formData: FormData) {
@@ -104,7 +96,7 @@ export async function updateAccountEmailAction(
     };
   }
 
-  const callback = new URL("/auth/email-change/confirm", await siteOrigin());
+  const callback = new URL("/auth/email-change/confirm", trustedSiteOrigin());
   const { error } = await authentication.supabase.auth.updateUser(
     { email: nextEmail },
     { emailRedirectTo: callback.toString() },

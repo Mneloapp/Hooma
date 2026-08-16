@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LocalizedText } from "@/components/LocalizedText";
+import { publicPageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "კონფიდენციალურობის პოლიტიკა | Hooma",
+export const metadata: Metadata = publicPageMetadata({
+  title: "კონფიდენციალურობის პოლიტიკა",
   description: "როგორ აგროვებს, იყენებს და იცავს Hooma მომხმარებლის პერსონალურ მონაცემებს.",
-};
+  path: "/privacy",
+});
 
 const sections = [
   {
