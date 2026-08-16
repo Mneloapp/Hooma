@@ -4,6 +4,11 @@ import { pathToFileURL } from "node:url";
 const baseUrl = (process.env.SEO_BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
 const canonicalOrigin = "https://hooma.ge";
 const timeoutMs = 30_000;
+const requiredProductSlugs = [
+  "true-spring-3037752",
+  "bambu-lab-p2s-3039863",
+  "ptfe-ams-1-ams-2-pro-3047971",
+];
 
 function decodeHtml(value = "") {
   return value
@@ -133,7 +138,20 @@ async function main() {
   assert.equal(new Set(sitemapUrls).size, sitemapUrls.length, "sitemap URLs must be unique");
   for (const url of sitemapUrls) {
     assert.ok(url.startsWith(`${canonicalOrigin}/`), `sitemap URL must use ${canonicalOrigin}: ${url}`);
-    assert.doesNotMatch(url, /[?]|\/(admin|api|account|cart|checkout|login)(\/|$)/, `forbidden sitemap URL: ${url}`);
+    assert.doesNotMatch(url, /[?]|\/(admin|api|account|cart|checkout|login|search)(\/|$)/, `forbidden sitemap URL: ${url}`);
+  }
+  const sitemapCategoryUrls = sitemapUrls.filter((url) => {
+    const pathname = new URL(url).pathname;
+    return pathname.startsWith("/shop/") && pathname.split("/").filter(Boolean).length === 2;
+  });
+  const sitemapProductUrls = sitemapUrls.filter((url) => new URL(url).pathname.startsWith("/product/"));
+  assert.ok(sitemapCategoryUrls.length > 0, "sitemap must include at least one public category URL");
+  assert.ok(sitemapProductUrls.length > 0, "sitemap must include at least one public product URL");
+  for (const slug of requiredProductSlugs) {
+    assert.ok(
+      sitemapProductUrls.includes(`${canonicalOrigin}/product/${slug}`),
+      `sitemap must include the known public product: ${slug}`,
+    );
   }
   pass("sitemap uniqueness and exclusions");
 
@@ -150,10 +168,7 @@ async function main() {
   assert.ok(storeSchema?.logo?.url, "OnlineStore must include the real logo");
   pass("homepage metadata, links, size budget, and OnlineStore JSON-LD");
 
-  const categoryUrls = sitemapUrls.filter((url) => {
-    const pathname = new URL(url).pathname;
-    return pathname.startsWith("/shop/") && pathname.split("/").filter(Boolean).length === 2;
-  });
+  const categoryUrls = sitemapCategoryUrls;
   let categoryResult;
   let categoryUrl;
   let categoryProductPaths = [];

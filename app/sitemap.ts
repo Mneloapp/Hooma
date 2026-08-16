@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { catalogCategories } from "@/data/catalog";
 import { absoluteUrl, categoryPath } from "@/lib/seo";
-import { getStorefrontPublicCategorySlugs, getStorefrontSitemapEntries } from "@/lib/storefront-catalog";
+import { getStorefrontSitemapCatalog } from "@/lib/storefront-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +16,7 @@ const informationPages = [
 ] as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [products, activeCategorySlugs] = await Promise.all([
-    getStorefrontSitemapEntries(),
-    getStorefrontPublicCategorySlugs(),
-  ]);
+  const { products, activeCategorySlugs } = await getStorefrontSitemapCatalog();
   const activeCategorySet = new Set(activeCategorySlugs);
   const productCategorySlugs = new Set(products.map((product) => product.categorySlug));
   const publicCategories = catalogCategories.filter((category) => (

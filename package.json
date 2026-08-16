@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:seo": "node scripts/seo-regression.mjs",
+    "test:sitemap": "node --experimental-strip-types --test tools/sitemap-catalog-rules.test.mjs",
     "test:auth": "node --test tools/auth-confirmation-rules.test.mjs tools/account-settings-rules.test.mjs",
     "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs",
     "test:audit-launch": "node --test tools/catalog-audit-launch-rules.test.mjs",
