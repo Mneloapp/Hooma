@@ -3,7 +3,9 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import type { Product, ProductCategory, ProductVariant } from "@/data/products";
 import type { ProductCardData } from "@/lib/product-card";
+import { loadStorefrontSitemapCatalog } from "@/lib/storefront-sitemap";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createSitemapCatalogClient } from "@/lib/supabase/sitemap";
 import { requirePermission } from "@/lib/supabase/server";
 import {
   STOREFRONT_CATALOG_CACHE_TAG,
@@ -64,6 +66,11 @@ export type StorefrontSitemapEntry = {
   categorySlug: string;
   image?: string;
   refreshedAt: Date;
+};
+
+export type StorefrontSitemapCatalog = {
+  products: StorefrontSitemapEntry[];
+  activeCategorySlugs: string[];
 };
 
 const categoryNames: Record<string, ProductCategory> = {
@@ -306,47 +313,31 @@ export async function getStorefrontProductCardsByIds(productIds: string[]): Prom
   )();
 }
 
-async function loadStorefrontSitemapEntries(): Promise<StorefrontSitemapEntry[]> {
-  const admin = createAdminClient() as any;
-  if (!admin) return [];
-
-  const pageSize = 1000;
-  const entries: StorefrontSitemapEntry[] = [];
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await admin
-      .from("storefront_product_cards")
-      .select("product_id,slug,category_slug,hero_image,refreshed_at")
-      .order("product_id", { ascending: true })
-      .range(from, from + pageSize - 1);
-    if (error) {
-      console.error("[storefront-catalog] Failed to load sitemap products.", error.message);
-      return entries;
-    }
-
-    const rows = (data ?? []) as Array<{
-      slug: string;
-      category_slug: string;
-      hero_image: string | null;
-      refreshed_at: string;
-    }>;
-    entries.push(...rows.map((row) => ({
+async function loadStorefrontSitemap(): Promise<StorefrontSitemapCatalog> {
+  const client = createSitemapCatalogClient();
+  const catalog = await loadStorefrontSitemapCatalog(client as any);
+  return {
+    products: catalog.products.map((row) => ({
       slug: row.slug,
       categorySlug: row.category_slug,
       image: safeCatalogImage(row.hero_image, "") || undefined,
       refreshedAt: new Date(row.refreshed_at),
-    })));
-    if (rows.length < pageSize) break;
-  }
-  return entries;
+    })),
+    activeCategorySlugs: catalog.categorySlugs,
+  };
 }
 
-export async function getStorefrontSitemapEntries(): Promise<StorefrontSitemapEntry[]> {
+export async function getStorefrontSitemapCatalog(): Promise<StorefrontSitemapCatalog> {
   return unstable_cache(
-    loadStorefrontSitemapEntries,
-    ["storefront-sitemap-products-v1"],
+    loadStorefrontSitemap,
+    ["storefront-sitemap-catalog-v2"],
     {
       revalidate: STOREFRONT_SITEMAP_CACHE_SECONDS,
-      tags: [STOREFRONT_SITEMAP_CACHE_TAG, STOREFRONT_PRODUCTS_CACHE_TAG],
+      tags: [
+        STOREFRONT_SITEMAP_CACHE_TAG,
+        STOREFRONT_PRODUCTS_CACHE_TAG,
+        STOREFRONT_CATEGORIES_CACHE_TAG,
+      ],
     },
   )();
 }
