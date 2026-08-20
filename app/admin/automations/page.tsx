@@ -170,7 +170,10 @@ function ConnectionCard({
         <Gate ready={apiNetwork} label="API ქსელი" />
         <Gate ready={publishing} label="გამოქვეყნება" />
         {connection.provider === "instagram" && dataAvailable && connection.connected && apiNetwork ? (
-          <Link href="/admin/automations/instagram-canary" className="inline-flex min-h-10 w-full items-center justify-center rounded-full border border-emerald-700/20 bg-emerald-50 px-4 text-center text-xs font-semibold text-emerald-900 sm:ml-auto sm:w-auto">Instagram-ის უსაფრთხო შემოწმება</Link>
+          <>
+            <Link href="/admin/automations/instagram-canary" className="inline-flex min-h-10 w-full items-center justify-center rounded-full border border-emerald-700/20 bg-emerald-50 px-4 text-center text-xs font-semibold text-emerald-900 sm:ml-auto sm:w-auto">Instagram-ის უსაფრთხო შემოწმება</Link>
+            <Link href="/admin/automations/instagram-launch" className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-fuchsia-700 px-4 text-center text-xs font-semibold text-white sm:w-auto">9 ვიდეოს launch</Link>
+          </>
         ) : null}
         {dataAvailable && !connection.connected && review.status === "approved" && oauthEnabled ? (
           <a href={connectHref} className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-hooma-text px-4 text-center text-xs font-semibold text-white sm:ml-auto sm:w-auto">{providerLabels[connection.provider]}-ის დაკავშირება</a>
