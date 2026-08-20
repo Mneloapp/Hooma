@@ -138,6 +138,11 @@ function boundedString(value: unknown, maximum = 4_096) {
     : null;
 }
 
+function optionalCaption(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  return boundedString(value, 2_200);
+}
+
 function safeDiagnostic(value: unknown, fallback: string) {
   const candidate = typeof value === "string" || typeof value === "number"
     ? String(value).trim()
@@ -584,9 +589,7 @@ export class InstagramReelsReadClient {
       for (const rawItem of response.data) {
         const item = record(rawItem);
         const id = instagramId(item?.id);
-        const caption = item?.caption === undefined
-          ? null
-          : boundedString(item.caption, 2_200);
+        const caption = optionalCaption(item?.caption);
         const permalink = parsePermalink(item?.permalink);
         const timestamp = isoTimestamp(item?.timestamp);
         if (!hasExactKeys(
@@ -622,7 +625,12 @@ export class InstagramReelsReadClient {
             code: "INVALID_MEDIA_PRODUCT_TYPE",
           });
         }
-        if (item.caption !== undefined && !caption) {
+        if (
+          item.caption !== undefined
+          && item.caption !== null
+          && item.caption !== ""
+          && !caption
+        ) {
           throw new InstagramReelsReadError({
             operation: "owned_media",
             code: "INVALID_MEDIA_CAPTION",
