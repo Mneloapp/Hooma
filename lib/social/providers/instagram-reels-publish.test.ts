@@ -73,7 +73,13 @@ test("container request is exact, redirect-safe and hashes only a redacted token
     caption: "სატესტო ვიდეო",
     accessToken: "provider-access-token-secret",
   });
+  const prepared = client.prepareCreateReelContainer({
+    accountId,
+    videoUrl: "https://media.hooma.ge/video.mp4?sig=safe",
+    caption: "სატესტო ვიდეო",
+  });
   assert.equal(result.containerId, "18000000000000001");
+  assert.equal(result.requestSha256, prepared.requestSha256);
   assert.match(result.requestSha256, /^[a-f0-9]{64}$/);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url.toString(), `https://graph.instagram.com/v25.0/${accountId}/media`);
@@ -111,7 +117,12 @@ test("media publish accepts only the expected account and exact IDs", async () =
     containerId: "18000000000000001",
     accessToken: "provider-access-token-secret",
   });
+  const prepared = client.preparePublishReel({
+    accountId,
+    containerId: "18000000000000001",
+  });
   assert.equal(result.mediaId, "18000000000000002");
+  assert.equal(result.requestSha256, prepared.requestSha256);
 });
 
 test("provider errors retain only safe code and request ID", async () => {

@@ -246,6 +246,40 @@ export class InstagramReelsPublishClient {
     return checkedResponse(operation, transported.status, transported.body);
   }
 
+  prepareCreateReelContainer(input: {
+    accountId: string;
+    videoUrl: string;
+    caption: string;
+  }) {
+    const active = this.ready("container_create", input.accountId);
+    const videoUrl = httpsMediaUrl(input.videoUrl);
+    const safeCaption = caption(input.caption);
+    if (!videoUrl || !safeCaption) {
+      throw new InstagramReelsPublishError({ operation: "container_create", code: "INPUT_INVALID" });
+    }
+    const redactedBody = new URLSearchParams({
+      media_type: "REELS",
+      video_url: videoUrl,
+      caption: safeCaption,
+      share_to_feed: active.shareToFeed ? "true" : "false",
+      access_token: "REDACTED",
+    });
+    return { requestSha256: requestSha256("container_create", redactedBody) };
+  }
+
+  preparePublishReel(input: { accountId: string; containerId: string }) {
+    this.ready("media_publish", input.accountId);
+    const containerId = instagramId(input.containerId);
+    if (!containerId) {
+      throw new InstagramReelsPublishError({ operation: "media_publish", code: "INPUT_INVALID" });
+    }
+    const redactedBody = new URLSearchParams({
+      creation_id: containerId,
+      access_token: "REDACTED",
+    });
+    return { requestSha256: requestSha256("media_publish", redactedBody) };
+  }
+
   async createReelContainer(input: {
     accountId: string;
     videoUrl: string;
@@ -267,12 +301,17 @@ export class InstagramReelsPublishClient {
     });
     const hashBody = new URLSearchParams(body);
     hashBody.set("access_token", "REDACTED");
+    const prepared = this.prepareCreateReelContainer(input);
     const response = await this.post("container_create", `${input.accountId}/media`, body);
     const containerId = instagramId(response?.id);
     if (!exactKeys(response, ["id"]) || !containerId) {
       throw new InstagramReelsPublishError({ operation: "container_create", code: "INVALID_RESPONSE" });
     }
-    return { containerId, requestSha256: requestSha256("container_create", hashBody) };
+    const observedRequestSha256 = requestSha256("container_create", hashBody);
+    if (observedRequestSha256 !== prepared.requestSha256) {
+      throw new InstagramReelsPublishError({ operation: "container_create", code: "REQUEST_HASH_MISMATCH" });
+    }
+    return { containerId, requestSha256: observedRequestSha256 };
   }
 
   async publishReel(input: {
@@ -291,11 +330,16 @@ export class InstagramReelsPublishClient {
     });
     const hashBody = new URLSearchParams(body);
     hashBody.set("access_token", "REDACTED");
+    const prepared = this.preparePublishReel(input);
     const response = await this.post("media_publish", `${input.accountId}/media_publish`, body);
     const mediaId = instagramId(response?.id);
     if (!exactKeys(response, ["id"]) || !mediaId) {
       throw new InstagramReelsPublishError({ operation: "media_publish", code: "INVALID_RESPONSE" });
     }
-    return { mediaId, requestSha256: requestSha256("media_publish", hashBody) };
+    const observedRequestSha256 = requestSha256("media_publish", hashBody);
+    if (observedRequestSha256 !== prepared.requestSha256) {
+      throw new InstagramReelsPublishError({ operation: "media_publish", code: "REQUEST_HASH_MISMATCH" });
+    }
+    return { mediaId, requestSha256: observedRequestSha256 };
   }
 }

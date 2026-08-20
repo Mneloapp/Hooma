@@ -19,9 +19,13 @@ The client requires an exact v25.0 activation object with immutable SHA-256 refe
 - Container status rejects unknown future status values and binds the response ID to the requested container.
 - Insights preserve an unavailable metric as `null`; a real returned zero remains `0`.
 
-## Deliberately absent
+## Deliberately absent from this read client
 
-There are no POST requests or publishing methods, no provider adapter registration, no cron route, no media staging URL, no delete/comment/boost/promote/Facebook operation, and no production activation object. Future publishing requires both `HOOMA_SOCIAL_PUBLISHING_ENABLED=1` and `HOOMA_INSTAGRAM_PUBLISHING_ENABLED=1`, plus the still-missing mutating provider adapter. Instagram OAuth/token maintenance is governed separately and cannot satisfy either publishing gate.
+This read client still contains no POST request or publishing method. Mutating
+operations now live in a separate fail-closed client and worker reviewed in
+`instagram-publishing-threat-review.md`; they do not weaken these read-client
+gates. Instagram OAuth/token maintenance remains governed separately and cannot
+satisfy either publishing gate.
 
 ## Documentation reviewed
 
