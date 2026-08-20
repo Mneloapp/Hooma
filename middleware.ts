@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 import { canAccessAdminPath, defaultAdminPath, isStaffRole, isUserRole } from "@/lib/auth/permissions";
-import { trustedSiteOrigin } from "@/lib/site-origin";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -11,7 +10,9 @@ export async function middleware(request: NextRequest) {
   if (!protectedPath) return response;
 
   const redirectToLogin = () => {
-    const url = new URL("/login", trustedSiteOrigin());
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
     url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   };
@@ -40,15 +41,21 @@ export async function middleware(request: NextRequest) {
     return redirectToLogin();
   }
   if (pathname.startsWith("/admin") && (!isStaffRole(profile.role) || !canAccessAdminPath(profile.role, pathname))) {
-    const url = new URL(isStaffRole(profile.role) ? defaultAdminPath(profile.role) : "/account", trustedSiteOrigin());
+    const url = request.nextUrl.clone();
+    url.pathname = isStaffRole(profile.role) ? defaultAdminPath(profile.role) : "/account";
+    url.search = "";
     return NextResponse.redirect(url);
   }
   if (pathname.startsWith("/account") && isStaffRole(profile.role)) {
-    const url = new URL(defaultAdminPath(profile.role), trustedSiteOrigin());
+    const url = request.nextUrl.clone();
+    url.pathname = defaultAdminPath(profile.role);
+    url.search = "";
     return NextResponse.redirect(url);
   }
   if (pathname.startsWith("/checkout") && isStaffRole(profile.role)) {
-    const url = new URL(defaultAdminPath(profile.role), trustedSiteOrigin());
+    const url = request.nextUrl.clone();
+    url.pathname = defaultAdminPath(profile.role);
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
