@@ -18,19 +18,19 @@ function code(error: unknown) {
 
 test("TikTok token maintenance is independent from the publishing gate", () => {
   assert.deepEqual(enabledSocialRefreshProviders({
-    publishingEnabled: false,
+    instagramOAuthEnabled: false,
     tiktokOAuthEnabled: true,
   }), ["tiktok"]);
   assert.deepEqual(enabledSocialRefreshProviders({
-    publishingEnabled: true,
+    instagramOAuthEnabled: true,
     tiktokOAuthEnabled: false,
   }), ["instagram"]);
   assert.deepEqual(enabledSocialRefreshProviders({
-    publishingEnabled: true,
+    instagramOAuthEnabled: true,
     tiktokOAuthEnabled: true,
   }), ["instagram", "tiktok"]);
   assert.deepEqual(enabledSocialRefreshProviders({
-    publishingEnabled: false,
+    instagramOAuthEnabled: false,
     tiktokOAuthEnabled: false,
   }), []);
 });

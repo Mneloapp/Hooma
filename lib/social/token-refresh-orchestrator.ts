@@ -22,11 +22,11 @@ export type SocialTokenRefreshResult = {
 };
 
 export function enabledSocialRefreshProviders(input: {
-  publishingEnabled: boolean;
+  instagramOAuthEnabled: boolean;
   tiktokOAuthEnabled: boolean;
 }) {
   const providers: SocialProvider[] = [];
-  if (input.publishingEnabled) providers.push("instagram");
+  if (input.instagramOAuthEnabled) providers.push("instagram");
   if (input.tiktokOAuthEnabled) providers.push("tiktok");
   return providers;
 }

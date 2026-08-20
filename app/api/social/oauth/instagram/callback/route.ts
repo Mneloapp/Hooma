@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/supabase/server";
+import { instagramOAuthEnabled } from "@/lib/social/config";
 import { recordSocialOAuthEvent, storeSocialConnection } from "@/lib/social/connections";
 import { consumeOAuthState } from "@/lib/social/oauth-state";
 import {
   boundedOAuthParameter,
   oauthResultRedirect,
-  requireSocialFeature,
   socialFeatureUnavailable,
 } from "@/lib/social/oauth-route";
 import {
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  if (!requireSocialFeature()) return socialFeatureUnavailable();
+  if (!instagramOAuthEnabled()) return socialFeatureUnavailable();
   const actor = await requirePermission("team.manage");
   if (!actor) {
     return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });

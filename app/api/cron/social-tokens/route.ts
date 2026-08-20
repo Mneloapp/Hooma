@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { socialPublishingEnabled, tiktokOAuthEnabled } from "@/lib/social/config";
+import { instagramOAuthEnabled, tiktokOAuthEnabled } from "@/lib/social/config";
 import {
   claimSocialConnectionRefresh,
   completeSocialConnectionRefresh,
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, status: "UNAUTHORIZED" }, { status: 401 });
   }
   const providers = enabledSocialRefreshProviders({
-    publishingEnabled: socialPublishingEnabled(),
+    instagramOAuthEnabled: instagramOAuthEnabled(),
     tiktokOAuthEnabled: tiktokOAuthEnabled(),
   });
   if (providers.length === 0) {

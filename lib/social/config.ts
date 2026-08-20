@@ -116,6 +116,17 @@ export function socialPublishingEnabled() {
   return process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED === "1";
 }
 
+export function instagramOAuthEnabled() {
+  const configured = process.env.HOOMA_INSTAGRAM_OAUTH_ENABLED;
+  if (configured !== undefined) return configured === "1";
+  return socialPublishingEnabled();
+}
+
+export function instagramPublishingEnabled() {
+  return socialPublishingEnabled()
+    && process.env.HOOMA_INSTAGRAM_PUBLISHING_ENABLED === "1";
+}
+
 function configuredReceiptSha256(name: string) {
   const value = process.env[name]?.trim() ?? "";
   return SHA256_PATTERN.test(value) ? value : null;
