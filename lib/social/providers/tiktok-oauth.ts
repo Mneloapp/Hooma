@@ -175,11 +175,11 @@ export function buildTikTokAuthorizationUrl(state: string) {
   }
   const config = providerConfig("tiktok");
   const url = new URL(config.authorizationUrl);
-  url.searchParams.set("app_id", config.clientId);
+  url.searchParams.set("client_key", config.clientId);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", config.requiredScopes.join(","));
   url.searchParams.set("state", state);
   url.searchParams.set("redirect_uri", config.redirectUri);
-  // TikTok grants the app's approved permissions when `scope` is omitted. The
-  // exact returned identifiers are validated after token exchange.
   return url;
 }
 

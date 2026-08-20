@@ -3,6 +3,10 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
+  TIKTOK_APPROVED_ACCOUNT_SCOPES,
+  TIKTOK_APPROVED_APP_ID,
+} from "../config";
+import {
   TikTokBusinessOrganicClient,
   type TikTokOrganicActivation,
   type TikTokOrganicPublishInput,
@@ -21,12 +25,34 @@ function hash(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function installActivationEnvironment() {
+  process.env.TIKTOK_BUSINESS_CLIENT_ID = TIKTOK_APPROVED_APP_ID;
+  process.env.TIKTOK_BUSINESS_CLIENT_SECRET = "test-client-secret";
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
+  process.env.TIKTOK_BUSINESS_REDIRECT_URI = "https://hooma.ge/api/social/oauth/tiktok/callback/";
+  process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = TIKTOK_APPROVED_ACCOUNT_SCOPES.join(",");
+  process.env.TIKTOK_BUSINESS_EXPECTED_USERNAME = "hooma.ge";
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_STATUS = "APPROVED";
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_RECEIPT_SHA256 = hash("app-review");
+  process.env.TIKTOK_BUSINESS_OAUTH_CONNECTION_RECEIPT_SHA256 = hash("oauth-connection");
+  process.env.TIKTOK_BUSINESS_ORGANIC_ACTIVATION_RECEIPT_SHA256 = hash("activation");
+  process.env.HOOMA_TIKTOK_OAUTH_ENABLED = "1";
+}
+
 function activation(overrides: Partial<TikTokOrganicActivation> = {}): TikTokOrganicActivation {
+  installActivationEnvironment();
   return {
     schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
     apiVersion: "v1.3",
+    appId: TIKTOK_APPROVED_APP_ID,
     appReviewStatus: "APPROVED",
     appReviewReceiptSha256: hash("app-review"),
+    activationReceiptSha256: hash("activation"),
+    oauthConnectionStatus: "ACTIVE_VERIFIED",
+    oauthConnectionReceiptSha256: hash("oauth-connection"),
+    oauthConnectionVerifiedAt: "2026-08-15T15:30:00.000Z",
+    oauthAccessExpiresAt: "2026-08-15T17:00:00.000Z",
+    oauthScopes: [...TIKTOK_APPROVED_ACCOUNT_SCOPES],
     endpointSchemaReceiptSha256: hash("schema-review"),
     identityReceiptSha256: hash("identity"),
     oauthScopeReceiptSha256: hash("oauth-scopes"),
@@ -122,11 +148,13 @@ function publishInput(overrides: Partial<TikTokOrganicPublishInput> = {}): TikTo
 }
 
 function enableNetworkAndPublishing() {
+  process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED = "1";
   process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
   process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED = "1";
 }
 
 function clearNetworkAndPublishing() {
+  delete process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED;
   delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
   delete process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED;
 }
@@ -138,6 +166,7 @@ test("activation remains fail-closed when any immutable approval evidence is mis
     activation: invalid,
     networkEnabled: true,
     publishingEnabled: true,
+    now: () => NOW,
   });
   assert.deepEqual(client.connectionStatus(), {
     provider: "TIKTOK_API_FOR_BUSINESS_ORGANIC_ACCOUNTS",
@@ -148,6 +177,121 @@ test("activation remains fail-closed when any immutable approval evidence is mis
     expectedUsername: null,
     credentialsLoaded: false,
   });
+});
+
+test("activation rejects another account and any unreviewed portal permission", () => {
+  clearNetworkAndPublishing();
+  for (const invalid of [
+    activation({ expectedUsername: "another.account" }),
+    activation({
+      portalPermissions: [
+        "Account User",
+        "Get Account Media",
+        "Account Post Content",
+        "Unreviewed Extra Permission",
+      ],
+    }),
+  ]) {
+    const client = new TikTokBusinessOrganicClient({
+      activation: invalid,
+      networkEnabled: true,
+      publishingEnabled: true,
+      now: () => NOW,
+    });
+    assert.equal(client.connectionStatus().schemaFrozen, false);
+    assert.equal(client.connectionStatus().networkEnabled, false);
+  }
+});
+
+test("SHA-shaped fabricated activation and App ID drift cannot publish", async () => {
+  enableNetworkAndPublishing();
+  let calls = 0;
+  const fabricated = {
+    ...activation(),
+    appId: "7675794584770248725",
+    appReviewReceiptSha256: hash("fabricated-app-review"),
+    oauthConnectionReceiptSha256: hash("fabricated-connection"),
+    activationReceiptSha256: hash("fabricated-activation"),
+  };
+  const client = new TikTokBusinessOrganicClient({
+    activation: fabricated,
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async () => {
+      calls += 1;
+      return { status: 200, body: {} };
+    },
+  });
+  try {
+    await assert.rejects(
+      client.publishVideo(publishInput(), "sensitive-token"),
+      /TIKTOK_ORGANIC_ERROR:publish:ACTIVATION_RECEIPTS_REQUIRED/,
+    );
+    assert.equal(client.connectionStatus().schemaFrozen, false);
+    assert.equal(calls, 0);
+  } finally {
+    clearNetworkAndPublishing();
+  }
+
+  enableNetworkAndPublishing();
+  const exactClient = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async () => {
+      calls += 1;
+      return { status: 200, body: {} };
+    },
+  });
+  process.env.TIKTOK_BUSINESS_CLIENT_ID = "7675794584770248725";
+  try {
+    await assert.rejects(
+      exactClient.publishVideo(publishInput(), "sensitive-token"),
+      /TIKTOK_ORGANIC_ERROR:publish:ACTIVATION_RECEIPTS_REQUIRED/,
+    );
+    assert.equal(exactClient.connectionStatus().schemaFrozen, false);
+    assert.equal(calls, 0);
+  } finally {
+    installActivationEnvironment();
+    clearNetworkAndPublishing();
+  }
+});
+
+test("publishing rechecks OAuth approval and active token freshness at operation time", async () => {
+  enableNetworkAndPublishing();
+  let calls = 0;
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async () => {
+      calls += 1;
+      return { status: 200, body: {} };
+    },
+  });
+  delete process.env.HOOMA_TIKTOK_OAUTH_ENABLED;
+  try {
+    await assert.rejects(
+      client.publishVideo(publishInput(), "sensitive-token"),
+      /TIKTOK_ORGANIC_ERROR:publish:ACTIVATION_RECEIPTS_REQUIRED/,
+    );
+    assert.equal(client.connectionStatus().networkEnabled, false);
+    assert.equal(calls, 0);
+  } finally {
+    installActivationEnvironment();
+    clearNetworkAndPublishing();
+  }
+
+  const staleClient = new TikTokBusinessOrganicClient({
+    activation: activation({ oauthAccessExpiresAt: "2026-08-15T16:05:00.000Z" }),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+  });
+  assert.equal(staleClient.connectionStatus().schemaFrozen, false);
 });
 
 test("publishing is disabled by default and makes no transport call", async () => {
@@ -168,6 +312,31 @@ test("publishing is disabled by default and makes no transport call", async () =
     /TIKTOK_ORGANIC_ERROR:publish:NETWORK_DISABLED/,
   );
   assert.equal(calls, 0);
+});
+
+test("provider publish switch cannot bypass the global social kill switch", async () => {
+  clearNetworkAndPublishing();
+  process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
+  process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED = "1";
+  let calls = 0;
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async () => {
+      calls += 1;
+      return { status: 200, body: {} };
+    },
+  });
+  await assert.rejects(
+    client.publishVideo(publishInput(), "sensitive-token"),
+    /TIKTOK_ORGANIC_ERROR:publish:PUBLISHING_DISABLED/,
+  );
+  assert.equal(client.connectionStatus().networkEnabled, true);
+  assert.equal(client.connectionStatus().publishingEnabled, false);
+  assert.equal(calls, 0);
+  clearNetworkAndPublishing();
 });
 
 test("CML receipt is hash-bound to exact account, post, media, caption, and approval", () => {

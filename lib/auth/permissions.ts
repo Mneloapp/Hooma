@@ -55,6 +55,7 @@ export function hasPermission(role: UserRole, permission: Permission) {
 }
 
 const routePermissions: Array<[string, Permission]> = [
+  ["/admin/automations", "team.manage"],
   ["/admin/team", "team.manage"],
   ["/admin/hr", "hr.self"],
   ["/admin/erp", "finance.manage"],

@@ -1,6 +1,17 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import {
+  providerConfig,
+  TIKTOK_APPROVED_APP_ID,
+  tiktokAppReviewApproved,
+  tiktokAppReviewReceiptSha256,
+  tiktokOAuthConnectionReceiptSha256,
+  tiktokOAuthEnabled,
+  tiktokOrganicActivationReceiptSha256,
+  tiktokOrganicNetworkEnabled,
+  tiktokOrganicPublishingEnabled,
+} from "../config";
 
 const API_ORIGIN = "https://business-api.tiktok.com";
 const API_VERSION = "v1.3";
@@ -9,6 +20,7 @@ const STATUS_PATH = "/open_api/v1.3/business/publish/status/";
 const VIDEO_LIST_PATH = "/open_api/v1.3/business/video/list/";
 const MAX_RESPONSE_BYTES = 1_000_000;
 const MIN_STAGING_TTL_MS = 30 * 60 * 1_000;
+const MIN_ACCESS_TOKEN_TTL_MS = 10 * 60 * 1_000;
 
 export const TIKTOK_ORGANIC_SCHEMA_ID =
   "tiktok-business-organic-v1.3-cml-ai-brand-2026-08-15" as const;
@@ -73,8 +85,15 @@ export class TikTokOrganicError extends Error {
 export type TikTokOrganicActivation = {
   schemaId: typeof TIKTOK_ORGANIC_SCHEMA_ID;
   apiVersion: "v1.3";
+  appId: typeof TIKTOK_APPROVED_APP_ID;
   appReviewStatus: "APPROVED";
   appReviewReceiptSha256: string;
+  activationReceiptSha256: string;
+  oauthConnectionStatus: "ACTIVE_VERIFIED";
+  oauthConnectionReceiptSha256: string;
+  oauthConnectionVerifiedAt: string;
+  oauthAccessExpiresAt: string;
+  oauthScopes: string[];
   endpointSchemaReceiptSha256: string;
   identityReceiptSha256: string;
   oauthScopeReceiptSha256: string;
@@ -262,7 +281,55 @@ function normalizedUsername(value: unknown) {
   return /^[a-z0-9._]{2,80}$/.test(normalized) ? normalized : null;
 }
 
-function parseActivation(value: unknown): TikTokOrganicActivation | null {
+function activationEvidenceIsCurrent(value: unknown, now: Date) {
+  const activation = record(value);
+  if (!activation || !tiktokAppReviewApproved() || !tiktokOAuthEnabled()) return false;
+
+  let config;
+  try {
+    config = providerConfig("tiktok");
+  } catch {
+    return false;
+  }
+  const appReviewReceipt = tiktokAppReviewReceiptSha256();
+  const connectionReceipt = tiktokOAuthConnectionReceiptSha256();
+  const activationReceipt = tiktokOrganicActivationReceiptSha256();
+  const verifiedAt = canonicalIsoTimestamp(activation.oauthConnectionVerifiedAt);
+  const accessExpiresAt = canonicalIsoTimestamp(activation.oauthAccessExpiresAt);
+  const suppliedScopes = Array.isArray(activation.oauthScopes)
+    ? activation.oauthScopes.filter((scope): scope is string => typeof scope === "string")
+    : [];
+  const exactSuppliedScopes = [...new Set(suppliedScopes)].sort();
+  const exactConfiguredScopes = [...config.requiredScopes].sort();
+
+  return Boolean(
+    config.clientId === TIKTOK_APPROVED_APP_ID
+    && activation.appId === config.clientId
+    && activation.appReviewStatus === "APPROVED"
+    && appReviewReceipt
+    && activation.appReviewReceiptSha256 === appReviewReceipt
+    && activation.oauthConnectionStatus === "ACTIVE_VERIFIED"
+    && connectionReceipt
+    && activation.oauthConnectionReceiptSha256 === connectionReceipt
+    && activationReceipt
+    && activation.activationReceiptSha256 === activationReceipt
+    && activation.expectedUsername === config.expectedUsername
+    && verifiedAt !== null
+    && accessExpiresAt !== null
+    && verifiedAt <= now.getTime() + 5 * 60 * 1_000
+    && accessExpiresAt > now.getTime() + MIN_ACCESS_TOKEN_TTL_MS
+    && accessExpiresAt > verifiedAt
+    && Array.isArray(activation.oauthScopes)
+    && activation.oauthScopes.length === suppliedScopes.length
+    && suppliedScopes.length === exactSuppliedScopes.length
+    && exactSuppliedScopes.length === exactConfiguredScopes.length
+    && exactSuppliedScopes.every(
+      (scope, index) => scope === exactConfiguredScopes[index],
+    )
+  );
+}
+
+function parseActivation(value: unknown, now: Date): TikTokOrganicActivation | null {
   const activation = record(value);
   const expectedUsername = normalizedUsername(activation?.expectedUsername);
   const expectedAccountId = safeId(activation?.expectedAccountId);
@@ -275,13 +342,23 @@ function parseActivation(value: unknown): TikTokOrganicActivation | null {
     ? activation.portalPermissions
       .filter((permission): permission is string => typeof permission === "string")
     : [];
+  const uniqueMediaHosts = [...new Set(verifiedMediaHosts)].sort();
+  const uniquePortalPermissions = [...new Set(portalPermissions)].sort();
+  const exactPortalPermissions = [...REQUIRED_PERMISSIONS].sort();
 
   if (
     !hasExactKeys(activation, [
       "schemaId",
       "apiVersion",
+      "appId",
       "appReviewStatus",
       "appReviewReceiptSha256",
+      "activationReceiptSha256",
+      "oauthConnectionStatus",
+      "oauthConnectionReceiptSha256",
+      "oauthConnectionVerifiedAt",
+      "oauthAccessExpiresAt",
+      "oauthScopes",
       "endpointSchemaReceiptSha256",
       "identityReceiptSha256",
       "oauthScopeReceiptSha256",
@@ -295,8 +372,10 @@ function parseActivation(value: unknown): TikTokOrganicActivation | null {
     ])
     || activation?.schemaId !== TIKTOK_ORGANIC_SCHEMA_ID
     || activation.apiVersion !== API_VERSION
-    || activation.appReviewStatus !== "APPROVED"
+    || !activationEvidenceIsCurrent(activation, now)
     || !SHA256.test(String(activation.appReviewReceiptSha256 ?? ""))
+    || !SHA256.test(String(activation.activationReceiptSha256 ?? ""))
+    || !SHA256.test(String(activation.oauthConnectionReceiptSha256 ?? ""))
     || !SHA256.test(String(activation.endpointSchemaReceiptSha256 ?? ""))
     || !SHA256.test(String(activation.identityReceiptSha256 ?? ""))
     || !SHA256.test(String(activation.oauthScopeReceiptSha256 ?? ""))
@@ -304,11 +383,13 @@ function parseActivation(value: unknown): TikTokOrganicActivation | null {
     || !SHA256.test(String(activation.cmlSchemaReceiptSha256 ?? ""))
     || !/^[A-Z]{2}$/.test(String(activation.cmlRegion ?? ""))
     || !expectedAccountId
-    || !expectedUsername
+    || expectedUsername !== "hooma.ge"
     || !Array.isArray(activation.verifiedMediaHosts)
     || activation.verifiedMediaHosts.length !== verifiedMediaHosts.length
+    || verifiedMediaHosts.length !== uniqueMediaHosts.length
     || !Array.isArray(activation.portalPermissions)
     || activation.portalPermissions.length !== portalPermissions.length
+    || portalPermissions.length !== uniquePortalPermissions.length
     || !verifiedMediaHosts.length
     || verifiedMediaHosts.some((host) => {
       try {
@@ -318,7 +399,10 @@ function parseActivation(value: unknown): TikTokOrganicActivation | null {
         return true;
       }
     })
-    || REQUIRED_PERMISSIONS.some((permission) => !portalPermissions.includes(permission))
+    || uniquePortalPermissions.length !== exactPortalPermissions.length
+    || uniquePortalPermissions.some(
+      (permission, index) => permission !== exactPortalPermissions[index],
+    )
   ) {
     return null;
   }
@@ -326,8 +410,15 @@ function parseActivation(value: unknown): TikTokOrganicActivation | null {
   return {
     schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
     apiVersion: API_VERSION,
+    appId: TIKTOK_APPROVED_APP_ID,
     appReviewStatus: "APPROVED",
     appReviewReceiptSha256: String(activation.appReviewReceiptSha256),
+    activationReceiptSha256: String(activation.activationReceiptSha256),
+    oauthConnectionStatus: "ACTIVE_VERIFIED",
+    oauthConnectionReceiptSha256: String(activation.oauthConnectionReceiptSha256),
+    oauthConnectionVerifiedAt: String(activation.oauthConnectionVerifiedAt),
+    oauthAccessExpiresAt: String(activation.oauthAccessExpiresAt),
+    oauthScopes: [...new Set(activation.oauthScopes as string[])],
     endpointSchemaReceiptSha256: String(activation.endpointSchemaReceiptSha256),
     identityReceiptSha256: String(activation.identityReceiptSha256),
     oauthScopeReceiptSha256: String(activation.oauthScopeReceiptSha256),
@@ -336,8 +427,8 @@ function parseActivation(value: unknown): TikTokOrganicActivation | null {
     cmlRegion: String(activation.cmlRegion),
     expectedAccountId,
     expectedUsername,
-    verifiedMediaHosts: [...new Set(verifiedMediaHosts)].sort(),
-    portalPermissions: [...new Set(portalPermissions)].sort(),
+    verifiedMediaHosts: uniqueMediaHosts,
+    portalPermissions: uniquePortalPermissions,
   };
 }
 
@@ -585,28 +676,31 @@ export class TikTokBusinessOrganicClient {
   private readonly now: () => Date;
 
   constructor(options: ClientOptions = {}) {
-    this.activation = parseActivation(options.activation);
+    this.now = options.now ?? (() => new Date());
+    this.activation = parseActivation(options.activation, this.now());
     this.networkRequested = options.networkEnabled === true;
     this.publishingRequested = options.publishingEnabled === true;
     this.transport = options.transport ?? defaultTransport;
-    this.now = options.now ?? (() => new Date());
   }
 
   connectionStatus() {
+    const activationCurrent = Boolean(
+      this.activation && activationEvidenceIsCurrent(this.activation, this.now()),
+    );
     const networkEnabled = Boolean(
-      this.activation
+      activationCurrent
       && this.networkRequested
-      && process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED === "1",
+      && tiktokOrganicNetworkEnabled(),
     );
     const publishingEnabled = Boolean(
       networkEnabled
       && this.publishingRequested
-      && process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED === "1",
+      && tiktokOrganicPublishingEnabled(),
     );
     return {
       provider: "TIKTOK_API_FOR_BUSINESS_ORGANIC_ACCOUNTS" as const,
       schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
-      schemaFrozen: Boolean(this.activation),
+      schemaFrozen: activationCurrent,
       networkEnabled,
       publishingEnabled,
       expectedUsername: this.activation?.expectedUsername ?? null,
@@ -615,12 +709,15 @@ export class TikTokBusinessOrganicClient {
   }
 
   private ready(operation: Exclude<TikTokOperation, "music" | "activation">) {
-    if (!this.activation) {
+    if (
+      !this.activation
+      || !activationEvidenceIsCurrent(this.activation, this.now())
+    ) {
       throw new TikTokOrganicError({ operation, code: "ACTIVATION_RECEIPTS_REQUIRED" });
     }
     if (
       !this.networkRequested
-      || process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED !== "1"
+      || !tiktokOrganicNetworkEnabled()
     ) {
       throw new TikTokOrganicError({ operation, code: "NETWORK_DISABLED" });
     }
@@ -631,7 +728,7 @@ export class TikTokBusinessOrganicClient {
     const activation = this.ready("publish");
     if (
       !this.publishingRequested
-      || process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED !== "1"
+      || !tiktokOrganicPublishingEnabled()
     ) {
       throw new TikTokOrganicError({ operation: "publish", code: "PUBLISHING_DISABLED" });
     }

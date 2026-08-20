@@ -4,9 +4,15 @@ import test from "node:test";
 import {
   providerConfig,
   socialPublishingEnabled,
+  TIKTOK_APPROVED_ACCOUNT_SCOPES,
+  TIKTOK_APPROVED_APP_ID,
+  tiktokAppReviewApproved,
   tiktokOAuthEnabled,
+  tiktokOrganicNetworkEnabled,
+  tiktokOrganicPublishingEnabled,
 } from "../config";
 import { isProviderAuthenticationFailure } from "../provider-client";
+import { boundedSingleOAuthParameter } from "../oauth-route";
 import {
   buildTikTokAuthorizationUrl,
   exchangeTikTokAuthorizationCode,
@@ -17,15 +23,17 @@ import {
   refreshTikTokAccessToken,
 } from "./tiktok-oauth";
 
-const APPROVED_SCOPES = ["approved.account.read", "approved.content.publish"];
+const APPROVED_SCOPES = [...TIKTOK_APPROVED_ACCOUNT_SCOPES];
 
 function installTikTokEnvironment() {
-  process.env.TIKTOK_BUSINESS_CLIENT_ID = "test-app-id";
+  process.env.TIKTOK_BUSINESS_CLIENT_ID = TIKTOK_APPROVED_APP_ID;
   process.env.TIKTOK_BUSINESS_CLIENT_SECRET = "test-client-secret";
-  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://ads.tiktok.com/marketing_api/auth";
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
   process.env.TIKTOK_BUSINESS_REDIRECT_URI = "https://hooma.ge/api/social/oauth/tiktok/callback/";
   process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = APPROVED_SCOPES.join(",");
   process.env.TIKTOK_BUSINESS_EXPECTED_USERNAME = "@Hooma.Ge";
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_STATUS = "APPROVED";
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_RECEIPT_SHA256 = "a".repeat(64);
 }
 
 function tokenResponse(scope = [...APPROVED_SCOPES].reverse().join(",")) {
@@ -59,28 +67,65 @@ test("TikTok callback is the exact approved trailing-slash URI", () => {
   );
 });
 
-test("TikTok authorization requests all approved app permissions without guessing scope labels", () => {
+test("TikTok callback parameters reject duplicates and control characters", () => {
+  const valid = new URLSearchParams({ state: "one-state", auth_code: "one-code" });
+  assert.equal(boundedSingleOAuthParameter(valid, "state", 256), "one-state");
+  assert.equal(boundedSingleOAuthParameter(valid, "auth_code"), "one-code");
+
+  const duplicated = new URLSearchParams("state=first&state=second");
+  assert.equal(boundedSingleOAuthParameter(duplicated, "state", 256), null);
+  const controlled = new URLSearchParams();
+  controlled.append("auth_code", "bad\u0000code");
+  assert.equal(boundedSingleOAuthParameter(controlled, "auth_code"), null);
+});
+
+test("TikTok account-holder authorization uses the exact approved endpoint and scopes", () => {
   installTikTokEnvironment();
   const url = buildTikTokAuthorizationUrl("state-value");
-  assert.equal(url.origin, "https://ads.tiktok.com");
-  assert.equal(url.pathname, "/marketing_api/auth");
-  assert.equal(url.searchParams.get("app_id"), "test-app-id");
+  assert.equal(url.origin, "https://www.tiktok.com");
+  assert.equal(url.pathname, "/v2/auth/authorize");
+  assert.equal(url.searchParams.get("client_key"), TIKTOK_APPROVED_APP_ID);
+  assert.equal(url.searchParams.get("response_type"), "code");
+  assert.equal(url.searchParams.get("scope"), APPROVED_SCOPES.join(","));
   assert.equal(url.searchParams.get("state"), "state-value");
   assert.equal(
     url.searchParams.get("redirect_uri"),
     "https://hooma.ge/api/social/oauth/tiktok/callback/",
   );
-  assert.equal(url.searchParams.has("scope"), false);
+  assert.equal(url.searchParams.has("app_id"), false);
 });
 
 test("returned TikTok scope identifiers are preserved exactly and fail closed", () => {
   assert.deepEqual(
-    parseTikTokReturnedScopes("approved.content.publish,approved.account.read"),
-    [...APPROVED_SCOPES].sort(),
+    parseTikTokReturnedScopes("video.publish,user.info.basic"),
+    ["user.info.basic", "video.publish"],
   );
-  assert.equal(parseTikTokReturnedScopes(["approved.account.read"]), null);
+  assert.equal(parseTikTokReturnedScopes(["user.info.basic"]), null);
   assert.equal(parseTikTokReturnedScopes("Account Post Content > Video Publish"), null);
-  assert.equal(parseTikTokReturnedScopes("approved.account.read,"), null);
+  assert.equal(parseTikTokReturnedScopes("user.info.basic,"), null);
+});
+
+test("configuration rejects the advertiser authorization endpoint and scope drift", () => {
+  installTikTokEnvironment();
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://ads.tiktok.com/marketing_api/auth";
+  assert.throws(
+    () => providerConfig("tiktok"),
+    /SOCIAL_CONFIG_INVALID_AUTHORIZATION_URL:TIKTOK_BUSINESS_AUTH_URL/,
+  );
+
+  installTikTokEnvironment();
+  process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = APPROVED_SCOPES.slice(1).join(",");
+  assert.throws(
+    () => providerConfig("tiktok"),
+    /SOCIAL_CONFIG_INVALID_APPROVED_SCOPES:TIKTOK_BUSINESS_APPROVED_SCOPES/,
+  );
+
+  installTikTokEnvironment();
+  process.env.TIKTOK_BUSINESS_CLIENT_ID = "another-approved-looking-app";
+  assert.throws(
+    () => providerConfig("tiktok"),
+    /SOCIAL_CONFIG_INVALID_APP:TIKTOK_BUSINESS_CLIENT_ID/,
+  );
 });
 
 test("token parsing accepts only the configured approved returned identifiers", () => {
@@ -96,7 +141,7 @@ test("token parsing accepts only the configured approved returned identifiers", 
   });
 
   assert.throws(
-    () => parseTikTokTokenResponse(tokenResponse("approved.account.read")),
+    () => parseTikTokTokenResponse(tokenResponse(APPROVED_SCOPES.slice(1).join(","))),
     (error: unknown) => error instanceof Error
       && error.message === "SOCIAL_PROVIDER_ERROR:tiktok:token_exchange:APPROVED_SCOPE_SET_MISMATCH"
       && !error.message.includes("sensitive-access-token")
@@ -105,7 +150,7 @@ test("token parsing accepts only the configured approved returned identifiers", 
 
   assert.throws(
     () => parseTikTokTokenResponse(tokenResponse(
-      "approved.account.read,approved.content.publish,unexpected.extra.scope",
+      `${APPROVED_SCOPES.join(",")},unexpected.extra.scope`,
     )),
     /SOCIAL_PROVIDER_ERROR:tiktok:token_exchange:APPROVED_SCOPE_SET_MISMATCH/,
   );
@@ -128,7 +173,7 @@ test("token exchange sends the exact callback and no scope override", async () =
       "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/token/",
     );
     assert.deepEqual(observedBodies[0], {
-      client_id: "test-app-id",
+      client_id: TIKTOK_APPROVED_APP_ID,
       client_secret: "test-client-secret",
       grant_type: "authorization_code",
       auth_code: "one-time-code",
@@ -163,7 +208,7 @@ test("token refresh validates identity and returns TikTok's rotated token pair",
       "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/refresh_token/",
     );
     assert.deepEqual(observedBodies[0], {
-      client_id: "test-app-id",
+      client_id: TIKTOK_APPROVED_APP_ID,
       client_secret: "test-client-secret",
       grant_type: "refresh_token",
       refresh_token: "previous-refresh-token",
@@ -196,7 +241,9 @@ test("token refresh rejects account drift, missing scopes, and invalid token pai
     );
     assert.equal(isProviderAuthenticationFailure(identityMismatch), true);
 
-    globalThis.fetch = async () => Response.json(tokenResponse("approved.account.read"));
+    globalThis.fetch = async () => Response.json(tokenResponse(
+      APPROVED_SCOPES.slice(1).join(","),
+    ));
     const missingScope = await refreshTikTokAccessToken(
       "previous-refresh-token",
       "account-open-id",
@@ -208,7 +255,7 @@ test("token refresh rejects account drift, missing scopes, and invalid token pai
     assert.equal(isProviderAuthenticationFailure(missingScope), true);
 
     globalThis.fetch = async () => Response.json(tokenResponse(
-      "approved.account.read,approved.content.publish,unexpected.extra.scope",
+      `${APPROVED_SCOPES.join(",")},unexpected.extra.scope`,
     ));
     const extraScope = await refreshTikTokAccessToken(
       "previous-refresh-token",
@@ -283,8 +330,13 @@ test("account and feature gates fail closed", () => {
 
   delete process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED;
   delete process.env.HOOMA_TIKTOK_OAUTH_ENABLED;
+  delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
+  delete process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED;
   assert.equal(socialPublishingEnabled(), false);
+  assert.equal(tiktokAppReviewApproved(), true);
   assert.equal(tiktokOAuthEnabled(), false);
+  assert.equal(tiktokOrganicNetworkEnabled(), false);
+  assert.equal(tiktokOrganicPublishingEnabled(), false);
   process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED = "true";
   process.env.HOOMA_TIKTOK_OAUTH_ENABLED = "true";
   assert.equal(socialPublishingEnabled(), false);
@@ -292,4 +344,20 @@ test("account and feature gates fail closed", () => {
   process.env.HOOMA_TIKTOK_OAUTH_ENABLED = "1";
   assert.equal(tiktokOAuthEnabled(), true);
   assert.equal(socialPublishingEnabled(), false);
+
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_STATUS = "PENDING";
+  assert.equal(tiktokAppReviewApproved(), false);
+  assert.equal(tiktokOAuthEnabled(), false);
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_STATUS = "APPROVED";
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_RECEIPT_SHA256 = "invalid";
+  assert.equal(tiktokAppReviewApproved(), false);
+  assert.equal(tiktokOAuthEnabled(), false);
+
+  process.env.TIKTOK_BUSINESS_APP_REVIEW_RECEIPT_SHA256 = "a".repeat(64);
+  process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
+  process.env.HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED = "1";
+  assert.equal(tiktokOrganicNetworkEnabled(), true);
+  assert.equal(tiktokOrganicPublishingEnabled(), false);
+  process.env.HOOMA_SOCIAL_PUBLISHING_ENABLED = "1";
+  assert.equal(tiktokOrganicPublishingEnabled(), true);
 });

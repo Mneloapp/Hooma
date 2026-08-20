@@ -1,6 +1,6 @@
 # TikTok Organic Accounts provider — threat review
 
-Reviewed: 2026-08-15
+Reviewed: 2026-08-20
 
 ## Scope
 
@@ -17,16 +17,19 @@ The implemented Organic Accounts operations are:
 
 Network access requires all of the following:
 
-1. An activation object whose app status is `APPROVED`.
-2. Immutable SHA-256 references for app review, endpoint-schema review, OAuth identity, the exact machine scopes returned by TikTok OAuth, URL-property verification, and CML-schema review.
-3. The exact expected account ID and username.
-4. The three approved portal permission labels: `Account User`, `Get Account Media`, and `Account Post Content`.
-5. An allowlist of TikTok-verified media hosts.
-6. An explicit constructor opt-in and `HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED=1`.
+1. The configured and activated app ID is exactly the approved Hooma Organic Publisher ID `7675794584770248724`.
+2. The app-review environment gate is `APPROVED` and its configured immutable SHA-256 exactly matches the activation object.
+3. The owner OAuth gate remains enabled and the activation contains an active verified `@hooma.ge` connection, its matching immutable receipt, the exact configured machine scope set, and more than ten minutes of access-token lifetime.
+4. A separate configured immutable SHA-256 exactly matches the redacted external activation-review artifact referenced by the activation object.
+5. Immutable SHA-256 references exist for endpoint-schema review, OAuth identity, exact machine scopes, URL-property verification, and CML-schema review.
+6. The exact expected account ID and username are present.
+7. The three approved portal permission labels are exactly `Account User`, `Get Account Media`, and `Account Post Content`.
+8. An allowlist of TikTok-verified media hosts is present.
+9. An explicit constructor opt-in and `HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED=1` are both present.
 
-Publishing has a second independent kill switch. It additionally requires an explicit constructor opt-in and `HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED=1`. Both switches default to off. No production route constructs or registers this client in this change.
+Publishing has two additional independent kill switches. It requires an explicit constructor opt-in, `HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED=1`, and the global `HOOMA_SOCIAL_PUBLISHING_ENABLED=1` switch. All switches default to off. No production route constructs or registers this client in this change.
 
-Portal permission labels are not OAuth scopes. Before constructing the activation object, the worker must inspect the access token and validate the exact machine scope identifiers returned by TikTok against the reviewed configuration, then store that result as the immutable OAuth-scope receipt. This adapter deliberately does not infer machine scopes from the three human-readable labels.
+Portal permission labels are not OAuth scopes. Before constructing the activation object, the worker must inspect the access token and validate the exact machine scope identifiers returned by TikTok against the reviewed configuration, then store that result as the immutable OAuth-scope receipt. This adapter deliberately does not infer machine scopes from the three human-readable labels. It rechecks the app-review and OAuth environment gates, all configured receipt hashes, exact app ID, exact scopes, and token-expiry boundary immediately before every network operation.
 
 ## Publish gates
 
@@ -56,19 +59,31 @@ The returned publish receipt contains no access token, signed media URL, caption
 
 ## Secret handling
 
-Access tokens are accepted only as runtime arguments. They are sent in the documented `Access-Token` header and are never returned, hashed into receipts, written to logs, or included in exception messages. OAuth exchange and refresh-token lifecycle remain outside this adapter. Default network parsing limits responses to 1 MB and uses a 10-second timeout.
+Access tokens are accepted only as runtime arguments. They are sent in the documented `Access-Token` header and are never returned, hashed into receipts, written to logs, or included in exception messages. OAuth exchange and refresh-token lifecycle remain outside this adapter. On Hooma's Hobby plan, six distinct once-daily UTC schedules invoke the same authenticated token-maintenance route at four-hour nominal intervals; no individual expression runs more than once per day. Hobby's within-the-hour precision keeps the effective gap at about five hours, inside the six-hour refresh margin. Database lease IDs and token versions make delayed or overlapping invocations idempotent. A successful production invocation remains activation evidence, not an assumption. Default network parsing limits responses to 1 MB and uses a 10-second timeout.
 
 ## Remaining production blockers
 
 Publishing must remain disabled until all of these are completed:
 
-1. TikTok approves `Hooma Organic Publisher` and its Accounts API access application.
+1. Store the sanitized immutable receipt for the `Hooma Organic Publisher`
+   **Approved** decision observed on 2026-08-20 and freeze its SHA-256 in the
+   production activation configuration. Portal approval is resolved; receipt
+   anchoring is not.
 2. Giorgi authorizes the owned `@hooma.ge` account and the OAuth identity and granted token scopes are recorded without secrets.
-3. The current approved-app portal schema is frozen into an immutable review receipt, including `music_sound_info`, `is_ai_generated`, `is_brand_organic`, status values, and metrics fields.
-4. The Hooma staging hostname is verified as a TikTok URL property and signed objects remain reachable for at least 30 minutes. The separate five-minute staging scaffold is insufficient for this adapter and must not be wired in unchanged.
-5. A CML catalog/eligibility selection flow produces the exact receipt contract used here. The app's current requested permissions must be checked for any additional CML discovery permission before attempting automatic track selection.
-6. A non-publishing validation/status canary passes against the approved app.
-7. The owner gives fresh action-time approval for the first exact canary post before any cron registration is added.
+3. Store a redacted immutable connection receipt and a complete activation receipt, then configure their exact SHA-256 values. An access token with ten minutes or less remaining cannot activate the provider.
+4. Verify production accepts all six Hobby-compatible once-daily schedules and successfully executes the authenticated, leased social-token route. Keep OAuth disabled until that evidence exists.
+5. The current approved-app portal schema is frozen into an immutable review receipt, including `music_sound_info`, `is_ai_generated`, `is_brand_organic`, status values, and metrics fields.
+6. The Hooma staging hostname is verified as a TikTok URL property and signed objects remain reachable for at least 30 minutes. The separate five-minute staging scaffold is insufficient for this adapter and must not be wired in unchanged.
+7. A CML catalog/eligibility selection flow produces the exact receipt contract used here. The app's current requested permissions must be checked for any additional CML discovery permission before attempting automatic track selection.
+8. A non-publishing validation/status canary passes against the approved app.
+9. The owner gives fresh action-time approval for the first exact canary post before any publishing route is added.
+
+The current database helper accepts an older top-level TikTok CML `trackId`
+shape, while this adapter validates the stricter nested v1 selection receipt.
+The queue content fingerprint also currently includes the receipt hash, whereas
+the adapter receipt binds to the pre-existing approval fingerprint. Publishing
+must remain off until an additive migration makes this contract non-circular
+and identical at both layers.
 
 ## Documentation reviewed
 
