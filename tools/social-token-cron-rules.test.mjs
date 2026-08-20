@@ -40,10 +40,11 @@ test("social token maintenance remains authenticated and independent from publis
 
   assert.match(route, /authenticateSocialCronRequest\(request\)/);
   assert.match(route, /tiktokOAuthEnabled:\s*tiktokOAuthEnabled\(\)/);
-  assert.match(route, /publishingEnabled:\s*socialPublishingEnabled\(\)/);
+  assert.match(route, /instagramOAuthEnabled:\s*instagramOAuthEnabled\(\)/);
   assert.match(route, /refreshTikTok:\s*refreshTikTokAccessToken/);
   assert.match(route, /claim:\s*claimSocialConnectionRefresh/);
   assert.doesNotMatch(route, /tiktokOrganicPublishingEnabled/);
+  assert.doesNotMatch(route, /socialPublishingEnabled/);
 
   const connections = await source("lib/social/connections.ts");
   assert.match(connections, /requested_lease_seconds:\s*120/);

@@ -50,6 +50,16 @@ export type SocialConnectionRefreshClaim = {
   refreshLeaseId: string;
 };
 
+export type InstagramPublishingConnection = {
+  provider: "instagram";
+  externalAccountId: string;
+  username: "hooma.ge";
+  scopes: string[];
+  accessToken: string;
+  accessExpiresAt: string;
+  tokenVersion: number;
+};
+
 function adminClient() {
   const admin = createAdminClient() as any;
   if (!admin) throw new Error("SOCIAL_DATABASE_UNAVAILABLE");
@@ -70,6 +80,62 @@ function safeUuid(value: unknown) {
 
 function envelope(value: unknown): EncryptedTokenEnvelope | null {
   return isEncryptedSocialSecretEnvelope(value) ? value : null;
+}
+
+export async function loadInstagramPublishingConnection(
+  now = new Date(),
+): Promise<InstagramPublishingConnection> {
+  const admin = adminClient();
+  const { data, error } = await admin
+    .from("social_connections")
+    .select("provider,external_account_id,username,scopes,access_token_enc,access_expires_at,token_version,status")
+    .eq("provider", "instagram")
+    .eq("status", "active")
+    .limit(2);
+  if (error || !Array.isArray(data) || data.length !== 1) {
+    throw new Error("INSTAGRAM_CONNECTION_UNAVAILABLE");
+  }
+  const row = data[0] as Record<string, unknown>;
+  const externalAccountId = safeIdentifier(row.external_account_id);
+  const username = normalizedUsername(row.username);
+  const tokenEnvelope = envelope(row.access_token_enc);
+  const accessExpiresAt = safeIdentifier(row.access_expires_at);
+  const tokenVersion = Number.isInteger(row.token_version) && Number(row.token_version) > 0
+    ? Number(row.token_version)
+    : null;
+  const configured = providerConfig("instagram");
+  const scopes = Array.isArray(row.scopes)
+    ? row.scopes.filter((scope): scope is string => typeof scope === "string").sort()
+    : [];
+  const requiredScopes = [...configured.requiredScopes].sort();
+  if (
+    row.provider !== "instagram"
+    || !externalAccountId
+    || username !== configured.expectedUsername
+    || username !== "hooma.ge"
+    || !tokenEnvelope
+    || !accessExpiresAt
+    || !tokenVersion
+    || Date.parse(accessExpiresAt) <= now.getTime() + 10 * 60 * 1_000
+    || scopes.length !== requiredScopes.length
+    || scopes.some((scope, index) => scope !== requiredScopes[index])
+  ) {
+    throw new Error("INSTAGRAM_CONNECTION_INVALID");
+  }
+  return {
+    provider: "instagram",
+    externalAccountId,
+    username: "hooma.ge",
+    scopes,
+    accessToken: decryptSocialToken(
+      tokenEnvelope,
+      "instagram",
+      externalAccountId,
+      "access_token",
+    ),
+    accessExpiresAt,
+    tokenVersion,
+  };
 }
 
 function databaseErrorCode(error: unknown) {
