@@ -1073,3 +1073,134 @@ Because rollback was mandatory at the first hard gate, the following were correc
 No order, payment, refund, OAuth state, social publication, admin action, or database mutation was created. The pre-existing Instagram OAuth 503 remains a separate P1 social-runtime issue and is not implicated in the sitemap failure.
 
 Final release status: **rolled back / not live**. GitHub `main` contains merge commit `4d66bb4fef0cceaadbf7082bfeb5613f70487bef`, while live Production safely remains on `af67ba3132ad7a460636c56d44ac08fc96ccea57`. A new release attempt requires remediation and revalidation of the Production Supabase-backed sitemap catalog read.
+
+## 16. Production sitemap remediation and first successful live artifact — 2026-08-20
+
+This section and Section 17 supersede Section 15's final rollback status.
+
+### Bounded root cause and remediation
+
+The failed release's `JWT issued at future` message originated from the server-only Supabase credential used by the sitemap/catalog path; no browser cookie or user session participated. Current database grants require the server-side service role for `storefront_product_cards` and the catalog RPCs, so replacing that read with an anonymous/publishable client would have violated the existing database contract.
+
+The remediation therefore kept the server-only client and made failures observable and fail-closed:
+
+- PR #95: `fix(seo): harden Production sitemap catalog authentication`;
+- head: `eba77bb488ccea858378474d6cce5d73fcb83f86`;
+- merge commit: `5d76a9186fd8cd6dd67088d3175650f150053290`;
+- exact base: `4d66bb4fef0cceaadbf7082bfeb5613f70487bef`;
+- migration/RLS/schema change: 0;
+- package/lock change: 0;
+- targeted sitemap tests: 7/7 pass;
+- full MJS suite: 164/164 pass;
+- TypeScript, changed-file ESLint, and diff check: pass.
+
+Vercel's unreadable sensitive server-key record was preserved for Preview only; a Hooma-matched sensitive server key was added for Production only. The final metadata shape is exactly two sensitive `SUPABASE_SECRET_KEY` records with disjoint Preview and Production targets. No raw value, token, fingerprint, or environment-record identifier is retained in this report.
+
+The first repaired Production artifact served a real-data sitemap successfully, but browser funnel QA then found an independent same-origin redirect defect: apex `/checkout` was redirected through the canonical `www` host by middleware. This was classified as a core storefront/auth gate failure and the public domain was returned to the recorded rollback deployment while the redirect was fixed.
+
+## 17. Auth-origin hotfix, final Production release, and complete QA — 2026-08-20
+
+### Narrow hotfix and merge
+
+PR #96 changed exactly `middleware.ts` and `tools/auth-confirmation-rules.test.mjs`. It restored request-origin redirects for the four protected middleware branches while retaining canonical-site behavior in the separate callback/canonical helper.
+
+| Item | Value |
+|---|---|
+| PR | #96, `fix(auth): preserve same-origin middleware redirects` |
+| Head | `b766075549b8164223561b420a19cc72c3a72315` |
+| Base | `5d76a9186fd8cd6dd67088d3175650f150053290` |
+| Merge strategy | merge commit; auto-merge not used |
+| Merge commit / final source | `44f0d78e45d176321fa32cbeda865f057b167745` |
+| Auth/middleware tests | 9/9 pass |
+| Sitemap tests | 8/8 pass |
+| Full MJS suite | 160/160 pass |
+| Instagram tests | 14/14 pass |
+| TikTok tests | 25/25 pass |
+| TypeScript / build | pass |
+| ESLint | 0 errors; 11 pre-existing warnings |
+| Package, lockfile, migrations | unchanged |
+| Diff and credential scans | pass |
+
+### Exact Production artifact
+
+- deployment: `dpl_DzVdGrPzsoFxQALR3zLSxwpyPJW2`;
+- generated deployment URL: `hooma-8dv9xpciq-mnelo.vercel.app`;
+- target/state: Production / READY / Current;
+- source ref/SHA: exact `main@44f0d78e45d176321fa32cbeda865f057b167745`;
+- live custom domain: `https://hooma.ge`;
+- recorded rollback target retained for emergency use: `dpl_6BSsVWRVH7wd6e1wMWoRjYxBqdba`.
+
+### Live HTTP and structured-data regression
+
+The public Production HTTP regression passed all 12 required groups:
+
+1. `robots.txt`: 200 with the required policy and sitemap declaration.
+2. `sitemap.xml`: 200, valid XML, 1,470 unique apex URLs, real categories/products, and forbidden/private paths excluded.
+3. Homepage: 200, indexable, metadata/canonical/social cards/OnlineStore valid.
+4. Category `/shop/3d-printer`: metadata, canonical, BreadcrumbList, and real product anchors valid.
+5. Required products `true-spring-3037752`, `bambu-lab-p2s-3039863`, and `ptfe-ams-1-ams-2-pro-3047971`: distinct metadata plus Product, Offer, SKU, GEL price, availability, image, and BreadcrumbList valid.
+6. Search/filter variants: noindex with normalized canonical.
+7. Cart/login/checkout: private noindex behavior and auth routing valid.
+8. Legacy route: permanent 308; unknown product/category: 404.
+9. Open Graph image: PNG, exact 1200×630.
+10. Favicon `/brand/hooma-symbol.png`: 200, `image/png`.
+11. Host-confusion defense: redirect target cannot escape the trusted site.
+12. Production indexability: no `X-Robots-Tag: noindex` and no robots-meta noindex.
+
+Dynamic sitemap/category/product output also provided direct evidence that live Supabase catalog reads were successful.
+
+### Browser, hero, and safe funnel QA
+
+The homepage reached `readyState=complete`, loaded the Next.js runtime, showed no error boundary or protection interstitial, and remained DOM-stable. The hero contract passed all assertions:
+
+- 11 category slides;
+- exactly one household slide at initial index 0;
+- expected household image and category link;
+- active slide `aria-hidden=false`, `sizes=100vw`, eager/high priority, 1774×887;
+- remaining 10 images lazy/auto;
+- one preload, one observed hero resource, HTTP 200 image response, and non-zero responsive render.
+
+The category and all three required product pages passed exact-path, canonical, metadata, JSON-LD, readiness, and storefront checks. The existing authenticated browser context already contained the required product in browser-local cart state; opening the cart verified the dialog, item, and checkout CTA. Following the CTA remained same-origin and followed the expected authenticated staff route. A separate anonymous HTTP check proved `/checkout` makes one same-origin redirect to `/login?next=%2Fcheckout` and finishes at a 200 noindex login page.
+
+No login form, checkout, payment, order, refund, OAuth, social, admin mutation, or database mutation was submitted.
+
+Console errors: 0. Page/runtime exceptions: 0. New same-origin 5xx: 0.
+
+### Lighthouse
+
+Three Lighthouse 13.4.1 mobile/default-throttling runs completed without runtime errors or warnings.
+
+| Metric | Run 1 | Run 2 | Run 3 | Median | Gate |
+|---|---:|---:|---:|---:|---|
+| Performance | 99 | 92 | 99 | **99** | ≥85 pass |
+| LCP | 1.744 s | 3.296 s | 1.995 s | **1.995 s** | ≤4.0 s pass |
+| TTFB | 69 ms | 69 ms | 67 ms | **69 ms** | reported |
+| CLS | 0 | 0 | 0 | **0** | ≤0.1 pass |
+| TBT | 43 ms | 1 ms | 9 ms | **9 ms** | ≤200 ms pass |
+| FCP | 1.214 s | 1.425 s | 1.247 s | **1.247 s** | reported |
+| Speed Index | 2.631 s | 2.083 s | 2.992 s | **2.631 s** | reported |
+
+### Runtime, redirect, protection, and search-platform completion
+
+The exact deployment's Vercel log view reported Warning 0, Error 0, and Fatal 0. Its observed status-code inventory contained 200, 304, expected 307/308, and the deliberate unknown-route 404 checks; no 5xx status was present. The prior sitemap JWT error did not recur.
+
+`www.hooma.ge` is now configured as a permanent 308 redirect to `hooma.ge`. Root, path, and query are preserved in a single hop; the final apex URL returns 200.
+
+Google Search Console work completed:
+
+- Domain property `hooma.ge` created and ownership verified through the required root TXT record;
+- `https://hooma.ge/sitemap.xml` submitted and read successfully;
+- sitemap status: Success; discovered pages: 1,470;
+- homepage inspection: indexed / URL is on Google;
+- category and all three required product inspections: not indexed yet; no indexing request was sent;
+- all three products: Rich Results Test crawled successfully, 3 valid items each (Product snippets, Merchant listings, Breadcrumbs), critical errors 0.
+
+Deployment Protection remains Vercel Authentication with Standard Protection for protected deployments. Final Hooma automation-bypass credential count: 0. Final active Hooma Shareable Link count: 0. The clean fixed Preview still returns the unauthenticated 302 protection challenge. No Shareable Link or bypass credential was created in this successful completion, and the unrelated `mnelo/devdariani` Shareable Link was neither inspected nor modified.
+
+The known Instagram OAuth 503 remains a separate P1 social-runtime problem, unchanged by the SEO/auth-origin diffs and non-blocking for this release.
+
+### Final status
+
+**RELEASED / LIVE / ALL DEFINED PRODUCTION GATES PASSED.**
+
+The documentation update is isolated to these two Markdown reports and is not part of the application release tree.

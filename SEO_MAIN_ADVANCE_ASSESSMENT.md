@@ -299,3 +299,36 @@ The public custom domains `hooma.ge` and `www.hooma.ge` resolve to the rollback 
 Full browser/funnel QA, three Lighthouse runs/medians, the success-only `www.hooma.ge` 308 change, and Search Console actions were not run after the first hard failure. Instagram OAuth 503 remains the separate pre-existing P1 social-runtime issue and did not cause this rollback.
 
 Final outcome: **PR #85 is merged into `main`, but the SEO release is not live. Production is safely rolled back to the recorded pre-release deployment. A follow-up must repair and validate the Production Supabase sitemap read before a new release attempt.**
+
+## Final release completion — 2026-08-20
+
+This section supersedes the rollback disposition above.
+
+**Final disposition: RELEASED / LIVE / VERIFIED.**
+
+The rollback revealed two independent Production-only defects. Both were remediated with narrowly scoped, reviewed hotfixes:
+
+- PR #95 (`codex/seo-sitemap-supabase-hotfix`) hardened the Production sitemap catalog authentication and fail-closed behavior. Head `eba77bb488ccea858378474d6cce5d73fcb83f86` merged as `5d76a9186fd8cd6dd67088d3175650f150053290`.
+- The sensitive Supabase server credential was separated by environment: the prior unreadable record remains Preview-only and a Hooma-matched sensitive server credential is Production-only. No credential value, fingerprint, token, or record identifier is recorded here.
+- Production QA then exposed a cross-origin auth redirect: middleware used the canonical site origin, which selected `www.hooma.ge`, instead of preserving the incoming apex origin. PR #96 restored same-origin middleware redirects without changing canonical/auth-callback behavior. Head `b766075549b8164223561b420a19cc72c3a72315` merged as `44f0d78e45d176321fa32cbeda865f057b167745`.
+
+The final Git-connected Production deployment is `dpl_DzVdGrPzsoFxQALR3zLSxwpyPJW2`, READY and current, from exact `main@44f0d78e45d176321fa32cbeda865f057b167745`. The release tree/source SHA was verified before live QA.
+
+Final live outcome:
+
+- HTTP SEO regression: 12/12 pass;
+- sitemap: HTTP 200, 1,470 unique real-data URLs, including the fixed category and three required products;
+- homepage/indexability, robots, canonical, metadata, JSON-LD, OG 1200×630, favicon, legacy 308, unknown 404, hostile-host, and Supabase catalog-read gates: pass;
+- browser readiness and complete 11-slide hero contract: pass;
+- category and three product DOM/metadata/JSON-LD checks: pass;
+- cart dialog and checkout routing: pass without order, payment, OAuth, social, or database mutation;
+- anonymous checkout redirects once to the same-origin login page; the existing authenticated browser session followed its normal staff route;
+- console errors 0; runtime Warning/Error/Fatal 0; new 5xx 0;
+- Lighthouse median: Performance 99, LCP 1.995 s, TTFB 69 ms, CLS 0, TBT 9 ms, FCP 1.247 s, Speed Index 2.631 s; every rollback threshold passed;
+- `www.hooma.ge` now permanently redirects to `hooma.ge` with HTTP 308, preserving path and query in one hop;
+- Google Search Console Domain property ownership is verified; sitemap status is Success with 1,470 discovered pages; homepage is indexed, while the newly inspected category and three products are not yet indexed; no indexing request was sent;
+- all three products passed Google Rich Results Test with Product snippets, Merchant listings, and Breadcrumbs valid, and no critical errors.
+
+Deployment Protection remained Standard Vercel Authentication for protected deployments. Final Hooma automation-bypass credential count is 0 and active Hooma Shareable Link count is 0. The clean fixed Preview URL still returns the HTTP 302 protection challenge. No Shareable Link or bypass credential was created during the final successful attempt, and the unrelated `mnelo/devdariani` Shareable Link was not accessed or changed.
+
+The pre-existing Instagram OAuth 503 remains a separate P1 social-runtime issue and did not block this SEO release.
