@@ -577,7 +577,7 @@ export class InstagramReelsReadClient {
       if (!hasExactKeys(response, ["data"], ["paging"]) || !Array.isArray(response.data)) {
         throw new InstagramReelsReadError({
           operation: "owned_media",
-          code: "INVALID_MEDIA_LIST_RESPONSE",
+          code: "INVALID_MEDIA_LIST_ENVELOPE",
         });
       }
 
@@ -589,27 +589,55 @@ export class InstagramReelsReadClient {
           : boundedString(item.caption, 2_200);
         const permalink = parsePermalink(item?.permalink);
         const timestamp = isoTimestamp(item?.timestamp);
-        if (
-          !hasExactKeys(
-            item,
-            ["id", "media_type", "media_product_type", "permalink", "timestamp"],
-            ["caption"],
-          )
-          || !id
-          || (item?.media_type !== "IMAGE"
-            && item?.media_type !== "VIDEO"
-            && item?.media_type !== "CAROUSEL_ALBUM")
-          || (item.media_product_type !== "AD"
-            && item.media_product_type !== "FEED"
-            && item.media_product_type !== "STORY"
-            && item.media_product_type !== "REELS")
-          || (item.caption !== undefined && !caption)
-          || !permalink
-          || !timestamp
-        ) {
+        if (!hasExactKeys(
+          item,
+          ["id", "media_type", "media_product_type", "permalink", "timestamp"],
+          ["caption"],
+        )) {
           throw new InstagramReelsReadError({
             operation: "owned_media",
-            code: "INVALID_MEDIA_LIST_RESPONSE",
+            code: "INVALID_MEDIA_ITEM_KEYS",
+          });
+        }
+        if (!id) {
+          throw new InstagramReelsReadError({
+            operation: "owned_media",
+            code: "INVALID_MEDIA_ID",
+          });
+        }
+        if (item?.media_type !== "IMAGE"
+          && item?.media_type !== "VIDEO"
+          && item?.media_type !== "CAROUSEL_ALBUM") {
+          throw new InstagramReelsReadError({
+            operation: "owned_media",
+            code: "INVALID_MEDIA_TYPE",
+          });
+        }
+        if (item.media_product_type !== "AD"
+          && item.media_product_type !== "FEED"
+          && item.media_product_type !== "STORY"
+          && item.media_product_type !== "REELS") {
+          throw new InstagramReelsReadError({
+            operation: "owned_media",
+            code: "INVALID_MEDIA_PRODUCT_TYPE",
+          });
+        }
+        if (item.caption !== undefined && !caption) {
+          throw new InstagramReelsReadError({
+            operation: "owned_media",
+            code: "INVALID_MEDIA_CAPTION",
+          });
+        }
+        if (!permalink) {
+          throw new InstagramReelsReadError({
+            operation: "owned_media",
+            code: "INVALID_MEDIA_PERMALINK",
+          });
+        }
+        if (!timestamp) {
+          throw new InstagramReelsReadError({
+            operation: "owned_media",
+            code: "INVALID_MEDIA_TIMESTAMP",
           });
         }
         scannedCount += 1;
