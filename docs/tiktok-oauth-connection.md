@@ -36,18 +36,21 @@ Activate the OAuth switch only after all of the following are true:
 5. Giorgi gives fresh action-time approval to connect the owned `@hooma.ge`
    account.
 
-The account-holder authorization request uses TikTok's exact approved endpoint
-with `client_key`, `response_type=code`, the frozen scope list, the exact
-callback, and one-time state. It must not use the separate advertiser
-`ads.tiktok.com/marketing_api/auth` flow. The returned token scope set is
-checked again before any credential can be stored.
+The account-holder authorization request and token exchange stay on the same
+TikTok API for Business Accounts API stack. Authorization uses
+`https://ads.tiktok.com/marketing_api/auth` with `app_id`, the frozen scope
+list, the exact callback, and one-time state. Its success callback returns
+`auth_code`, which is exchanged only at `/tt_user/oauth2/token/`. The separate
+TikTok for Developers Login Kit `v2/auth/authorize` flow returns `code` and
+must never be mixed with the Accounts API token endpoint. The returned token
+scope set is checked again before any credential can be stored.
 
 ## Production values
 
 Non-secret fixed values:
 
 ```dotenv
-TIKTOK_BUSINESS_AUTH_URL=https://www.tiktok.com/v2/auth/authorize
+TIKTOK_BUSINESS_AUTH_URL=https://ads.tiktok.com/marketing_api/auth
 TIKTOK_BUSINESS_CLIENT_ID=7675794584770248724
 TIKTOK_BUSINESS_REDIRECT_URI=https://hooma.ge/api/social/oauth/tiktok/callback/
 TIKTOK_BUSINESS_EXPECTED_USERNAME=hooma.ge
@@ -119,10 +122,12 @@ the stale activation.
 - **Redirect mismatch:** configuration accepts only the canonical Hooma origin
   and the exact trailing-slash callback. The same value is sent during both
   authorization and token exchange.
-- **Wrong authorization surface:** configuration accepts only
-  `https://www.tiktok.com/v2/auth/authorize`; the advertiser authorization URL
-  is rejected. Success callbacks accept one bounded `auth_code` value and
-  reject duplicated state or authorization-code parameters.
+- **Wrong authorization surface:** configuration accepts only the API for
+  Business account-holder URL `https://ads.tiktok.com/marketing_api/auth`.
+  The TikTok for Developers Login Kit endpoint is rejected because it returns
+  a different callback and token contract. Success callbacks accept one
+  bounded `auth_code` value and reject duplicated state or authorization-code
+  parameters.
 - **Permission drift:** human labels are never mapped to guessed scope strings.
   Returned machine identifiers must contain the frozen approval-derived set.
 - **Token disclosure:** token responses are never logged. Access and refresh

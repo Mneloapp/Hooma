@@ -175,8 +175,7 @@ export function buildTikTokAuthorizationUrl(state: string) {
   }
   const config = providerConfig("tiktok");
   const url = new URL(config.authorizationUrl);
-  url.searchParams.set("client_key", config.clientId);
-  url.searchParams.set("response_type", "code");
+  url.searchParams.set("app_id", config.clientId);
   url.searchParams.set("scope", config.requiredScopes.join(","));
   url.searchParams.set("state", state);
   url.searchParams.set("redirect_uri", config.redirectUri);

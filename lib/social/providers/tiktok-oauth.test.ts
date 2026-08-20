@@ -28,7 +28,7 @@ const APPROVED_SCOPES = [...TIKTOK_APPROVED_ACCOUNT_SCOPES];
 function installTikTokEnvironment() {
   process.env.TIKTOK_BUSINESS_CLIENT_ID = TIKTOK_APPROVED_APP_ID;
   process.env.TIKTOK_BUSINESS_CLIENT_SECRET = "test-client-secret";
-  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://ads.tiktok.com/marketing_api/auth";
   process.env.TIKTOK_BUSINESS_REDIRECT_URI = "https://hooma.ge/api/social/oauth/tiktok/callback/";
   process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = APPROVED_SCOPES.join(",");
   process.env.TIKTOK_BUSINESS_EXPECTED_USERNAME = "@Hooma.Ge";
@@ -79,20 +79,20 @@ test("TikTok callback parameters reject duplicates and control characters", () =
   assert.equal(boundedSingleOAuthParameter(controlled, "auth_code"), null);
 });
 
-test("TikTok account-holder authorization uses the exact approved endpoint and scopes", () => {
+test("TikTok account-holder authorization uses the API for Business endpoint and scopes", () => {
   installTikTokEnvironment();
   const url = buildTikTokAuthorizationUrl("state-value");
-  assert.equal(url.origin, "https://www.tiktok.com");
-  assert.equal(url.pathname, "/v2/auth/authorize");
-  assert.equal(url.searchParams.get("client_key"), TIKTOK_APPROVED_APP_ID);
-  assert.equal(url.searchParams.get("response_type"), "code");
+  assert.equal(url.origin, "https://ads.tiktok.com");
+  assert.equal(url.pathname, "/marketing_api/auth");
+  assert.equal(url.searchParams.get("app_id"), TIKTOK_APPROVED_APP_ID);
   assert.equal(url.searchParams.get("scope"), APPROVED_SCOPES.join(","));
   assert.equal(url.searchParams.get("state"), "state-value");
   assert.equal(
     url.searchParams.get("redirect_uri"),
     "https://hooma.ge/api/social/oauth/tiktok/callback/",
   );
-  assert.equal(url.searchParams.has("app_id"), false);
+  assert.equal(url.searchParams.has("client_key"), false);
+  assert.equal(url.searchParams.has("response_type"), false);
 });
 
 test("returned TikTok scope identifiers are preserved exactly and fail closed", () => {
@@ -105,9 +105,9 @@ test("returned TikTok scope identifiers are preserved exactly and fail closed", 
   assert.equal(parseTikTokReturnedScopes("user.info.basic,"), null);
 });
 
-test("configuration rejects the advertiser authorization endpoint and scope drift", () => {
+test("configuration rejects the Login Kit authorization endpoint and scope drift", () => {
   installTikTokEnvironment();
-  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://ads.tiktok.com/marketing_api/auth";
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
   assert.throws(
     () => providerConfig("tiktok"),
     /SOCIAL_CONFIG_INVALID_AUTHORIZATION_URL:TIKTOK_BUSINESS_AUTH_URL/,
