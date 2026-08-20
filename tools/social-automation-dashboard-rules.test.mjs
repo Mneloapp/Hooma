@@ -58,6 +58,8 @@ test("dashboard has no publishing or destructive action surface", () => {
   assert.doesNotMatch(page, /<form|<button|action=|use server|ServerAction/);
   assert.doesNotMatch(loader, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/);
   assert.match(page, /გამოქვეყნების, წაშლის, boost-ის ან ხარჯვის კონტროლი აქ არ არსებობს/);
+  assert.match(page, /href="\/admin\/automations\/instagram-canary"/);
+  assert.match(page, /Instagram-ის უსაფრთხო შემოწმება/);
 });
 
 test("loader selects only sanitized fields and never client-exposes flags", () => {
