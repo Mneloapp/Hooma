@@ -4,7 +4,7 @@ import { tiktokOAuthEnabled } from "@/lib/social/config";
 import { recordSocialOAuthEvent, storeSocialConnection } from "@/lib/social/connections";
 import { consumeOAuthState } from "@/lib/social/oauth-state";
 import {
-  boundedOAuthParameter,
+  boundedSingleOAuthParameter,
   oauthResultRedirect,
   socialFeatureUnavailable,
 } from "@/lib/social/oauth-route";
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   if (url.origin !== "https://hooma.ge") {
     return NextResponse.json({ ok: false, message: "Invalid callback origin." }, { status: 400 });
   }
-  const state = boundedOAuthParameter(url.searchParams.get("state"), 256);
+  const state = boundedSingleOAuthParameter(url.searchParams, "state", 256);
   const stateAccepted = state
     ? await consumeOAuthState("tiktok", actor.id, state).catch(() => false)
     : false;
@@ -46,7 +46,9 @@ export async function GET(request: Request) {
   }
 
   const providerDenied = url.searchParams.has("error")
+    || url.searchParams.has("error_description")
     || url.searchParams.has("error_reason")
+    || url.searchParams.has("error_code")
     || url.searchParams.get("code") === "40102";
   if (providerDenied) {
     await recordSocialOAuthEvent(
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const authorizationCode = boundedOAuthParameter(url.searchParams.get("auth_code"));
+    const authorizationCode = boundedSingleOAuthParameter(url.searchParams, "auth_code");
     if (!authorizationCode) throw new Error("AUTHORIZATION_CODE_MISSING");
     const token = await exchangeTikTokAuthorizationCode(authorizationCode);
     const identity = await getTikTokOAuthIdentity(token.accessToken, token.openId);
