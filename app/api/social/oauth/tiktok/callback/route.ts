@@ -13,7 +13,10 @@ import {
   getTikTokOAuthIdentity,
   parseTikTokAuthorizationCallback,
 } from "@/lib/social/providers/tiktok-oauth";
-import { providerErrorCode } from "@/lib/social/provider-client";
+import {
+  providerErrorAuditDiagnostic,
+  type SocialOAuthFailureStage,
+} from "@/lib/social/provider-client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,6 +49,7 @@ export async function GET(request: Request) {
     return oauthResultRedirect("tiktok", "state_rejected");
   }
 
+  let failureStage: SocialOAuthFailureStage = "authorization";
   try {
     const callback = parseTikTokAuthorizationCallback(url.searchParams);
     if (callback.kind === "denied") {
@@ -57,8 +61,11 @@ export async function GET(request: Request) {
       ).catch(() => undefined);
       return oauthResultRedirect("tiktok", "denied");
     }
+    failureStage = "token_exchange";
     const token = await exchangeTikTokAuthorizationCode(callback.code);
+    failureStage = "identity";
     const identity = await getTikTokOAuthIdentity(token.accessToken, token.openId);
+    failureStage = "connection_store";
     await storeSocialConnection({
       provider: "tiktok",
       tokenType: token.tokenType,
@@ -79,11 +86,16 @@ export async function GET(request: Request) {
     }, actor.id);
     return oauthResultRedirect("tiktok", "connected");
   } catch (error) {
+    const diagnostic = providerErrorAuditDiagnostic(error, failureStage);
     await recordSocialOAuthEvent(
       actor.id,
       "tiktok",
       "social_oauth_failed",
-      providerErrorCode(error),
+      diagnostic.errorCode,
+      {
+        failureStage: diagnostic.failureStage,
+        providerRequestId: diagnostic.providerRequestId,
+      },
     ).catch(() => undefined);
     return oauthResultRedirect("tiktok", "failed");
   }

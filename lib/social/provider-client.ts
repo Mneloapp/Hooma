@@ -11,6 +11,52 @@ export type SocialProviderStage =
   | "token_refresh"
   | "identity";
 
+export type SocialOAuthFailureStage =
+  | SocialProviderStage
+  | "connection_store";
+
+export type SocialOAuthAuditDiagnostic = {
+  errorCode: string;
+  failureStage: SocialOAuthFailureStage;
+  providerRequestId: string | null;
+};
+
+export type SocialOAuthAuditDiagnosticInput = {
+  failureStage?: unknown;
+  providerRequestId?: unknown;
+};
+
+const SOCIAL_OAUTH_FAILURE_STAGES = new Set<string>([
+  "authorization",
+  "token_exchange",
+  "token_refresh",
+  "identity",
+  "connection_store",
+]);
+
+const SOCIAL_OAUTH_PLAIN_ERROR_CODES = new Set<string>([
+  "SOCIAL_ACTOR_INVALID",
+  "SOCIAL_CONFIG_INVALID_ACCOUNT",
+  "SOCIAL_CONFIG_INVALID_APP",
+  "SOCIAL_CONFIG_INVALID_APPROVED_SCOPES",
+  "SOCIAL_CONFIG_INVALID_AUTHORIZATION_URL",
+  "SOCIAL_CONFIG_INVALID_HTTPS",
+  "SOCIAL_CONFIG_INVALID_REDIRECT",
+  "SOCIAL_CONFIG_INVALID_SCOPES",
+  "SOCIAL_CONFIG_MISSING",
+  "SOCIAL_CONNECTION_STORE_FAILED",
+  "SOCIAL_DATABASE_UNAVAILABLE",
+  "SOCIAL_TOKEN_ACTIVE_KEY_ID_INVALID",
+  "SOCIAL_TOKEN_ACTIVE_KEY_VERSION_INVALID",
+  "SOCIAL_TOKEN_AAD_CONTEXT_INVALID",
+  "SOCIAL_TOKEN_EMPTY",
+  "SOCIAL_TOKEN_ENVELOPE_KEY_UNAVAILABLE",
+  "SOCIAL_TOKEN_KEYRING_INVALID_JSON",
+  "SOCIAL_TOKEN_KEYRING_NOT_CONFIGURED",
+  "SOCIAL_TOKEN_LIFETIME_INVALID",
+  "SOCIAL_TOKEN_TOO_LARGE",
+]);
+
 type SocialProviderErrorOptions = {
   provider: SocialProvider;
   stage: SocialProviderStage;
@@ -25,6 +71,14 @@ function safeDiagnostic(value: unknown, fallback: string) {
     ? String(value).trim()
     : "";
   return SAFE_CODE_PATTERN.test(candidate) ? candidate : fallback;
+}
+
+function safeOptionalDiagnostic(value: unknown) {
+  return typeof value === "string"
+    && value !== "UNAVAILABLE"
+    && SAFE_CODE_PATTERN.test(value)
+    ? value
+    : null;
 }
 
 export class SocialProviderError extends Error {
@@ -43,9 +97,7 @@ export class SocialProviderError extends Error {
     this.stage = options.stage;
     this.code = code;
     this.httpStatus = Number.isInteger(options.httpStatus) ? options.httpStatus! : null;
-    this.requestId = options.requestId
-      ? safeDiagnostic(options.requestId, "UNAVAILABLE")
-      : null;
+    this.requestId = safeOptionalDiagnostic(options.requestId);
     this.retryable = options.retryable ?? false;
   }
 }
@@ -105,6 +157,59 @@ export function providerErrorCode(error: unknown) {
     if (match) return match[1];
   }
   return "UNEXPECTED_FAILURE";
+}
+
+/**
+ * Reduce a provider failure to the only fields permitted in OAuth audit
+ * metadata. Plain runtime errors can retain only one explicitly allowlisted
+ * internal code; arbitrary message text and all code details are discarded.
+ */
+export function providerErrorAuditDiagnostic(
+  error: unknown,
+  fallbackStage: SocialOAuthFailureStage,
+): SocialOAuthAuditDiagnostic {
+  if (error instanceof SocialProviderError) {
+    return {
+      errorCode: error.code,
+      failureStage: error.stage,
+      providerRequestId: error.requestId,
+    };
+  }
+  const classified = providerErrorCode(error);
+  const plainInternalCode = classified.match(
+    /^([A-Z][A-Z0-9_]{2,119})(?::|$)/,
+  )?.[1];
+  return {
+    errorCode: plainInternalCode && SOCIAL_OAUTH_PLAIN_ERROR_CODES.has(plainInternalCode)
+      ? plainInternalCode
+      : "UNEXPECTED_FAILURE",
+    failureStage: fallbackStage,
+    providerRequestId: null,
+  };
+}
+
+/**
+ * Final defense-in-depth allowlist at the audit boundary. The returned object
+ * can contain only the provider and sanitized OAuth diagnostic fields.
+ */
+export function socialOAuthAuditMetadata(
+  provider: SocialProvider,
+  errorCode: unknown,
+  diagnostic: SocialOAuthAuditDiagnosticInput = {},
+) {
+  const metadata: Record<string, string> = {
+    provider,
+    error_code: safeDiagnostic(errorCode, "UNEXPECTED_FAILURE"),
+  };
+  if (
+    typeof diagnostic.failureStage === "string"
+    && SOCIAL_OAUTH_FAILURE_STAGES.has(diagnostic.failureStage)
+  ) {
+    metadata.failure_stage = diagnostic.failureStage;
+  }
+  const providerRequestId = safeOptionalDiagnostic(diagnostic.providerRequestId);
+  if (providerRequestId) metadata.provider_request_id = providerRequestId;
+  return metadata;
 }
 
 export function isProviderAuthenticationFailure(error: unknown) {
