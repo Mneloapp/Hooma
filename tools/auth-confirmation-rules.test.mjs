@@ -45,10 +45,10 @@ test("auth and email-change redirects ignore hostile request Host headers", asyn
     "../app/auth/complete/route.ts",
     "../app/auth/confirm/route.ts",
     "../app/auth/email-change/confirm/route.ts",
-    "../middleware.ts",
   ];
-  const [originHelper, ...redirectSources] = await Promise.all([
+  const [originHelper, middlewareSource, ...redirectSources] = await Promise.all([
     read("../lib/site-origin.ts"),
+    read("../middleware.ts"),
     ...paths.map(read),
   ]);
 
@@ -60,4 +60,15 @@ test("auth and email-change redirects ignore hostile request Host headers", asyn
     assert.match(source, /trustedSiteOrigin/);
     assert.doesNotMatch(source, /x-forwarded-host|x-forwarded-proto/);
   }
+
+  assert.equal(
+    middlewareSource.match(/request\.nextUrl\.clone\(\)/g)?.length,
+    4,
+    "every protected-route redirect must preserve the normalized request origin",
+  );
+  assert.doesNotMatch(middlewareSource, /trustedSiteOrigin|x-forwarded-host|x-forwarded-proto/);
+  assert.match(
+    middlewareSource,
+    /url\.pathname = "\/login";\s+url\.search = "";\s+url\.searchParams\.set\("next", `\$\{pathname\}\$\{request\.nextUrl\.search\}`\)/,
+  );
 });
