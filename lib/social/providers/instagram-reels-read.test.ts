@@ -236,6 +236,36 @@ test("owned-media lookup never reports clear when the page cap is reached", asyn
   }
 });
 
+test("owned-media schema failures identify only the invalid field class", async () => {
+  enableReads();
+  const cases = [
+    [{ unexpected: [] }, "INVALID_MEDIA_LIST_ENVELOPE"],
+    [{ data: [{ id: MEDIA_ID }] }, "INVALID_MEDIA_ITEM_KEYS"],
+    [{ data: [{ id: MEDIA_ID, caption: "x", media_type: "AUDIO", media_product_type: "REELS", permalink: "https://www.instagram.com/reel/ABC_123/", timestamp: "2026-08-15T20:30:00+0000" }] }, "INVALID_MEDIA_TYPE"],
+    [{ data: [{ id: MEDIA_ID, caption: "x", media_type: "VIDEO", media_product_type: "UNKNOWN", permalink: "https://www.instagram.com/reel/ABC_123/", timestamp: "2026-08-15T20:30:00+0000" }] }, "INVALID_MEDIA_PRODUCT_TYPE"],
+  ] as const;
+  try {
+    for (const [body, code] of cases) {
+      const client = new InstagramReelsReadClient({
+        activation: activation(),
+        networkEnabled: true,
+        transport: async () => ({ status: 200, body }),
+      });
+      await assert.rejects(
+        client.lookupOwnedReelDuplicate({
+          accountId: ACCOUNT_ID,
+          captionSha256: hash("expected caption"),
+          notBefore: "2026-08-15T18:00:00.000Z",
+          maxPages: 1,
+        }, TOKEN),
+        new RegExp(`INSTAGRAM_REELS_READ_ERROR:owned_media:${code}`),
+      );
+    }
+  } finally {
+    clearFlags();
+  }
+});
+
 test("container status accepts only reviewed values and binds the returned ID", async () => {
   enableReads();
   const statuses = ["IN_PROGRESS", "FINISHED"];
