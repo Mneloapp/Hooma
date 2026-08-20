@@ -11,7 +11,12 @@ import {
   tiktokOrganicNetworkEnabled,
   tiktokOrganicPublishingEnabled,
 } from "../config";
-import { isProviderAuthenticationFailure } from "../provider-client";
+import {
+  isProviderAuthenticationFailure,
+  providerErrorAuditDiagnostic,
+  socialOAuthAuditMetadata,
+  SocialProviderError,
+} from "../provider-client";
 import { boundedSingleOAuthParameter } from "../oauth-route";
 import {
   buildTikTokAuthorizationUrl,
@@ -250,6 +255,146 @@ test("token exchange sends the exact callback and no scope override", async () =
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("TikTok token failures expose only allowlisted audit diagnostics", async () => {
+  installTikTokEnvironment();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({
+    code: 40131,
+    message: "provider-body-secret",
+    request_id: "request-safe-id",
+    data: {
+      access_token: "provider-body-access-token",
+      refresh_token: "provider-body-refresh-token",
+    },
+  });
+  try {
+    const error = await exchangeTikTokAuthorizationCode("callback-code-secret")
+      .then(() => null, (caught: unknown) => caught);
+    assert.ok(error instanceof SocialProviderError);
+
+    const diagnostic = providerErrorAuditDiagnostic(error, "authorization");
+    assert.deepEqual(diagnostic, {
+      errorCode: "40131",
+      failureStage: "token_exchange",
+      providerRequestId: "request-safe-id",
+    });
+    const metadata = socialOAuthAuditMetadata(
+      "tiktok",
+      diagnostic.errorCode,
+      {
+        failureStage: diagnostic.failureStage,
+        providerRequestId: diagnostic.providerRequestId,
+      },
+    );
+    assert.deepEqual(metadata, {
+      provider: "tiktok",
+      error_code: "40131",
+      failure_stage: "token_exchange",
+      provider_request_id: "request-safe-id",
+    });
+
+    const serialized = JSON.stringify({ diagnostic, metadata });
+    for (const secret of [
+      "callback-code-secret",
+      "test-client-secret",
+      "provider-body-secret",
+      "provider-body-access-token",
+      "provider-body-refresh-token",
+    ]) {
+      assert.equal(serialized.includes(secret), false);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("OAuth audit diagnostics reject untrusted messages, stages, and request IDs", () => {
+  const unknown = providerErrorAuditDiagnostic(
+    new Error("raw provider body secret"),
+    "connection_store",
+  );
+  assert.deepEqual(unknown, {
+    errorCode: "UNEXPECTED_FAILURE",
+    failureStage: "connection_store",
+    providerRequestId: null,
+  });
+  assert.equal(JSON.stringify(unknown).includes("raw provider body secret"), false);
+  assert.equal(
+    providerErrorAuditDiagnostic(
+      new Error("SOCIAL_SECRET_LOOKING_RAW_MESSAGE"),
+      "connection_store",
+    ).errorCode,
+    "UNEXPECTED_FAILURE",
+  );
+
+  const storeFailure = providerErrorAuditDiagnostic(
+    new Error("SOCIAL_CONNECTION_STORE_FAILED:23505"),
+    "connection_store",
+  );
+  assert.deepEqual(storeFailure, {
+    errorCode: "SOCIAL_CONNECTION_STORE_FAILED",
+    failureStage: "connection_store",
+    providerRequestId: null,
+  });
+  assert.equal(JSON.stringify(storeFailure).includes("23505"), false);
+
+  const metadata = socialOAuthAuditMetadata(
+    "tiktok",
+    "40131\nraw-code-secret",
+    {
+      failureStage: "token_exchange\nraw-stage-secret",
+      providerRequestId: "request-id\nraw-request-secret",
+    },
+  );
+  assert.deepEqual(metadata, {
+    provider: "tiktok",
+    error_code: "UNEXPECTED_FAILURE",
+  });
+
+  for (const requestId of [
+    " request-id ",
+    "request/id",
+    "request?id=secret",
+    "request-id\nraw-request-secret",
+    "x".repeat(121),
+    "UNAVAILABLE",
+  ]) {
+    const invalidRequestId = new SocialProviderError({
+      provider: "tiktok",
+      stage: "token_exchange",
+      code: "40131",
+      requestId,
+    });
+    assert.equal(invalidRequestId.requestId, null);
+    assert.deepEqual(
+      socialOAuthAuditMetadata("tiktok", "40131", { providerRequestId: requestId }),
+      { provider: "tiktok", error_code: "40131" },
+    );
+  }
+  assert.deepEqual(
+    socialOAuthAuditMetadata("tiktok", "40131", { providerRequestId: 40131 }),
+    { provider: "tiktok", error_code: "40131" },
+  );
+});
+
+test("TikTok identity failures retain the provider stage and request ID", () => {
+  let identityError: unknown;
+  try {
+    parseTikTokIdentityResponse({
+      code: 40131,
+      message: "identity-provider-body-secret",
+      request_id: "identity-request-id",
+    }, "expected-account-id");
+  } catch (error) {
+    identityError = error;
+  }
+  assert.deepEqual(providerErrorAuditDiagnostic(identityError, "token_exchange"), {
+    errorCode: "40131",
+    failureStage: "identity",
+    providerRequestId: "identity-request-id",
+  });
 });
 
 test("token refresh validates identity and returns TikTok's rotated token pair", async () => {

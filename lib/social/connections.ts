@@ -13,7 +13,9 @@ import {
   assertRequiredScopes,
   normalizedUsername,
   providerErrorCode,
+  socialOAuthAuditMetadata,
   SocialProviderError,
+  type SocialOAuthAuditDiagnosticInput,
 } from "./provider-client";
 
 const TIKTOK_REFRESH_MARGIN_SECONDS = 6 * 60 * 60;
@@ -127,17 +129,15 @@ export async function recordSocialOAuthEvent(
   provider: SocialProvider,
   action: "social_oauth_denied" | "social_oauth_failed" | "social_oauth_state_rejected",
   errorCode: string,
+  diagnostic: SocialOAuthAuditDiagnosticInput = {},
 ) {
   const admin = adminClient();
-  const safeCode = /^[A-Za-z0-9_.:-]{1,120}$/.test(errorCode)
-    ? errorCode
-    : "UNEXPECTED_FAILURE";
   const { error } = await admin.from("audit_log").insert({
     actor_id: actorId,
     action,
     entity_type: "social_connection",
     entity_id: provider,
-    metadata: { provider, error_code: safeCode },
+    metadata: socialOAuthAuditMetadata(provider, errorCode, diagnostic),
   });
   if (error) throw new Error(`SOCIAL_AUDIT_FAILED:${error.code ?? "UNKNOWN"}`);
 }

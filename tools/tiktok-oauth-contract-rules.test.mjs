@@ -46,3 +46,49 @@ test("TikTok publishing and network switches remain fail-closed by default", asy
   assert.match(example, /^HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED=0$/m);
   assert.match(example, /^HOOMA_TIKTOK_ORGANIC_PUBLISHING_ENABLED=0$/m);
 });
+
+test("TikTok callback audit diagnostics are stage-aware and strictly sanitized", async () => {
+  const [callback, providerClient, connections, docs] = await Promise.all([
+    source("app/api/social/oauth/tiktok/callback/route.ts"),
+    source("lib/social/provider-client.ts"),
+    source("lib/social/connections.ts"),
+    source("docs/tiktok-oauth-connection.md"),
+  ]);
+
+  assert.match(callback, /let failureStage: SocialOAuthFailureStage = "authorization"/);
+  assert.match(callback, /failureStage = "token_exchange"/);
+  assert.match(callback, /failureStage = "identity"/);
+  assert.match(callback, /failureStage = "connection_store"/);
+  const catchStart = callback.indexOf("} catch (error) {");
+  const catchEnd = callback.indexOf(
+    'return oauthResultRedirect("tiktok", "failed")',
+    catchStart,
+  );
+  assert.notEqual(catchStart, -1);
+  assert.notEqual(catchEnd, -1);
+  const failureHandler = callback.slice(catchStart, catchEnd);
+  assert.match(failureHandler, /providerErrorAuditDiagnostic\(error, failureStage\)/);
+  assert.match(failureHandler, /failureStage: diagnostic\.failureStage/);
+  assert.match(failureHandler, /providerRequestId: diagnostic\.providerRequestId/);
+  assert.doesNotMatch(failureHandler, /providerErrorCode|error\.message|callback\.code|\bstate\b|JSON\.stringify/);
+
+  const diagnosticStart = providerClient.indexOf("export function providerErrorAuditDiagnostic");
+  const diagnosticEnd = providerClient.indexOf("export function socialOAuthAuditMetadata");
+  const diagnosticHelper = providerClient.slice(diagnosticStart, diagnosticEnd);
+  assert.match(diagnosticHelper, /error instanceof SocialProviderError/);
+  assert.match(diagnosticHelper, /providerErrorCode\(error\)/);
+  assert.match(diagnosticHelper, /SOCIAL_OAUTH_PLAIN_ERROR_CODES\.has\(plainInternalCode\)/);
+  assert.match(diagnosticHelper, /: "UNEXPECTED_FAILURE"/);
+  assert.doesNotMatch(diagnosticHelper, /error\.message|JSON\.stringify/);
+  assert.match(providerClient, /SOCIAL_OAUTH_FAILURE_STAGES\.has\(diagnostic\.failureStage\)/);
+  assert.match(providerClient, /metadata\.provider_request_id = providerRequestId/);
+
+  assert.match(
+    connections,
+    /metadata: socialOAuthAuditMetadata\(provider, errorCode, diagnostic\)/,
+  );
+  assert.doesNotMatch(connections, /metadata: \{ provider, error_code: safeCode \}/);
+
+  assert.match(docs, /Authorization codes, OAuth\s+state, client secrets/);
+  assert.match(docs, /raw `error\.message` values are never written or logged/);
+});

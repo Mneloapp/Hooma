@@ -134,6 +134,14 @@ the stale activation.
   Returned machine identifiers must contain the frozen approval-derived set.
 - **Token disclosure:** token responses are never logged. Access and refresh
   tokens pass directly into the existing AES-256-GCM envelope storage path.
+- **Failure diagnostics:** a failed callback writes only the sanitized provider
+  error code, one fixed allowlisted failure stage, and (when present) the
+  provider's bounded request ID to audit metadata. Authorization codes, OAuth
+  state, client secrets, access or refresh tokens, provider response bodies or
+  messages, and raw `error.message` values are never written or logged. Known
+  internal failures may retain only their safe `SOCIAL_*` plain-code
+  classification (for example, `SOCIAL_CONNECTION_STORE_FAILED`); details after
+  the code are discarded. Unclassified failures use `UNEXPECTED_FAILURE`.
 - **Refresh-token rotation:** every refresh must return a complete token pair,
   the same app-specific account ID, and the frozen approved scopes. The worker
   stores TikTok's returned refresh token and increments the database token
