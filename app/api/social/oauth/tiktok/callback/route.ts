@@ -11,6 +11,7 @@ import {
 import {
   exchangeTikTokAuthorizationCode,
   getTikTokOAuthIdentity,
+  parseTikTokAuthorizationCallback,
 } from "@/lib/social/providers/tiktok-oauth";
 import { providerErrorCode } from "@/lib/social/provider-client";
 
@@ -45,25 +46,18 @@ export async function GET(request: Request) {
     return oauthResultRedirect("tiktok", "state_rejected");
   }
 
-  const providerDenied = url.searchParams.has("error")
-    || url.searchParams.has("error_description")
-    || url.searchParams.has("error_reason")
-    || url.searchParams.has("error_code")
-    || url.searchParams.get("code") === "40102";
-  if (providerDenied) {
-    await recordSocialOAuthEvent(
-      actor.id,
-      "tiktok",
-      "social_oauth_denied",
-      "AUTHORIZATION_DENIED",
-    ).catch(() => undefined);
-    return oauthResultRedirect("tiktok", "denied");
-  }
-
   try {
-    const authorizationCode = boundedSingleOAuthParameter(url.searchParams, "auth_code");
-    if (!authorizationCode) throw new Error("AUTHORIZATION_CODE_MISSING");
-    const token = await exchangeTikTokAuthorizationCode(authorizationCode);
+    const callback = parseTikTokAuthorizationCallback(url.searchParams);
+    if (callback.kind === "denied") {
+      await recordSocialOAuthEvent(
+        actor.id,
+        "tiktok",
+        "social_oauth_denied",
+        "AUTHORIZATION_DENIED",
+      ).catch(() => undefined);
+      return oauthResultRedirect("tiktok", "denied");
+    }
+    const token = await exchangeTikTokAuthorizationCode(callback.code);
     const identity = await getTikTokOAuthIdentity(token.accessToken, token.openId);
     await storeSocialConnection({
       provider: "tiktok",

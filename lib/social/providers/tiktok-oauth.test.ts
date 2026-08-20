@@ -17,6 +17,7 @@ import {
   buildTikTokAuthorizationUrl,
   exchangeTikTokAuthorizationCode,
   getTikTokOAuthIdentity,
+  parseTikTokAuthorizationCallback,
   parseTikTokIdentityResponse,
   parseTikTokReturnedScopes,
   parseTikTokTokenResponse,
@@ -28,7 +29,7 @@ const APPROVED_SCOPES = [...TIKTOK_APPROVED_ACCOUNT_SCOPES];
 function installTikTokEnvironment() {
   process.env.TIKTOK_BUSINESS_CLIENT_ID = TIKTOK_APPROVED_APP_ID;
   process.env.TIKTOK_BUSINESS_CLIENT_SECRET = "test-client-secret";
-  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://ads.tiktok.com/marketing_api/auth";
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
   process.env.TIKTOK_BUSINESS_REDIRECT_URI = "https://hooma.ge/api/social/oauth/tiktok/callback/";
   process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = APPROVED_SCOPES.join(",");
   process.env.TIKTOK_BUSINESS_EXPECTED_USERNAME = "@Hooma.Ge";
@@ -67,32 +68,80 @@ test("TikTok callback is the exact approved trailing-slash URI", () => {
   );
 });
 
-test("TikTok callback parameters reject duplicates and control characters", () => {
-  const valid = new URLSearchParams({ state: "one-state", auth_code: "one-code" });
+test("TikTok callback parameters accept only one portal-v2 code", () => {
+  const valid = new URLSearchParams({ state: "one-state", code: "one-code" });
   assert.equal(boundedSingleOAuthParameter(valid, "state", 256), "one-state");
-  assert.equal(boundedSingleOAuthParameter(valid, "auth_code"), "one-code");
+  assert.deepEqual(parseTikTokAuthorizationCallback(valid), {
+    kind: "authorized",
+    code: "one-code",
+  });
 
   const duplicated = new URLSearchParams("state=first&state=second");
   assert.equal(boundedSingleOAuthParameter(duplicated, "state", 256), null);
+
   const controlled = new URLSearchParams();
-  controlled.append("auth_code", "bad\u0000code");
-  assert.equal(boundedSingleOAuthParameter(controlled, "auth_code"), null);
+  controlled.append("code", "bad\u0000code");
+  assert.throws(
+    () => parseTikTokAuthorizationCallback(controlled),
+    /AUTHORIZATION_CODE_MISSING/,
+  );
+
+  for (const invalid of [
+    new URLSearchParams("code=first&code=second"),
+    new URLSearchParams({ code: "x".repeat(4_097) }),
+    new URLSearchParams(),
+  ]) {
+    assert.throws(
+      () => parseTikTokAuthorizationCallback(invalid),
+      /AUTHORIZATION_CODE_MISSING/,
+    );
+  }
 });
 
-test("TikTok account-holder authorization uses the API for Business endpoint and scopes", () => {
+test("TikTok callback rejects legacy and hybrid authorization surfaces", () => {
+  for (const invalid of [
+    new URLSearchParams({ auth_code: "legacy-code" }),
+    new URLSearchParams({ code: "portal-code", auth_code: "legacy-code" }),
+  ]) {
+    assert.throws(
+      () => parseTikTokAuthorizationCallback(invalid),
+      /LEGACY_AUTHORIZATION_RESPONSE/,
+    );
+  }
+
+  assert.deepEqual(
+    parseTikTokAuthorizationCallback(new URLSearchParams({ code: "40102" })),
+    { kind: "authorized", code: "40102" },
+  );
+});
+
+test("explicit TikTok provider errors remain denials and win over code", () => {
+  for (const name of ["error", "error_description", "error_reason", "error_code"]) {
+    const parameters = new URLSearchParams({ code: "must-not-be-used" });
+    parameters.set(name, "provider-denied");
+    assert.deepEqual(parseTikTokAuthorizationCallback(parameters), { kind: "denied" });
+  }
+});
+
+test("TikTok account-holder authorization uses the approved portal-v2 contract", () => {
   installTikTokEnvironment();
   const url = buildTikTokAuthorizationUrl("state-value");
-  assert.equal(url.origin, "https://ads.tiktok.com");
-  assert.equal(url.pathname, "/marketing_api/auth");
-  assert.equal(url.searchParams.get("app_id"), TIKTOK_APPROVED_APP_ID);
+  assert.equal(url.origin, "https://www.tiktok.com");
+  assert.equal(url.pathname, "/v2/auth/authorize");
+  assert.equal(url.searchParams.get("client_key"), TIKTOK_APPROVED_APP_ID);
+  assert.equal(url.searchParams.get("response_type"), "code");
   assert.equal(url.searchParams.get("scope"), APPROVED_SCOPES.join(","));
   assert.equal(url.searchParams.get("state"), "state-value");
   assert.equal(
     url.searchParams.get("redirect_uri"),
     "https://hooma.ge/api/social/oauth/tiktok/callback/",
   );
-  assert.equal(url.searchParams.has("client_key"), false);
-  assert.equal(url.searchParams.has("response_type"), false);
+  assert.deepEqual(
+    [...url.searchParams.keys()].sort(),
+    ["client_key", "redirect_uri", "response_type", "scope", "state"],
+  );
+  assert.equal(url.searchParams.has("app_id"), false);
+  assert.equal(url.toString().includes("test-client-secret"), false);
 });
 
 test("returned TikTok scope identifiers are preserved exactly and fail closed", () => {
@@ -105,14 +154,32 @@ test("returned TikTok scope identifiers are preserved exactly and fail closed", 
   assert.equal(parseTikTokReturnedScopes("user.info.basic,"), null);
 });
 
-test("configuration rejects the Login Kit authorization endpoint and scope drift", () => {
+test("configuration accepts only the exact approved portal-v2 authorization endpoint", () => {
   installTikTokEnvironment();
-  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
-  assert.throws(
-    () => providerConfig("tiktok"),
-    /SOCIAL_CONFIG_INVALID_AUTHORIZATION_URL:TIKTOK_BUSINESS_AUTH_URL/,
+  assert.equal(
+    providerConfig("tiktok").authorizationUrl,
+    "https://www.tiktok.com/v2/auth/authorize",
   );
 
+  for (const invalid of [
+    "https://ads.tiktok.com/marketing_api/auth",
+    "https://www.tiktok.com/v2/auth/authorize/",
+    "https://tiktok.com/v2/auth/authorize",
+    "https://www.tiktok.com/v2/auth/another",
+    "https://www.tiktok.com/v2/auth/authorize?prefilled=1",
+    "https://www.tiktok.com/v2/auth/authorize#fragment",
+    "https://user:pass@www.tiktok.com/v2/auth/authorize",
+  ]) {
+    installTikTokEnvironment();
+    process.env.TIKTOK_BUSINESS_AUTH_URL = invalid;
+    assert.throws(
+      () => providerConfig("tiktok"),
+      /SOCIAL_CONFIG_INVALID_(?:AUTHORIZATION_URL|HTTPS):TIKTOK_BUSINESS_AUTH_URL/,
+    );
+  }
+});
+
+test("configuration rejects approved scope and App ID drift", () => {
   installTikTokEnvironment();
   process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = APPROVED_SCOPES.slice(1).join(",");
   assert.throws(

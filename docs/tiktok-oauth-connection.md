@@ -36,21 +36,22 @@ Activate the OAuth switch only after all of the following are true:
 5. Giorgi gives fresh action-time approval to connect the owned `@hooma.ge`
    account.
 
-The account-holder authorization request and token exchange stay on the same
-TikTok API for Business Accounts API stack. Authorization uses
-`https://ads.tiktok.com/marketing_api/auth` with `app_id`, the frozen scope
-list, the exact callback, and one-time state. Its success callback returns
-`auth_code`, which is exchanged only at `/tt_user/oauth2/token/`. The separate
-TikTok for Developers Login Kit `v2/auth/authorize` flow returns `code` and
-must never be mixed with the Accounts API token endpoint. The returned token
-scope set is checked again before any credential can be stored.
+The app portal is authoritative for this approved app's account-holder
+authorization request. It uses `https://www.tiktok.com/v2/auth/authorize` with
+`client_key`, `response_type=code`, the frozen scope list, the exact callback,
+and one-time state. The success callback names the credential `code`. Hooma
+passes that value unchanged to the Accounts API token endpoint in the JSON
+field named `auth_code`, as required by `/tt_user/oauth2/token/`. This is an
+explicit field-name mapping between the portal callback contract and the
+Accounts API token contract; it is not a token transformation. The returned
+token scope set is checked again before any credential can be stored.
 
 ## Production values
 
 Non-secret fixed values:
 
 ```dotenv
-TIKTOK_BUSINESS_AUTH_URL=https://ads.tiktok.com/marketing_api/auth
+TIKTOK_BUSINESS_AUTH_URL=https://www.tiktok.com/v2/auth/authorize
 TIKTOK_BUSINESS_CLIENT_ID=7675794584770248724
 TIKTOK_BUSINESS_REDIRECT_URI=https://hooma.ge/api/social/oauth/tiktok/callback/
 TIKTOK_BUSINESS_EXPECTED_USERNAME=hooma.ge
@@ -122,12 +123,13 @@ the stale activation.
 - **Redirect mismatch:** configuration accepts only the canonical Hooma origin
   and the exact trailing-slash callback. The same value is sent during both
   authorization and token exchange.
-- **Wrong authorization surface:** configuration accepts only the API for
-  Business account-holder URL `https://ads.tiktok.com/marketing_api/auth`.
-  The TikTok for Developers Login Kit endpoint is rejected because it returns
-  a different callback and token contract. Success callbacks accept one
-  bounded `auth_code` value and reject duplicated state or authorization-code
-  parameters.
+- **Wrong authorization surface:** configuration accepts only the exact
+  account-holder URL shown by the approved app portal:
+  `https://www.tiktok.com/v2/auth/authorize`. The request uses the frozen App
+  ID as `client_key` and requires `response_type=code`. Success callbacks
+  accept one bounded `code` value. Legacy `auth_code`, hybrid callbacks,
+  duplicated codes, and duplicated state are rejected before token exchange.
+  Explicit provider error parameters remain a denial.
 - **Permission drift:** human labels are never mapped to guessed scope strings.
   Returned machine identifiers must contain the frozen approval-derived set.
 - **Token disclosure:** token responses are never logged. Access and refresh
@@ -150,7 +152,7 @@ the stale activation.
 ## Verification
 
 Run `npm run test:social:tiktok` and a production build. Then verify that the
-admin settings page shows TikTok as unavailable while the OAuth switch is off,
+admin automations page shows TikTok as unavailable while the OAuth switch is off,
 without exposing any application identifiers or secrets.
 
 Before rollout, verify that production accepts all six Hobby-compatible daily
@@ -163,3 +165,4 @@ Official references:
 
 - [TikTok API for Business endpoint index](https://business-api.tiktok.com/gateway/docs/index?doc_id=1735713875563521&language=ENGLISH)
 - [Obtain a short-term access token](https://business-api.tiktok.com/gateway/docs/index?doc_id=1833997638479041&language=ENGLISH)
+- [Approved Hooma app detail](https://business-api.tiktok.com/portal/apps/7675794584770248724)
