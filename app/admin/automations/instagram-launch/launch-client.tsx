@@ -6,7 +6,6 @@ import { CheckCircle2, LoaderCircle, ShieldAlert, UploadCloud } from "lucide-rea
 import { createClient } from "@/lib/supabase/client";
 import {
   INSTAGRAM_NINE_DAY_CAMPAIGN_ITEMS,
-  type InstagramNineDayCampaignItem,
 } from "@/lib/social/campaigns/instagram-nine-day-2026-08-22";
 
 type ItemStatus = {

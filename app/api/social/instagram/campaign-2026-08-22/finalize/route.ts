@@ -154,12 +154,13 @@ export async function POST(request: Request) {
     ]);
 
     const selectedFields = "id,post_id,provider,account_id,product_id,product_code,product_url,scheduled_at,publish_not_after,state,publishing_allowed,approval_status,approval_fingerprint,content_fingerprint,video_object_path,video_sha256,cover_object_path,cover_sha256,caption,music_mode,music_receipt,rights_status,visual_claims_status,settings,idempotency_key";
-    let { data: existing, error: existingError } = await admin
+    const existingRead = await admin
       .from("social_publish_jobs")
       .select(selectedFields)
       .eq("post_id", item.postId)
       .maybeSingle();
-    if (existingError) throw new Error("SOCIAL_JOB_READ_FAILED");
+    if (existingRead.error) throw new Error("SOCIAL_JOB_READ_FAILED");
+    let existing = existingRead.data;
 
     if (!existing) {
       const insert = await admin.from("social_publish_jobs").insert({
