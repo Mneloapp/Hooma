@@ -140,7 +140,11 @@ function boundedString(value: unknown, maximum = 4_096) {
 
 function optionalCaption(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
-  return boundedString(value, 2_200);
+  return typeof value === "string"
+    && value.length <= 2_200
+    && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)
+    ? value
+    : null;
 }
 
 function safeDiagnostic(value: unknown, fallback: string) {
