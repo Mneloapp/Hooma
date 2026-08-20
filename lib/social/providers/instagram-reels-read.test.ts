@@ -236,6 +236,41 @@ test("owned-media lookup never reports clear when the page cap is reached", asyn
   }
 });
 
+test("owned-media lookup treats empty or null captions as safely non-matching", async () => {
+  for (const caption of ["", null]) {
+    enableReads();
+    const client = new InstagramReelsReadClient({
+      activation: activation(),
+      networkEnabled: true,
+      transport: async () => ({
+        status: 200,
+        body: {
+          data: [{
+            id: MEDIA_ID,
+            caption,
+            media_type: "VIDEO",
+            media_product_type: "REELS",
+            permalink: "https://www.instagram.com/reel/ABC_123/",
+            timestamp: "2026-08-15T20:30:00+0000",
+          }],
+        },
+      }),
+    });
+    try {
+      const result = await client.lookupOwnedReelDuplicate({
+        accountId: ACCOUNT_ID,
+        captionSha256: hash("expected caption"),
+        notBefore: "2026-08-15T18:00:00.000Z",
+        maxPages: 1,
+      }, TOKEN);
+      assert.equal(result.status, "CLEAR");
+      assert.equal(result.scannedCount, 1);
+    } finally {
+      clearFlags();
+    }
+  }
+});
+
 test("owned-media schema failures identify only the invalid field class", async () => {
   enableReads();
   const cases = [
