@@ -73,8 +73,8 @@ function requiredTikTokAuthorizationUrl() {
   const value = requiredHttps("TIKTOK_BUSINESS_AUTH_URL");
   const url = new URL(value);
   if (
-    url.origin !== "https://www.tiktok.com"
-    || url.pathname !== "/v2/auth/authorize"
+    url.origin !== "https://ads.tiktok.com"
+    || url.pathname !== "/marketing_api/auth"
     || url.search
     || url.hash
   ) {
