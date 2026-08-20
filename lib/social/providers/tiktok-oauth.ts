@@ -13,6 +13,12 @@ const TOKEN_URL = "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/
 const REFRESH_URL = "https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/refresh_token/";
 const IDENTITY_URL = "https://business-api.tiktok.com/open_api/v1.3/business/get/";
 const SCOPE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{2,120}$/;
+const CALLBACK_ERROR_PARAMETERS = [
+  "error",
+  "error_description",
+  "error_reason",
+  "error_code",
+] as const;
 
 export type TikTokOAuthToken = {
   accessToken: string;
@@ -29,6 +35,10 @@ export type TikTokOAuthIdentity = {
   username: string;
   displayName: string | null;
 };
+
+export type TikTokAuthorizationCallback =
+  | { kind: "authorized"; code: string }
+  | { kind: "denied" };
 
 function boundedString(value: unknown, maximum = 4_096) {
   return typeof value === "string"
@@ -80,6 +90,37 @@ export function parseTikTokReturnedScopes(value: unknown) {
     || entries.some((entry) => !SCOPE_IDENTIFIER_PATTERN.test(entry))
   ) return null;
   return [...new Set(entries)].sort();
+}
+
+/**
+ * The approved app portal issues the account-holder credential as `code`.
+ * Legacy API-for-Business authorization responses used `auth_code`; reject
+ * that surface explicitly so an in-flight legacy callback cannot cross into
+ * the portal-v2 exchange after a deployment.
+ */
+export function parseTikTokAuthorizationCallback(
+  searchParams: URLSearchParams,
+): TikTokAuthorizationCallback {
+  if (CALLBACK_ERROR_PARAMETERS.some((name) => searchParams.has(name))) {
+    return { kind: "denied" };
+  }
+  if (searchParams.has("auth_code")) {
+    throw new SocialProviderError({
+      provider: "tiktok",
+      stage: "authorization",
+      code: "LEGACY_AUTHORIZATION_RESPONSE",
+    });
+  }
+  const codes = searchParams.getAll("code");
+  const code = codes.length === 1 ? boundedString(codes[0]) : null;
+  if (!code) {
+    throw new SocialProviderError({
+      provider: "tiktok",
+      stage: "authorization",
+      code: "AUTHORIZATION_CODE_MISSING",
+    });
+  }
+  return { kind: "authorized", code };
 }
 
 function assertExactApprovedScopes(
@@ -175,7 +216,8 @@ export function buildTikTokAuthorizationUrl(state: string) {
   }
   const config = providerConfig("tiktok");
   const url = new URL(config.authorizationUrl);
-  url.searchParams.set("app_id", config.clientId);
+  url.searchParams.set("client_key", config.clientId);
+  url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", config.requiredScopes.join(","));
   url.searchParams.set("state", state);
   url.searchParams.set("redirect_uri", config.redirectUri);

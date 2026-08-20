@@ -28,7 +28,7 @@ function hash(value: string) {
 function installActivationEnvironment() {
   process.env.TIKTOK_BUSINESS_CLIENT_ID = TIKTOK_APPROVED_APP_ID;
   process.env.TIKTOK_BUSINESS_CLIENT_SECRET = "test-client-secret";
-  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://ads.tiktok.com/marketing_api/auth";
+  process.env.TIKTOK_BUSINESS_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize";
   process.env.TIKTOK_BUSINESS_REDIRECT_URI = "https://hooma.ge/api/social/oauth/tiktok/callback/";
   process.env.TIKTOK_BUSINESS_APPROVED_SCOPES = TIKTOK_APPROVED_ACCOUNT_SCOPES.join(",");
   process.env.TIKTOK_BUSINESS_EXPECTED_USERNAME = "hooma.ge";
