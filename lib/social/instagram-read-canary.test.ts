@@ -62,8 +62,38 @@ test("read canary returns only sanitized read-only evidence", async () => {
   assert.doesNotMatch(serialized, /sensitive-token/);
   assert.deepEqual(calls, [
     "quota:17841471234567890:sensitive-token",
-    "duplicate:17841471234567890:1:sensitive-token",
+    "duplicate:17841471234567890:5:sensitive-token",
   ]);
+});
+
+test("read canary fails closed when the real duplicate scan page cap is inconclusive", async () => {
+  await assert.rejects(
+    runInstagramReadCanary({
+      now: NOW,
+      connection: connection(),
+      client: {
+        connectionStatus: () => ({
+          provider: "INSTAGRAM_API_WITH_INSTAGRAM_LOGIN",
+          schemaFrozen: true,
+          networkEnabled: true,
+          expectedUsername: "hooma.ge",
+          mutationsImplemented: false,
+        }),
+        fetchContentPublishingLimit: async () => ({
+          status: "AVAILABLE",
+          usage: 0,
+          total: 25,
+          remaining: 25,
+          durationSeconds: 86_400,
+        }),
+        lookupOwnedReelDuplicate: async (input) => {
+          assert.equal(input.maxPages, 5);
+          return { status: "INCONCLUSIVE_PAGE_LIMIT", scannedCount: 250 };
+        },
+      },
+    }),
+    /INSTAGRAM_CANARY_DUPLICATE_CHECK_INCONCLUSIVE/,
+  );
 });
 
 test("read canary rejects an unsafe or mutation-capable client before network calls", async () => {

@@ -68,10 +68,13 @@ export async function runInstagramReadCanary(input: {
       accountId: input.connection.externalAccountId,
       captionSha256: CANARY_CAPTION_SHA256,
       notBefore: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000).toISOString(),
-      maxPages: 1,
+      maxPages: 5,
     },
     input.connection.accessToken,
   );
+  if (duplicate.status === "INCONCLUSIVE_PAGE_LIMIT") {
+    throw new Error("INSTAGRAM_CANARY_DUPLICATE_CHECK_INCONCLUSIVE");
+  }
 
   return {
     status: "PASS" as const,
