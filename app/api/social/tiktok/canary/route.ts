@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/supabase/server";
 import { TIKTOK_NINE_DAY_CAMPAIGN_ITEMS } from "@/lib/social/campaigns/tiktok-nine-day-2026-08-22";
 import { loadTikTokPublishingConnection } from "@/lib/social/connections";
-import { TikTokBusinessOrganicClient } from "@/lib/social/providers/tiktok-business-organic";
+import {
+  TikTokBusinessOrganicClient,
+  TikTokOrganicError,
+} from "@/lib/social/providers/tiktok-business-organic";
 import { tiktokOrganicActivation } from "@/lib/social/tiktok-activation";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +20,7 @@ function response(status: number, body: Record<string, unknown>) {
 }
 
 function safeError(error: unknown) {
+  if (error instanceof TikTokOrganicError) return error.code;
   const raw = error instanceof Error ? error.message.split(":", 1)[0] : "UNEXPECTED_FAILURE";
   return /^[A-Z0-9_]{3,80}$/.test(raw) ? raw : "UNEXPECTED_FAILURE";
 }
