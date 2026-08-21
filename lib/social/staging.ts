@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { socialMediaBaseUrl } from "./config";
-import type { InstagramPublishJob } from "./publish-job";
+import type { InstagramPublishJob, TikTokPublishJob } from "./publish-job";
 
 export const SOCIAL_STAGING_BUCKET = "social-publishing-staging";
 // Meta can fetch the Reel asynchronously after container creation. Keep the
@@ -24,7 +24,7 @@ type StorageAdmin = {
   };
 };
 
-export type VerifiedInstagramStagedMedia = {
+export type VerifiedSocialStagedMedia = {
   video: { signedUrl: string; sha256: string; sizeBytes: number };
   cover: { signedUrl: string; sha256: string; sizeBytes: number } | null;
   expiresAt: string;
@@ -76,7 +76,23 @@ export async function verifyAndSignInstagramStagedMedia(
   admin: StorageAdmin,
   job: InstagramPublishJob,
   now = new Date(),
-): Promise<VerifiedInstagramStagedMedia> {
+): Promise<VerifiedSocialStagedMedia> {
+  return verifyAndSignSocialStagedMedia(admin, job, now);
+}
+
+export async function verifyAndSignTikTokStagedMedia(
+  admin: StorageAdmin,
+  job: TikTokPublishJob,
+  now = new Date(),
+): Promise<VerifiedSocialStagedMedia> {
+  return verifyAndSignSocialStagedMedia(admin, job, now);
+}
+
+async function verifyAndSignSocialStagedMedia(
+  admin: StorageAdmin,
+  job: InstagramPublishJob | TikTokPublishJob,
+  now: Date,
+): Promise<VerifiedSocialStagedMedia> {
   const video = await verifyAndSign(admin, job.videoObjectPath, job.videoSha256, MAX_VIDEO_BYTES);
   const cover = job.coverObjectPath && job.coverSha256
     ? await verifyAndSign(admin, job.coverObjectPath, job.coverSha256, MAX_COVER_BYTES)

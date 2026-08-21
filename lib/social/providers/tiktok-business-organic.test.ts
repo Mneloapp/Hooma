@@ -103,6 +103,38 @@ function cmlReceipt() {
   return receipt;
 }
 
+function ownedMasterReceipt() {
+  return {
+    schemaVersion: 1,
+    receiptType: "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE",
+    immutable: true,
+    context: {
+      platform: "tiktok",
+      account: "@hooma.ge",
+      postId: POST_ID,
+      campaignId: "tiktok-nine-day-2026-08-22",
+    },
+    track: {
+      id: "hooma-original-playful-discovery-v1",
+      commercialUseAllowed: true,
+      trackSha256: hash("track"),
+      license: {
+        status: "VERIFIED",
+        commercialUseAllowed: true,
+        platforms: ["tiktok"],
+        receiptSha256: hash("license"),
+      },
+    },
+    output: { sha256: hash("video"), audioPcmSha256: hash("pcm") },
+    sourceReceipt: {
+      receiptType: "HOOMA_LICENSED_VOICE_MUSIC_MASTER_PROVENANCE",
+      receiptSha256: hash("source"),
+      provenanceSha256: hash("provenance"),
+      sourceVoiceSha256: hash("voice"),
+    },
+  };
+}
+
 function publishInput(overrides: Partial<TikTokOrganicPublishInput> = {}): TikTokOrganicPublishInput {
   return {
     accountId: ACCOUNT_ID,
@@ -631,5 +663,100 @@ test("unknown provider status fails closed", async () => {
     );
   } finally {
     clearNetworkAndPublishing();
+  }
+});
+
+test("licensed pre-mixed owned master publishes without replacing audio", async () => {
+  enableNetworkAndPublishing();
+  let observedBody: any = null;
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async (request) => {
+      observedBody = JSON.parse(request.body ?? "null") as Record<string, unknown>;
+      return { status: 200, body: { code: 0, request_id: "req-owned", data: { share_id: "share-owned" } } };
+    },
+  });
+  try {
+    const input = publishInput({
+      musicMode: "HOOMA_OWNED_MASTER",
+      musicReceipt: ownedMasterReceipt(),
+    });
+    const prepared = client.preparePublishVideo(input);
+    const result = await client.publishVideo(input, "sensitive-token");
+    assert.equal(result.providerRequestSha256, prepared.providerRequestSha256);
+    assert.equal(result.musicMode, "HOOMA_OWNED_MASTER");
+    assert.equal(result.cmlSelectionFingerprint, null);
+    const postInfo = observedBody?.post_info as Record<string, unknown>;
+    assert.equal("music_sound_info" in postInfo, false);
+    assert.equal(postInfo.is_ai_generated, true);
+    assert.equal(postInfo.is_brand_organic, true);
+  } finally {
+    clearNetworkAndPublishing();
+  }
+});
+
+test("owned-post duplicate lookup is bounded and hashes the exact caption", async () => {
+  installActivationEnvironment();
+  process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
+  let calls = 0;
+  const exactCaption = "exact approved caption";
+  const createTime = Math.floor(NOW.getTime() / 1_000);
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    now: () => NOW,
+    transport: async (request) => {
+      calls += 1;
+      assert.equal(request.operation, "duplicate_lookup");
+      assert.equal(request.method, "GET");
+      assert.deepEqual(JSON.parse(request.url.searchParams.get("fields") ?? "[]"), [
+        "item_id", "share_url", "caption", "create_time",
+      ]);
+      if (calls === 1) {
+        assert.equal(request.url.searchParams.has("cursor"), false);
+        return {
+          status: 200,
+          body: {
+            code: 0,
+            request_id: "req-page-1",
+            data: {
+              videos: [{ item_id: "7674252169872198931", caption: "different", create_time: createTime }],
+              cursor: createTime * 1_000 - 1,
+              has_more: true,
+            },
+          },
+        };
+      }
+      assert.equal(request.url.searchParams.has("cursor"), true);
+      return {
+        status: 200,
+        body: {
+          code: 0,
+          request_id: "req-page-2",
+          data: {
+            videos: [{ item_id: REMOTE_POST_ID, caption: exactCaption, create_time: createTime - 1 }],
+            cursor: 0,
+            has_more: false,
+          },
+        },
+      };
+    },
+  });
+  try {
+    const result = await client.lookupOwnedPostDuplicate({
+      accountId: ACCOUNT_ID,
+      captionSha256: hash(exactCaption),
+      notBefore: "2026-08-15T14:00:00.000Z",
+      maxPages: 2,
+    }, "sensitive-token");
+    assert.equal(result.status, "DUPLICATE");
+    assert.equal(result.duplicate?.postId, REMOTE_POST_ID);
+    assert.equal(result.scannedCount, 2);
+    assert.equal(calls, 2);
+  } finally {
+    delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
   }
 });
