@@ -186,13 +186,17 @@ export function parseTikTokTokenResponse(
 export function parseTikTokIdentityResponse(body: unknown, expectedAccountId: string) {
   const { data, requestId } = responseData(body, "identity");
   const config = providerConfig("tiktok");
-  const accountId = boundedString(data.business_id, 256);
+  const accountId = boundedString(expectedAccountId, 256);
+  const returnedAccountId = data.business_id === undefined || data.business_id === null
+    ? null
+    : boundedString(data.business_id, 256);
   const username = normalizedUsername(data.username);
   const displayName = data.display_name === undefined || data.display_name === null
     ? null
     : boundedString(data.display_name, 256);
   if (
-    accountId !== expectedAccountId
+    !accountId
+    || (data.business_id !== undefined && data.business_id !== null && returnedAccountId !== accountId)
     || username !== config.expectedUsername
     || (data.display_name !== undefined && data.display_name !== null && !displayName)
   ) {
@@ -297,7 +301,7 @@ export async function getTikTokOAuthIdentity(
   url.searchParams.set("business_id", expectedAccountId);
   url.searchParams.set(
     "fields",
-    JSON.stringify(["business_id", "username", "display_name"]),
+    JSON.stringify(["username", "display_name"]),
   );
   const body = await providerFetchJson("tiktok", "identity", url, {
     method: "GET",

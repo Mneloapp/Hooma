@@ -114,9 +114,10 @@ the stale activation.
 
 ## Threat review
 
-- **Wrong account:** identity lookup must return the token's exact `business_id`
-  and normalized username `hooma.ge`; any other account fails closed before
-  storage.
+- **Wrong account:** identity lookup passes the token response's exact `open_id`
+  as the required `business_id` query parameter and binds the returned normalized
+  username to `hooma.ge`. The endpoint's `fields` list requests only supported
+  response fields; any conflicting account ID or username fails closed before storage.
 - **State fixation or callback replay:** OAuth state is random, hashed in the
   database, bound to the owner and provider, mirrored in an HTTP-only secure
   cookie, expires quickly, and is consumed once.
