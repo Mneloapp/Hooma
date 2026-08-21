@@ -10,6 +10,7 @@ const worker = readFileSync(new URL("../lib/social/tiktok-publish-worker.ts", im
 const provider = readFileSync(new URL("../lib/social/providers/tiktok-business-organic.ts", import.meta.url), "utf8");
 const cron = readFileSync(new URL("../app/api/cron/social-publish/route.ts", import.meta.url), "utf8");
 const campaign = readFileSync(new URL("../lib/social/campaigns/tiktok-nine-day-2026-08-22.ts", import.meta.url), "utf8");
+const canary = readFileSync(new URL("../app/api/social/tiktok/canary/route.ts", import.meta.url), "utf8");
 
 test("TikTok lifecycle records immutable intent before the only publish dispatch", () => {
   assert.match(migration, /create table if not exists public\.social_tiktok_publish_lifecycles/);
@@ -57,4 +58,11 @@ test("provider refuses redirect-following and performs bounded owned-post duplic
   assert.match(provider, /url\.searchParams\.set\("max_count", "20"\)/);
   assert.match(provider, /status: "INCONCLUSIVE_PAGE_LIMIT"/);
   assert.match(provider, /sha256Text\(caption\) === input\.captionSha256/);
+});
+
+test("read-only canary exposes only the provider's sanitized diagnostic code", () => {
+  assert.match(canary, /error instanceof TikTokOrganicError/);
+  assert.match(canary, /return error\.code/);
+  assert.doesNotMatch(canary, /error\.message[^\n]*response/);
+  assert.doesNotMatch(canary, /accessToken[^\n]*response/);
 });
