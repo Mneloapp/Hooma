@@ -34,6 +34,10 @@ export type InstagramPublishJob = {
   providerPostId: string | null;
 };
 
+export type TikTokPublishJob = Omit<InstagramPublishJob, "state"> & {
+  state: "claimed" | "publishing";
+};
+
 function object(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -57,9 +61,13 @@ function safeObjectPath(value: string) {
     && !value.includes("\0");
 }
 
-export function parseInstagramPublishJob(value: unknown): InstagramPublishJob {
+function parseSocialPublishJob(
+  value: unknown,
+  provider: "instagram" | "tiktok",
+): InstagramPublishJob | TikTokPublishJob {
   const row = object(value);
-  if (!row || row.provider !== "instagram") throw new Error("INSTAGRAM_JOB_INVALID");
+  const errorCode = provider === "instagram" ? "INSTAGRAM_JOB_INVALID" : "TIKTOK_JOB_INVALID";
+  if (!row || row.provider !== provider) throw new Error(errorCode);
   const coverObjectPath = nullableText(row.cover_object_path);
   const coverSha256 = nullableText(row.cover_sha256);
   const job: InstagramPublishJob = {
@@ -96,7 +104,9 @@ export function parseInstagramPublishJob(value: unknown): InstagramPublishJob {
     !UUID.test(job.id)
     || !UUID.test(job.claimId)
     || !job.postId
-    || !/^[1-9]\d{0,255}$/.test(job.accountId)
+    || (provider === "instagram"
+      ? !/^[1-9]\d{0,255}$/.test(job.accountId)
+      : !/^[A-Za-z0-9._:~-]{1,256}$/.test(job.accountId))
     || !safeObjectPath(job.videoObjectPath)
     || !SHA256.test(job.videoSha256)
     || !SHA256.test(job.contentFingerprint)
@@ -113,14 +123,38 @@ export function parseInstagramPublishJob(value: unknown): InstagramPublishJob {
     || !Number.isFinite(Date.parse(job.claimExpiresAt))
     || !object(row.music_receipt)
     || !object(row.settings)
-  ) throw new Error("INSTAGRAM_JOB_INVALID");
+  ) throw new Error(errorCode);
   return job;
+}
+
+export function parseInstagramPublishJob(value: unknown): InstagramPublishJob {
+  return parseSocialPublishJob(value, "instagram") as InstagramPublishJob;
+}
+
+export function parseTikTokPublishJob(value: unknown): TikTokPublishJob {
+  return parseSocialPublishJob(value, "tiktok") as TikTokPublishJob;
 }
 
 export function instagramPublishGateFailures(
   job: InstagramPublishJob,
   expectedState: InstagramPublishJob["state"],
   now = new Date(),
+) {
+  return socialPublishGateFailures(job, expectedState, now);
+}
+
+export function tiktokPublishGateFailures(
+  job: TikTokPublishJob,
+  expectedState: TikTokPublishJob["state"],
+  now = new Date(),
+) {
+  return socialPublishGateFailures(job, expectedState, now);
+}
+
+function socialPublishGateFailures(
+  job: InstagramPublishJob | TikTokPublishJob,
+  expectedState: "claimed" | "publishing",
+  now: Date,
 ) {
   const failures: string[] = [];
   if (job.state !== expectedState) failures.push("STATE_MISMATCH");

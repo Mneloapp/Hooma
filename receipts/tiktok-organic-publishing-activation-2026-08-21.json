@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "receiptType": "TIKTOK_ORGANIC_PUBLISHING_ACTIVATION",
+  "immutable": true,
+  "reviewedAt": "2026-08-21T11:30:00+04:00",
+  "providerSchemaId": "tiktok-business-organic-v1.3-cml-owned-master-ai-brand-2026-08-21",
+  "provider": "tiktok",
+  "application": {
+    "appId": "7675794584770248724",
+    "name": "Hooma Organic Publisher",
+    "reviewStatus": "APPROVED"
+  },
+  "account": {
+    "username": "@hooma.ge",
+    "oauthStatus": "ACTIVE_VERIFIED",
+    "rawAccountIdStoredInReceipt": false
+  },
+  "permissions": [
+    "Account User",
+    "Get Account Media",
+    "Account Post Content"
+  ],
+  "scopes": [
+    "user.account.type",
+    "user.info.basic",
+    "user.info.profile",
+    "user.info.stats",
+    "user.info.username",
+    "user.insights",
+    "video.insights",
+    "video.list",
+    "video.publish",
+    "video.upload"
+  ],
+  "api": {
+    "version": "v1.3",
+    "origin": "https://business-api.tiktok.com",
+    "endpoints": [
+      "/open_api/v1.3/business/video/list/",
+      "/open_api/v1.3/business/video/publish/",
+      "/open_api/v1.3/business/publish/status/"
+    ],
+    "redirectPolicy": "ERROR",
+    "remoteDuplicateCheck": "BOUNDED_OWNED_POST_CAPTION_SHA256",
+    "ambiguousPublishReplay": "PROHIBITED"
+  },
+  "music": {
+    "silentPublishingAllowed": false,
+    "acceptedModes": [
+      "HOOMA_OWNED_MASTER",
+      "TIKTOK_CML"
+    ],
+    "ownedMasterRequirement": "IMMUTABLE_COMMERCIAL_LICENSE_AND_EXACT_OUTPUT_SHA256",
+    "cmlRequirement": "EXACT_VALID_SELECTION_RECEIPT"
+  },
+  "content": {
+    "shareToFacebook": false,
+    "adsOnly": false,
+    "uploadToDraft": false,
+    "promotionType": "YOUR_BRAND",
+    "aiGeneratedDisclosureRequired": true
+  },
+  "automation": {
+    "exactApprovalRequired": true,
+    "freshProductCheckRequired": true,
+    "freshMediaHashCheckRequired": true,
+    "crashSafeLifecycleRequired": true,
+    "analyticsSnapshotsHours": [
+      2,
+      24,
+      72
+    ],
+    "unavailableMetrics": "NULL"
+  },
+  "security": {
+    "containsAccessToken": false,
+    "containsRefreshToken": false,
+    "containsClientSecret": false,
+    "containsCookie": false,
+    "containsAuthorizationCode": false
+  }
+}

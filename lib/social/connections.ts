@@ -60,6 +60,17 @@ export type InstagramPublishingConnection = {
   tokenVersion: number;
 };
 
+export type TikTokPublishingConnection = {
+  provider: "tiktok";
+  externalAccountId: string;
+  username: "hooma.ge";
+  scopes: string[];
+  accessToken: string;
+  accessExpiresAt: string;
+  lastVerifiedAt: string;
+  tokenVersion: number;
+};
+
 function adminClient() {
   const admin = createAdminClient() as any;
   if (!admin) throw new Error("SOCIAL_DATABASE_UNAVAILABLE");
@@ -134,6 +145,66 @@ export async function loadInstagramPublishingConnection(
       "access_token",
     ),
     accessExpiresAt,
+    tokenVersion,
+  };
+}
+
+export async function loadTikTokPublishingConnection(
+  now = new Date(),
+): Promise<TikTokPublishingConnection> {
+  const admin = adminClient();
+  const { data, error } = await admin
+    .from("social_connections")
+    .select("provider,external_account_id,username,scopes,access_token_enc,access_expires_at,last_verified_at,token_version,status")
+    .eq("provider", "tiktok")
+    .eq("status", "active")
+    .limit(2);
+  if (error || !Array.isArray(data) || data.length !== 1) {
+    throw new Error("TIKTOK_CONNECTION_UNAVAILABLE");
+  }
+  const row = data[0] as Record<string, unknown>;
+  const externalAccountId = safeIdentifier(row.external_account_id);
+  const username = normalizedUsername(row.username);
+  const tokenEnvelope = envelope(row.access_token_enc);
+  const accessExpiresAt = safeIdentifier(row.access_expires_at);
+  const lastVerifiedAt = safeIdentifier(row.last_verified_at);
+  const tokenVersion = Number.isInteger(row.token_version) && Number(row.token_version) > 0
+    ? Number(row.token_version)
+    : null;
+  const configured = providerConfig("tiktok");
+  const scopes = Array.isArray(row.scopes)
+    ? row.scopes.filter((scope): scope is string => typeof scope === "string").sort()
+    : [];
+  const requiredScopes = [...configured.requiredScopes].sort();
+  if (
+    row.provider !== "tiktok"
+    || !externalAccountId
+    || username !== configured.expectedUsername
+    || username !== "hooma.ge"
+    || !tokenEnvelope
+    || !accessExpiresAt
+    || !lastVerifiedAt
+    || !tokenVersion
+    || Date.parse(accessExpiresAt) <= now.getTime() + 10 * 60 * 1_000
+    || Date.parse(lastVerifiedAt) > now.getTime() + 5 * 60 * 1_000
+    || scopes.length !== requiredScopes.length
+    || scopes.some((scope, index) => scope !== requiredScopes[index])
+  ) {
+    throw new Error("TIKTOK_CONNECTION_INVALID");
+  }
+  return {
+    provider: "tiktok",
+    externalAccountId,
+    username: "hooma.ge",
+    scopes,
+    accessToken: decryptSocialToken(
+      tokenEnvelope,
+      "tiktok",
+      externalAccountId,
+      "access_token",
+    ),
+    accessExpiresAt,
+    lastVerifiedAt,
     tokenVersion,
   };
 }

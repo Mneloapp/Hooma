@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "receiptType": "TIKTOK_OAUTH_CONNECTION",
+  "immutable": true,
+  "provider": "tiktok",
+  "application": {
+    "appId": "7675794584770248724",
+    "name": "Hooma Organic Publisher",
+    "reviewStatus": "APPROVED"
+  },
+  "account": {
+    "username": "@hooma.ge",
+    "status": "ACTIVE_VERIFIED",
+    "rawAccountIdStoredInReceipt": false
+  },
+  "connection": {
+    "connectedAt": "2026-08-21T10:57:00.308+04:00",
+    "lastVerifiedAt": "2026-08-21T10:57:00.308+04:00",
+    "accessExpiresAt": "2026-08-22T10:57:00.308+04:00",
+    "tokenStorage": "ENCRYPTED_REMOTE_DATABASE",
+    "tokenVersion": 1
+  },
+  "scopes": [
+    "user.account.type",
+    "user.info.basic",
+    "user.info.profile",
+    "user.info.stats",
+    "user.info.username",
+    "user.insights",
+    "video.insights",
+    "video.list",
+    "video.publish",
+    "video.upload"
+  ],
+  "publishing": {
+    "enabledAtReceiptTime": false,
+    "requiresSeparateActivationReceipt": true,
+    "requiresExactPostApproval": true
+  },
+  "security": {
+    "containsAccessToken": false,
+    "containsRefreshToken": false,
+    "containsClientSecret": false,
+    "containsCookie": false,
+    "containsAuthorizationCode": false
+  }
+}

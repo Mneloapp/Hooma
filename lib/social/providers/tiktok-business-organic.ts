@@ -23,7 +23,7 @@ const MIN_STAGING_TTL_MS = 30 * 60 * 1_000;
 const MIN_ACCESS_TOKEN_TTL_MS = 10 * 60 * 1_000;
 
 export const TIKTOK_ORGANIC_SCHEMA_ID =
-  "tiktok-business-organic-v1.3-cml-ai-brand-2026-08-15" as const;
+  "tiktok-business-organic-v1.3-cml-owned-master-ai-brand-2026-08-21" as const;
 
 const REQUIRED_PERMISSIONS = [
   "Account User",
@@ -48,12 +48,20 @@ const METRIC_FIELDS = [
   "website_clicks",
 ] as const;
 
+const DUPLICATE_FIELDS = ["item_id", "share_url", "caption", "create_time"] as const;
+
 const SHA256 = /^[a-f0-9]{64}$/;
 const SAFE_ID = /^[A-Za-z0-9._:~-]{1,256}$/;
 const TIKTOK_POST_ID = /^[1-9]\d{7,39}$/;
 
 type JsonObject = Record<string, unknown>;
-type TikTokOperation = "publish" | "publish_status" | "metrics" | "music" | "activation";
+type TikTokOperation =
+  | "publish"
+  | "publish_status"
+  | "metrics"
+  | "duplicate_lookup"
+  | "music"
+  | "activation";
 
 export class TikTokOrganicError extends Error {
   readonly code: string;
@@ -138,6 +146,36 @@ export type TikTokCmlSelectionReceipt = {
   selectionFingerprint: string;
 };
 
+export type TikTokOwnedMasterReceipt = {
+  schemaVersion: 1;
+  receiptType: "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE";
+  immutable: true;
+  context: {
+    platform: "tiktok";
+    account: "@hooma.ge";
+    postId: string;
+    campaignId: string;
+  };
+  track: {
+    id: string;
+    commercialUseAllowed: true;
+    trackSha256: string;
+    license: {
+      status: "VERIFIED";
+      commercialUseAllowed: true;
+      platforms: ["tiktok"];
+      receiptSha256: string;
+    };
+  };
+  output: { sha256: string; audioPcmSha256: string };
+  sourceReceipt: {
+    receiptType: "HOOMA_LICENSED_VOICE_MUSIC_MASTER_PROVENANCE";
+    receiptSha256: string;
+    provenanceSha256: string;
+    sourceVoiceSha256: string;
+  };
+};
+
 export type TikTokPublishSettings = {
   commentsEnabled: true;
   duetEnabled: boolean;
@@ -169,7 +207,7 @@ export type TikTokOrganicPublishInput = {
   caption: string;
   captionSha256: string;
   idempotencyKey: string;
-  musicMode: "TIKTOK_CML";
+  musicMode: "TIKTOK_CML" | "HOOMA_OWNED_MASTER";
   musicReceipt: unknown;
   settings: TikTokPublishSettings;
   media: {
@@ -545,6 +583,57 @@ export function validateTikTokCmlSelectionReceipt(
   return receipt as unknown as TikTokCmlSelectionReceipt;
 }
 
+export function validateTikTokOwnedMasterReceipt(
+  value: unknown,
+  expected: { postId: string; videoSha256: string },
+): TikTokOwnedMasterReceipt {
+  const receipt = record(value);
+  const context = record(receipt?.context);
+  const track = record(receipt?.track);
+  const license = record(track?.license);
+  const output = record(receipt?.output);
+  const sourceReceipt = record(receipt?.sourceReceipt);
+  const platforms = Array.isArray(license?.platforms) ? license.platforms : [];
+  if (
+    !hasExactKeys(receipt, [
+      "schemaVersion", "receiptType", "immutable", "context", "track", "output", "sourceReceipt",
+    ])
+    || !hasExactKeys(context, ["platform", "account", "postId", "campaignId"])
+    || !hasExactKeys(track, ["id", "commercialUseAllowed", "trackSha256", "license"])
+    || !hasExactKeys(license, ["status", "commercialUseAllowed", "platforms", "receiptSha256"])
+    || !hasExactKeys(output, ["sha256", "audioPcmSha256"])
+    || !hasExactKeys(sourceReceipt, [
+      "receiptType", "receiptSha256", "provenanceSha256", "sourceVoiceSha256",
+    ])
+    || receipt?.schemaVersion !== 1
+    || receipt.receiptType !== "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE"
+    || receipt.immutable !== true
+    || context?.platform !== "tiktok"
+    || context.account !== "@hooma.ge"
+    || context.postId !== expected.postId
+    || !safeId(context.campaignId, 160)
+    || track?.commercialUseAllowed !== true
+    || !safeId(track.id, 160)
+    || !SHA256.test(String(track.trackSha256 ?? ""))
+    || license?.status !== "VERIFIED"
+    || license.commercialUseAllowed !== true
+    || platforms.length !== 1
+    || platforms[0] !== "tiktok"
+    || !SHA256.test(String(license.receiptSha256 ?? ""))
+    || output?.sha256 !== expected.videoSha256
+    || !SHA256.test(String(output.audioPcmSha256 ?? ""))
+    || sourceReceipt?.receiptType !== "HOOMA_LICENSED_VOICE_MUSIC_MASTER_PROVENANCE"
+    || !SHA256.test(String(sourceReceipt.receiptSha256 ?? ""))
+    || !SHA256.test(String(sourceReceipt.provenanceSha256 ?? ""))
+    || !SHA256.test(String(sourceReceipt.sourceVoiceSha256 ?? ""))
+    || !safeId(expected.postId, 160)
+    || !SHA256.test(expected.videoSha256)
+  ) {
+    throw new TikTokOrganicError({ operation: "music", code: "OWNED_MASTER_RECEIPT_INVALID" });
+  }
+  return receipt as unknown as TikTokOwnedMasterReceipt;
+}
+
 async function defaultTransport(request: TikTokTransportRequest) {
   let response: Response;
   try {
@@ -554,6 +643,7 @@ async function defaultTransport(request: TikTokTransportRequest) {
       body: request.body,
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
+      redirect: "error",
     });
   } catch {
     throw new TikTokOrganicError({
@@ -748,7 +838,7 @@ export class TikTokBusinessOrganicClient {
     }
   }
 
-  async publishVideo(input: TikTokOrganicPublishInput, accessToken: string) {
+  private preparePublishRequest(input: TikTokOrganicPublishInput) {
     const activation = this.publishReady();
     const now = this.now();
     const publishRecord = record(input);
@@ -815,7 +905,7 @@ export class TikTokBusinessOrganicClient {
       || !boundedCaption(input.caption)
       || input.captionSha256 !== sha256Text(input.caption)
       || !boundedString(input.idempotencyKey, 240)
-      || input.musicMode !== "TIKTOK_CML"
+      || !new Set(["TIKTOK_CML", "HOOMA_OWNED_MASTER"]).has(input.musicMode)
       || canonicalIsoTimestamp(input.scheduledAt) === null
       || canonicalIsoTimestamp(input.publishNotAfter) === null
       || canonicalIsoTimestamp(input.scheduledAt)! > now.getTime()
@@ -865,16 +955,6 @@ export class TikTokBusinessOrganicClient {
       throw new TikTokOrganicError({ operation: "publish", code: "STAGING_GATE_MISMATCH" });
     }
 
-    const music = validateTikTokCmlSelectionReceipt(input.musicReceipt, {
-      accountId: input.accountId,
-      postId: input.postId,
-      contentFingerprint: input.contentFingerprint,
-      approvalFingerprint: input.approvalFingerprint,
-      videoSha256: input.videoSha256,
-      captionSha256: input.captionSha256,
-      region: activation.cmlRegion,
-    }, now);
-
     const postInfo: JsonObject = {
       caption: input.caption,
       is_brand_organic: true,
@@ -885,12 +965,35 @@ export class TikTokBusinessOrganicClient {
       is_ai_generated: true,
       upload_to_draft: false,
       is_ads_only: false,
-      music_sound_info: {
+    };
+    let cmlSelectionFingerprint: string | null = null;
+    let musicReceiptSha256: string;
+    if (input.musicMode === "TIKTOK_CML") {
+      const music = validateTikTokCmlSelectionReceipt(input.musicReceipt, {
+        accountId: input.accountId,
+        postId: input.postId,
+        contentFingerprint: input.contentFingerprint,
+        approvalFingerprint: input.approvalFingerprint,
+        videoSha256: input.videoSha256,
+        captionSha256: input.captionSha256,
+        region: activation.cmlRegion,
+      }, now);
+      cmlSelectionFingerprint = music.selectionFingerprint;
+      musicReceiptSha256 = sha256Json(music);
+      postInfo.music_sound_info = {
         music_sound_id: music.track.musicSoundId,
         music_sound_volume: music.mix.musicSoundVolume,
         video_original_sound_volume: music.mix.videoOriginalSoundVolume,
-      },
-    };
+      };
+    } else {
+      const music = validateTikTokOwnedMasterReceipt(input.musicReceipt, {
+        postId: input.postId,
+        videoSha256: input.videoSha256,
+      });
+      musicReceiptSha256 = sha256Json(music);
+      // The exact licensed music and voice are already mixed into the immutable
+      // master. Omitting music_sound_info prevents TikTok from replacing it.
+    }
     if (input.settings.thumbnailOffsetMs !== undefined) {
       postInfo.thumbnail_offset = input.settings.thumbnailOffsetMs;
     }
@@ -899,13 +1002,54 @@ export class TikTokBusinessOrganicClient {
       video_url: videoUrl.toString(),
       post_info: postInfo,
     };
+    const requestFingerprint = sha256Json({
+      schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
+      accountId: input.accountId,
+      postId: input.postId,
+      contentFingerprint: input.contentFingerprint,
+      videoSha256: input.videoSha256,
+      captionSha256: input.captionSha256,
+      videoHost: videoUrl.hostname.toLowerCase(),
+      idempotencyKey: input.idempotencyKey,
+      musicMode: input.musicMode,
+      musicReceiptSha256,
+      settings: input.settings,
+    });
+    return {
+      activation,
+      now,
+      body,
+      requestFingerprint,
+      musicReceiptSha256,
+      cmlSelectionFingerprint,
+    };
+  }
+
+  preparePublishVideo(input: TikTokOrganicPublishInput) {
+    const prepared = this.preparePublishRequest(input);
+    return {
+      provider: "tiktok" as const,
+      operation: "publish" as const,
+      schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
+      accountId: input.accountId,
+      postId: input.postId,
+      contentFingerprint: input.contentFingerprint,
+      providerRequestSha256: prepared.requestFingerprint,
+      musicMode: input.musicMode,
+      musicReceiptSha256: prepared.musicReceiptSha256,
+      cmlSelectionFingerprint: prepared.cmlSelectionFingerprint,
+    };
+  }
+
+  async publishVideo(input: TikTokOrganicPublishInput, accessToken: string) {
+    const prepared = this.preparePublishRequest(input);
     const url = new URL(PUBLISH_PATH, API_ORIGIN);
     const result = await this.send({
       operation: "publish",
       url,
       method: "POST",
       headers: accessTokenHeader(accessToken, "publish"),
-      body: JSON.stringify(body),
+      body: JSON.stringify(prepared.body),
     });
     const response = providerResponse("publish", result.status, result.body);
     const shareId = safeId(response.data.share_id);
@@ -916,18 +1060,6 @@ export class TikTokBusinessOrganicClient {
         requestId: response.requestId,
       });
     }
-    const requestFingerprint = sha256Json({
-      schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
-      accountId: input.accountId,
-      postId: input.postId,
-      contentFingerprint: input.contentFingerprint,
-      videoSha256: input.videoSha256,
-      captionSha256: input.captionSha256,
-      videoHost: videoUrl.hostname.toLowerCase(),
-      idempotencyKey: input.idempotencyKey,
-      musicSelectionFingerprint: music.selectionFingerprint,
-      settings: input.settings,
-    });
     return {
       provider: "tiktok" as const,
       operation: "publish" as const,
@@ -940,14 +1072,16 @@ export class TikTokBusinessOrganicClient {
       providerPublishId: shareId,
       providerPostId: null,
       providerUrl: null,
-      providerRequestSha256: requestFingerprint,
+      providerRequestSha256: prepared.requestFingerprint,
       providerResponseSha256: sha256Json({
         code: response.response.code,
         requestId: response.requestId,
         shareId,
       }),
-      cmlSelectionFingerprint: music.selectionFingerprint,
-      acceptedAt: now.toISOString(),
+      musicMode: input.musicMode,
+      musicReceiptSha256: prepared.musicReceiptSha256,
+      cmlSelectionFingerprint: prepared.cmlSelectionFingerprint,
+      acceptedAt: prepared.now.toISOString(),
     };
   }
 
@@ -1070,6 +1204,135 @@ export class TikTokBusinessOrganicClient {
       code: "UNKNOWN_PUBLISH_STATUS",
       requestId: response.requestId,
     });
+  }
+
+  async lookupOwnedPostDuplicate(
+    input: {
+      accountId: string;
+      captionSha256: string;
+      notBefore: string;
+      maxPages: number;
+    },
+    accessToken: string,
+  ) {
+    const activation = this.ready("duplicate_lookup");
+    const parsedInput = record(input);
+    const notBefore = canonicalIsoTimestamp(input.notBefore);
+    if (
+      !hasExactKeys(parsedInput, ["accountId", "captionSha256", "notBefore", "maxPages"])
+      || input.accountId !== activation.expectedAccountId
+      || !SHA256.test(input.captionSha256)
+      || notBefore === null
+      || !Number.isInteger(input.maxPages)
+      || input.maxPages < 1
+      || input.maxPages > 5
+    ) {
+      throw new TikTokOrganicError({
+        operation: "duplicate_lookup",
+        code: "DUPLICATE_LOOKUP_INPUT_INVALID",
+      });
+    }
+    let cursor: number | null = null;
+    let scannedCount = 0;
+    const seenCursors = new Set<number>();
+    for (let page = 0; page < input.maxPages; page += 1) {
+      const url = new URL(VIDEO_LIST_PATH, API_ORIGIN);
+      url.searchParams.set("business_id", input.accountId);
+      url.searchParams.set("fields", JSON.stringify(DUPLICATE_FIELDS));
+      url.searchParams.set("max_count", "20");
+      if (cursor !== null) url.searchParams.set("cursor", String(cursor));
+      const result = await this.send({
+        operation: "duplicate_lookup",
+        url,
+        method: "GET",
+        headers: accessTokenHeader(accessToken, "duplicate_lookup"),
+      });
+      const response = providerResponse("duplicate_lookup", result.status, result.body);
+      const videos = Array.isArray(response.data.videos) ? response.data.videos : null;
+      if (!videos || typeof response.data.has_more !== "boolean") {
+        throw new TikTokOrganicError({
+          operation: "duplicate_lookup",
+          code: "DUPLICATE_LOOKUP_RESPONSE_INVALID",
+          requestId: response.requestId,
+        });
+      }
+      let reachedOlderPost = false;
+      for (const value of videos) {
+        const video = record(value);
+        const postId = safeId(video?.item_id);
+        const caption = typeof video?.caption === "string"
+          && video.caption.length <= 2_200
+          && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(video.caption)
+          ? video.caption
+          : null;
+        const createTime = Number(video?.create_time);
+        if (
+          !postId
+          || !TIKTOK_POST_ID.test(postId)
+          || caption === null
+          || !Number.isSafeInteger(createTime)
+          || createTime <= 0
+        ) {
+          throw new TikTokOrganicError({
+            operation: "duplicate_lookup",
+            code: "DUPLICATE_LOOKUP_RESPONSE_INVALID",
+            requestId: response.requestId,
+          });
+        }
+        if (createTime * 1_000 < notBefore) {
+          reachedOlderPost = true;
+          break;
+        }
+        scannedCount += 1;
+        if (sha256Text(caption) === input.captionSha256) {
+          return {
+            provider: "tiktok" as const,
+            operation: "duplicate_lookup" as const,
+            status: "DUPLICATE" as const,
+            accountId: input.accountId,
+            scannedCount,
+            duplicate: {
+              postId,
+              providerUrl: canonicalPostUrl(activation.expectedUsername, postId),
+            },
+            providerRequestId: response.requestId,
+            collectedAt: this.now().toISOString(),
+          };
+        }
+      }
+      if (reachedOlderPost || response.data.has_more === false) {
+        return {
+          provider: "tiktok" as const,
+          operation: "duplicate_lookup" as const,
+          status: "CLEAR" as const,
+          accountId: input.accountId,
+          scannedCount,
+          duplicate: null,
+          providerRequestId: response.requestId,
+          collectedAt: this.now().toISOString(),
+        };
+      }
+      const nextCursor = Number(response.data.cursor);
+      if (!Number.isSafeInteger(nextCursor) || nextCursor <= 0 || seenCursors.has(nextCursor)) {
+        throw new TikTokOrganicError({
+          operation: "duplicate_lookup",
+          code: "DUPLICATE_LOOKUP_CURSOR_INVALID",
+          requestId: response.requestId,
+        });
+      }
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    }
+    return {
+      provider: "tiktok" as const,
+      operation: "duplicate_lookup" as const,
+      status: "INCONCLUSIVE_PAGE_LIMIT" as const,
+      accountId: input.accountId,
+      scannedCount,
+      duplicate: null,
+      providerRequestId: null,
+      collectedAt: this.now().toISOString(),
+    };
   }
 
   async fetchOwnedPostMetrics(
