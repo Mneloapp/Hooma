@@ -26,6 +26,8 @@ test("TikTok OAuth stays on the approved portal-v2 authorization contract", asyn
   assert.match(provider, /url\.searchParams\.set\("redirect_uri", config\.redirectUri\)/);
   assert.doesNotMatch(provider, /url\.searchParams\.set\("app_id"/);
   assert.match(provider, /auth_code: authCode/);
+  assert.match(provider, /JSON\.stringify\(\["username", "display_name"\]\)/);
+  assert.doesNotMatch(provider, /JSON\.stringify\(\["business_id",/);
 
   assert.match(callback, /parseTikTokAuthorizationCallback\(url\.searchParams\)/);
   assert.match(callback, /exchangeTikTokAuthorizationCode\(callback\.code\)/);

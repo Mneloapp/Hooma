@@ -496,7 +496,6 @@ test("identity parsing and lookup bind the connection to @hooma.ge", async () =>
     code: 0,
     request_id: "identity-request-id",
     data: {
-      business_id: "account-open-id",
       username: "@Hooma.Ge",
       display_name: "Hooma",
     },
@@ -526,6 +525,10 @@ test("identity parsing and lookup bind the connection to @hooma.ge", async () =>
     await getTikTokOAuthIdentity("identity-access-token", "account-open-id");
     assert.equal(observedUrls[0]?.pathname, "/open_api/v1.3/business/get/");
     assert.equal(observedUrls[0]?.searchParams.get("business_id"), "account-open-id");
+    assert.equal(
+      observedUrls[0]?.searchParams.get("fields"),
+      JSON.stringify(["username", "display_name"]),
+    );
     assert.equal(observedAccessTokens[0], "identity-access-token");
   } finally {
     globalThis.fetch = originalFetch;
