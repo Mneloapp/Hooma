@@ -17,6 +17,7 @@ import {
   SocialProviderError,
   type SocialOAuthAuditDiagnosticInput,
 } from "./provider-client";
+import { canonicalSocialConnectionTimestamp } from "./social-connection-timestamp";
 
 const TIKTOK_REFRESH_MARGIN_SECONDS = 6 * 60 * 60;
 const INSTAGRAM_REFRESH_AFTER_SECONDS = 45 * 24 * 60 * 60;
@@ -166,8 +167,8 @@ export async function loadTikTokPublishingConnection(
   const externalAccountId = safeIdentifier(row.external_account_id);
   const username = normalizedUsername(row.username);
   const tokenEnvelope = envelope(row.access_token_enc);
-  const accessExpiresAt = safeIdentifier(row.access_expires_at);
-  const lastVerifiedAt = safeIdentifier(row.last_verified_at);
+  const accessExpiresAt = canonicalSocialConnectionTimestamp(row.access_expires_at);
+  const lastVerifiedAt = canonicalSocialConnectionTimestamp(row.last_verified_at);
   const tokenVersion = Number.isInteger(row.token_version) && Number(row.token_version) > 0
     ? Number(row.token_version)
     : null;
