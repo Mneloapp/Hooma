@@ -198,6 +198,10 @@ function sha256Text(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+export function canonicalInstagramCaption(value: string) {
+  return value.replace(/\r\n?/g, "\n").trimEnd();
+}
+
 function parseActivation(value: unknown): InstagramReelsReadActivation | null {
   const activation = record(value);
   const accountId = instagramId(activation?.expectedAccountId);
@@ -658,7 +662,7 @@ export class InstagramReelsReadClient {
           && item.media_product_type === "REELS"
           && caption
           && timestamp >= notBefore
-          && sha256Text(caption) === input.captionSha256
+          && sha256Text(canonicalInstagramCaption(caption)) === input.captionSha256
         ) {
           return {
             status: "DUPLICATE" as const,

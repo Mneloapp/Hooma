@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
+  canonicalInstagramCaption,
   InstagramReelsReadClient,
   type InstagramReadTransportRequest,
   type InstagramReelsReadActivation,
@@ -197,6 +198,39 @@ test("owned-media lookup returns an exact-caption Reel duplicate without leaking
     });
     assert.equal(JSON.stringify(result).includes(caption), false);
     assert.equal(JSON.stringify(result).includes(TOKEN), false);
+  } finally {
+    clearFlags();
+  }
+});
+
+test("owned-media lookup tolerates Meta trailing-whitespace normalization", async () => {
+  enableReads();
+  const submittedCaption = "სამაჯურები მოწესრიგებულად ✨\n\n#Hooma\n";
+  const providerCaption = "სამაჯურები მოწესრიგებულად ✨\n\n#Hooma";
+  const client = new InstagramReelsReadClient({
+    activation: activation(),
+    networkEnabled: true,
+    transport: async () => ({
+      status: 200,
+      body: {
+        data: [{
+          id: MEDIA_ID,
+          caption: providerCaption,
+          media_type: "VIDEO",
+          media_product_type: "REELS",
+          permalink: "https://www.instagram.com/reel/ABC_123/",
+          timestamp: "2026-08-15T20:30:00+0000",
+        }],
+      },
+    }),
+  });
+  try {
+    const result = await client.lookupOwnedReelDuplicate({
+      accountId: ACCOUNT_ID,
+      captionSha256: hash(canonicalInstagramCaption(submittedCaption)),
+      notBefore: "2026-08-15T18:00:00.000Z",
+    }, TOKEN);
+    assert.equal(result.status, "DUPLICATE");
   } finally {
     clearFlags();
   }
