@@ -6,6 +6,7 @@ import { CartProvider } from "@/components/CartContext";
 import { CartDrawer } from "@/components/CartDrawer";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { HoomaAssistant } from "@/components/assistant/HoomaAssistant";
+import { WebAnalytics } from "@/components/WebAnalytics";
 import { DEFAULT_DESCRIPTION, DEFAULT_SOCIAL_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Footer />
             <CartDrawer />
             <HoomaAssistant />
+            <WebAnalytics />
           </CartProvider>
         </LanguageProvider>
       </body>

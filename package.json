@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:seo": "node scripts/seo-regression.mjs",
     "test:structured-data": "node --experimental-strip-types --test tools/product-structured-data-rules.test.mjs",
+    "test:analytics": "node --experimental-strip-types --test tools/web-analytics-rules.test.mjs",
     "test:sitemap": "node --experimental-strip-types --test tools/sitemap-catalog-rules.test.mjs",
     "test:auth": "node --test tools/auth-confirmation-rules.test.mjs tools/account-settings-rules.test.mjs",
     "test:assistant": "node --experimental-strip-types --test tools/storefront-assistant-rules.test.mjs",
@@ -29,6 +30,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
+    "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "next": "15.5.21",
