@@ -93,3 +93,7 @@ test("blocked terminal jobs never inflate the active queue or show a green no-bl
   assert.match(page, /blocked_remote_uncertain: "დისტანციური შედეგი ხელით შესამოწმებელია"/);
   assert.doesNotMatch(page, /displayedTerminalStates/);
 });
+
+test("due-time duplicate preflight is not reported as a waiting queue blocker", () => {
+  assert.doesNotMatch(loader, /blockers\.push\("დისტანციური დუბლიკატი ჯერ არ შემოწმებულა"\)/);
+});
