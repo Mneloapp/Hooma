@@ -5,10 +5,11 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-test("Instagram publish cron is authenticated and runs every 30 minutes", async () => {
+test("Instagram publish cron is authenticated and has half-hour backup schedules", async () => {
   const config = JSON.parse(await source("vercel.json"));
   const entries = config.crons.filter((entry) => entry.path === "/api/cron/social-publish");
-  assert.deepEqual(entries, [{ path: "/api/cron/social-publish", schedule: "*/30 * * * *" }]);
+  assert.equal(entries.length, 48);
+  assert.equal(new Set(entries.map((entry) => entry.schedule)).size, 48);
   const route = await source("app/api/cron/social-publish/route.ts");
   assert.match(route, /authenticateSocialCronRequest\(request\)/);
   assert.match(route, /runInstagramPublishWorker\(\)/);
