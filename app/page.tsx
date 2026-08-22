@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { JsonLd } from "@/components/JsonLd";
 import { HomeStorefrontClient } from "@/components/home/HomeStorefrontClient";
 import { getDailyDeals } from "@/lib/daily-deals";
+import { selectRandomCategoryProducts } from "@/lib/homepage-product-selection";
 import { applyProductCardDeal } from "@/lib/product-card";
 import type { ProductCardData } from "@/lib/product-card";
 import { getStorefrontHomeCards, getStorefrontProductCardsByIds } from "@/lib/storefront-catalog";
@@ -10,6 +11,7 @@ import { absoluteUrl, DEFAULT_DESCRIPTION, DEFAULT_SOCIAL_IMAGE, SITE_NAME } fro
 export const dynamic = "force-dynamic";
 
 const HOME_CATEGORY_PRODUCTS = 6;
+const HOME_CATEGORY_CANDIDATES = 24;
 const HOME_DAILY_DEALS = 6;
 
 export const metadata: Metadata = {
@@ -35,15 +37,16 @@ export const metadata: Metadata = {
 
 export default async function Home() {
   const [homeCards, dailyDeals] = await Promise.all([
-    getStorefrontHomeCards(HOME_CATEGORY_PRODUCTS),
+    getStorefrontHomeCards(HOME_CATEGORY_CANDIDATES),
     getDailyDeals(),
   ]);
   const dailyDealByProductId = new Map(dailyDeals.deals.map((deal) => [deal.productId, deal]));
   const dailyDealCards = await getStorefrontProductCardsByIds(dailyDeals.deals.slice(0, HOME_DAILY_DEALS).map((deal) => deal.productId));
   const dailyDealProducts = dailyDealCards.map((product) => applyProductCardDeal(product, dailyDealByProductId.get(product.id)));
   const applyDeals = (products: ProductCardData[]) => products.map((product) => applyProductCardDeal(product, dailyDealByProductId.get(product.id)));
+  const selectedCategoryProducts = selectRandomCategoryProducts(homeCards.categoryProducts, HOME_CATEGORY_PRODUCTS);
   const categoryProducts = Object.fromEntries(
-    Object.entries(homeCards.categoryProducts).map(([slug, products]) => [slug, applyDeals(products)]),
+    Object.entries(selectedCategoryProducts).map(([slug, products]) => [slug, applyDeals(products)]),
   );
 
   const storeJsonLd = {

@@ -262,7 +262,7 @@ async function loadStorefrontHomeCards(perSection = 12): Promise<StorefrontHomeC
 }
 
 export async function getStorefrontHomeCards(perSection = 12): Promise<StorefrontHomeCards> {
-  const normalizedCount = Math.min(12, Math.max(1, Math.trunc(perSection)));
+  const normalizedCount = Math.min(24, Math.max(1, Math.trunc(perSection)));
   return unstable_cache(
     () => loadStorefrontHomeCards(normalizedCount),
     ["storefront-home-cards-v1", String(normalizedCount)],

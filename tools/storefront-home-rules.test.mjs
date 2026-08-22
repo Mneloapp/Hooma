@@ -73,7 +73,8 @@ test("homepage moves the printer-technology category to the final category posit
   assert.match(homeClient, /catalogCategories\.filter\(\(category\) => category\.slug === "3d-printer"\)/);
   assert.match(homeClient, /homepageCategories\.map\(\(category\)/);
   assert.match(homePage, /const HOME_CATEGORY_PRODUCTS = 6/);
-  assert.match(homePage, /getStorefrontHomeCards\(HOME_CATEGORY_PRODUCTS\)/);
+  assert.match(homePage, /const HOME_CATEGORY_CANDIDATES = 24/);
+  assert.match(homePage, /getStorefrontHomeCards\(HOME_CATEGORY_CANDIDATES\)/);
 });
 
 test("homepage opens with a scrollable poster for every catalog category", () => {
