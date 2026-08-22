@@ -297,7 +297,8 @@ function jobBlockers(
   if (!row.publishing_allowed) blockers.push("ამ ჩანაწერის გამოქვეყნება ჩაკეტილია");
   if (row.rights_status !== "CLEARED") blockers.push("გამოყენების უფლებები დასადასტურებელია");
   if (row.visual_claims_status !== "CLEARED") blockers.push("ვიზუალური შესაბამისობა დასადასტურებელია");
-  if (row.remote_duplicate_status !== "CLEAR") blockers.push("დისტანციური დუბლიკატი ჯერ არ შემოწმებულა");
+  // Remote duplicate lookup is an atomic due-time preflight, not a queue
+  // blocker while an approved job is waiting for its scheduled window.
   if (!connections.get(row.provider)?.connected) blockers.push("პლატფორმის OAuth კავშირი მზად არ არის");
   if (!switches.providers[row.provider].publishing) blockers.push("პლატფორმის kill-switch გამორთულია");
   if (!switches.stagingConfigured || (!stagedStates.has(row.state) && Date.parse(row.scheduled_at) <= now)) blockers.push("მედია staging-ზე მზად არ არის");

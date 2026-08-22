@@ -61,6 +61,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const INSTAGRAM_ID = /^[1-9]\d{0,255}$/;
 const SAFE_ERROR = /^[A-Z0-9_]{3,80}$/;
 const SENSITIVE_KEY = /access[_-]?token|refresh[_-]?token|authorization|cookie|client[_-]?secret|password|otp|verification[_-]?code/i;
+const UNKNOWN_OUTCOME_RECONCILIATION_GRACE_MS = 15 * 60 * 1_000;
 
 function object(value: unknown): JsonObject | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -266,6 +267,7 @@ async function reconcileMediaPublish(
   job: InstagramPublishJob,
   lifecycle: InstagramLifecycle,
   accessToken: string,
+  now: Date,
 ) {
   const duplicate = await duplicateLookup(readClient, job, accessToken);
   if (duplicate.status === "DUPLICATE" && duplicate.duplicate) {
@@ -281,6 +283,15 @@ async function reconcileMediaPublish(
   if (lifecycle.phase === "MEDIA_PUBLISH_INTENT_RECORDED") {
     await recordOutcome(admin, job, lifecycle, "UNKNOWN", null);
   }
+  if (
+    duplicate.status === "CLEAR"
+    && lifecycle.phase === "MEDIA_PUBLISH_OUTCOME_UNKNOWN"
+    && now.getTime() >= Date.parse(job.publishNotAfter) + UNKNOWN_OUTCOME_RECONCILIATION_GRACE_MS
+  ) {
+    await recordOutcome(admin, job, lifecycle, "REJECTED_NO_SIDE_EFFECT", null);
+    await failJob(admin, job, new Error("INSTAGRAM_REMOTE_PUBLISH_NOT_FOUND"), false);
+    return { status: "FAILED_REMOTE_NOT_FOUND" as const, postId: job.postId, remoteMutationAttempted: false };
+  }
   return { status: "REMOTE_RESULT_UNCERTAIN" as const, postId: job.postId, remoteMutationAttempted: false };
 }
 
@@ -291,6 +302,7 @@ async function beginAndPublish(
   job: InstagramPublishJob,
   lifecycle: InstagramLifecycle,
   accessToken: string,
+  now: Date,
 ) {
   if (!lifecycle.providerContainerId) throw new Error("INSTAGRAM_CONTAINER_ID_MISSING");
   const prepared = publishClient.preparePublishReel({
@@ -310,7 +322,7 @@ async function beginAndPublish(
     },
   }));
   if (!lifecycle.dispatchAllowed) {
-    return reconcileMediaPublish(admin, readClient, job, lifecycle, accessToken);
+    return reconcileMediaPublish(admin, readClient, job, lifecycle, accessToken, now);
   }
   try {
     const published = await publishClient.publishReel({
@@ -382,7 +394,7 @@ async function pollContainer(
     requested_next_poll_at: nextPollAt,
   }));
   if (lifecycle.phase === "CONTAINER_READY") {
-    return beginAndPublish(admin, readClient, publishClient, job, lifecycle, accessToken);
+    return beginAndPublish(admin, readClient, publishClient, job, lifecycle, accessToken, now);
   }
   if (lifecycle.phase === "CONTAINER_FAILED") {
     await failJob(admin, job, new Error("INSTAGRAM_CONTAINER_FAILED"), false);
@@ -542,13 +554,13 @@ async function resumeJob(
     case "CONTAINER_PROCESSING":
       return pollContainer(admin, readClient, publishClient, job, lifecycle, accessToken, now);
     case "CONTAINER_READY":
-      return beginAndPublish(admin, readClient, publishClient, job, lifecycle, accessToken);
+      return beginAndPublish(admin, readClient, publishClient, job, lifecycle, accessToken, now);
     case "CONTAINER_FAILED":
       await failJob(admin, job, new Error("INSTAGRAM_CONTAINER_FAILED"), false);
       return { status: "FAILED_CONTAINER" as const, postId: job.postId, remoteMutationAttempted: false };
     case "MEDIA_PUBLISH_INTENT_RECORDED":
     case "MEDIA_PUBLISH_OUTCOME_UNKNOWN":
-      return reconcileMediaPublish(admin, readClient, job, lifecycle, accessToken);
+      return reconcileMediaPublish(admin, readClient, job, lifecycle, accessToken, now);
     case "MEDIA_PUBLISH_CONFIRMED":
       return completeConfirmed(admin, job, lifecycle);
     case "MEDIA_PUBLISH_REJECTED":

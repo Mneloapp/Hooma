@@ -1,0 +1,32 @@
+name: Social publishing heartbeat
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: hooma-social-publishing-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  publish-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Run authenticated Hooma social worker
+        env:
+          HOOMA_CRON_SECRET: ${{ secrets.HOOMA_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
+            --header "Authorization: Bearer ${HOOMA_CRON_SECRET}" \
+            --header "Accept: application/json" \
+            https://hooma.ge/api/cron/social-publish)"
+          test "$status" = "200"
+          jq -e '.ok == true and .status == "COMPLETE"' "$response_file" >/dev/null

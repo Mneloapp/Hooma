@@ -8,6 +8,18 @@ import { runTikTokAnalyticsWorker } from "@/lib/social/tiktok-analytics-worker";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function workerSummary(result: { status: string; externalActionsPerformed: boolean; result: unknown }) {
+  const nested = result.result && typeof result.result === "object" && !Array.isArray(result.result)
+    ? result.result as Record<string, unknown>
+    : null;
+  return {
+    status: result.status,
+    externalActionsPerformed: result.externalActionsPerformed,
+    resultStatus: typeof nested?.status === "string" ? nested.status : null,
+    errorCode: typeof nested?.errorCode === "string" ? nested.errorCode : null,
+  };
+}
+
 export async function GET(request: Request) {
   if (!authenticateSocialCronRequest(request)) {
     return NextResponse.json(
@@ -26,6 +38,13 @@ export async function GET(request: Request) {
     || status === "COMPLETE";
   const ok = [instagramPublishing, instagramAnalytics, tiktokPublishing, tiktokAnalytics]
     .every((result) => healthy(result.status));
+  console.info("social_publish_cron_result", {
+    ok,
+    instagramPublishing: workerSummary(instagramPublishing),
+    instagramAnalytics: workerSummary(instagramAnalytics),
+    tiktokPublishing: workerSummary(tiktokPublishing),
+    tiktokAnalytics: workerSummary(tiktokAnalytics),
+  });
   return NextResponse.json(
     {
       ok,

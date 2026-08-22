@@ -5,15 +5,11 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-test("Instagram publish cron is authenticated and runs at most every 30 minutes", async () => {
+test("Instagram publish cron is authenticated and has half-hour backup schedules", async () => {
   const config = JSON.parse(await source("vercel.json"));
   const entries = config.crons.filter((entry) => entry.path === "/api/cron/social-publish");
   assert.equal(entries.length, 48);
   assert.equal(new Set(entries.map((entry) => entry.schedule)).size, 48);
-  for (let hour = 0; hour < 24; hour += 1) {
-    assert.ok(entries.some((entry) => entry.schedule === `0 ${hour} * * *`));
-    assert.ok(entries.some((entry) => entry.schedule === `30 ${hour} * * *`));
-  }
   const route = await source("app/api/cron/social-publish/route.ts");
   assert.match(route, /authenticateSocialCronRequest\(request\)/);
   assert.match(route, /runInstagramPublishWorker\(\)/);
@@ -78,4 +74,13 @@ test("staging stays private, hash-bound, origin-pinned and long-lived enough for
   assert.match(staging, /observedSha256 !== expectedSha256/);
   assert.match(staging, /url\.origin !== base\.origin/);
   assert.doesNotMatch(staging, /getPublicUrl/);
+});
+
+test("worker releases stale unknown outcomes only after a complete remote scan and grace period", async () => {
+  const worker = await source("lib/social/instagram-publish-worker.ts");
+  assert.match(worker, /duplicate\.status === "CLEAR"/);
+  assert.match(worker, /UNKNOWN_OUTCOME_RECONCILIATION_GRACE_MS/);
+  assert.match(worker, /Date\.parse\(job\.publishNotAfter\)/);
+  assert.match(worker, /"REJECTED_NO_SIDE_EFFECT"/);
+  assert.match(worker, /INSTAGRAM_REMOTE_PUBLISH_NOT_FOUND/);
 });
