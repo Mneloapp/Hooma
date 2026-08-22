@@ -15,6 +15,7 @@ import { ProductReviewsSection } from "@/components/reviews/ProductReviewsSectio
 import { LocalizedText } from "@/components/LocalizedText";
 import { getCategory } from "@/data/catalog";
 import { JsonLd } from "@/components/JsonLd";
+import { buildProductReviewStructuredData, buildStructuredProductCategory } from "@/lib/product-structured-data";
 import { absoluteUrl, categoryPath, compactDescription, privatePageMetadata, publicPageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const defaultVariant = product.variants[0];
   const fixedMulticolor = defaultVariant.colorMode === "fixed_multicolor" && defaultVariant.amsRequired;
   const localizedCategory = getCategory(product.categorySlug);
+  const localizedSubcategory = localizedCategory?.subcategories.find((subcategory) => subcategory.slug === product.subcategorySlug);
   const recommendationPage = await getStorefrontCatalogPage({
     category: product.categorySlug,
     subcategory: product.subcategorySlug,
@@ -74,6 +76,12 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
     ? product.variants.find((variant) => variant.id === activeDeal.variantId) ?? defaultVariant
     : defaultVariant;
   const offerPrice = activeDeal?.dealPrice ?? offerVariant.price;
+  const structuredCategory = buildStructuredProductCategory(localizedCategory?.name, localizedSubcategory?.name);
+  const reviewStructuredData = buildProductReviewStructuredData({
+    ratingAverage: product.ratingAverage,
+    ratingCount: product.ratingCount,
+    reviews: reviewData.reviews,
+  });
   const productJsonLd = !previewProduct && offerPrice !== null ? {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -84,8 +92,9 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
     image: productImages,
     sku: offerVariant.sku || undefined,
     brand: { "@type": "Brand", name: "Hooma" },
-    category: localizedCategory?.nameKa ?? product.category,
+    category: structuredCategory,
     url: productUrl,
+    ...reviewStructuredData,
     offers: {
       "@type": "Offer",
       url: productUrl,

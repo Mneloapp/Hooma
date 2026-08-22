@@ -209,7 +209,22 @@ async function main() {
     assert.equal(product.offers?.priceCurrency, "GEL");
     assert.match(product.offers?.availability || "", /^https:\/\/schema\.org\/(InStock|OutOfStock)$/);
     assert.equal(product.offers?.url, expectedCanonical);
-    assert.equal(product.aggregateRating, undefined, "ratings must not be invented in JSON-LD");
+    assert.ok(typeof product.category === "string" && /[A-Za-z]/.test(product.category), "merchant category must use the catalog's textual hierarchy");
+    assert.ok(product.category.length < 750, "merchant category must remain within Google's custom category limit");
+    if (product.review !== undefined) {
+      assert.ok(Array.isArray(product.review) && product.review.length > 0);
+      for (const review of product.review) {
+        assert.equal(review?.["@type"], "Review");
+        assert.ok(typeof review.author?.name === "string" && review.author.name.trim().length > 0);
+        assert.ok(typeof review.reviewBody === "string" && review.reviewBody.trim().length > 0);
+        assert.ok(Number(review.reviewRating?.ratingValue) >= 1 && Number(review.reviewRating?.ratingValue) <= 5);
+      }
+    }
+    if (product.aggregateRating !== undefined) {
+      assert.ok(Number(product.aggregateRating.ratingValue) >= 1 && Number(product.aggregateRating.ratingValue) <= 5);
+      assert.ok(Number(product.aggregateRating.reviewCount) > 0);
+      assert.ok(Array.isArray(product.review) && product.review.length > 0, "aggregate rating must be backed by visible reviews");
+    }
     metadataSamples.push({ title: title(productResult.body), description: meta(productResult.body, "description") });
   }
   assert.equal(new Set(metadataSamples.map((sample) => sample.title)).size, metadataSamples.length);
