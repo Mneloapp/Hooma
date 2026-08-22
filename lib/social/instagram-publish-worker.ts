@@ -15,7 +15,10 @@ import {
   InstagramReelsPublishClient,
   InstagramReelsPublishError,
 } from "./providers/instagram-reels-publish";
-import { InstagramReelsReadClient } from "./providers/instagram-reels-read";
+import {
+  canonicalInstagramCaption,
+  InstagramReelsReadClient,
+} from "./providers/instagram-reels-read";
 import { verifyAndSignInstagramStagedMedia } from "./staging";
 
 type JsonObject = Record<string, unknown>;
@@ -188,7 +191,7 @@ async function failJob(
 }
 
 function captionSha256(job: InstagramPublishJob) {
-  return sha256(job.caption);
+  return sha256(canonicalInstagramCaption(job.caption));
 }
 
 async function duplicateLookup(
