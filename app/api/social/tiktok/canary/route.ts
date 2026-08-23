@@ -8,6 +8,7 @@ import {
   tiktokNineDayCampaignItem,
 } from "@/lib/social/campaigns/tiktok-nine-day-2026-08-22";
 import { loadTikTokPublishingConnection } from "@/lib/social/connections";
+import { socialMediaBaseUrl } from "@/lib/social/config";
 import {
   TikTokBusinessOrganicClient,
   TikTokOrganicError,
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     });
     const target = tiktokNineDayCampaignItem(latestUncertain.data?.post_id)
       ?? TIKTOK_NINE_DAY_CAMPAIGN_ITEMS[0]!;
-    const [settingsResult, duplicateResult] = await Promise.allSettled([
+    const [settingsResult, duplicateResult, propertyResult] = await Promise.allSettled([
       client.fetchVideoSettings({ accountId: connection.externalAccountId }, connection.accessToken),
       client.lookupOwnedPostDuplicate({
       accountId: connection.externalAccountId,
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
       notBefore: new Date(Date.parse(target.scheduledAt) - 72 * 60 * 60 * 1_000).toISOString(),
       maxPages: 5,
       }, connection.accessToken),
+      client.fetchUrlPropertyStatus({ mediaBaseUrl: socialMediaBaseUrl() }),
     ]);
     if (duplicateResult.status === "rejected") throw duplicateResult.reason;
     const settings = settingsResult.status === "fulfilled"
@@ -77,6 +79,14 @@ export async function POST(request: Request) {
       }
       : { status: "FAILED_CLOSED", errorCode: safeError(settingsResult.reason) };
     const duplicate = duplicateResult.value;
+    const urlProperty = propertyResult.status === "fulfilled"
+      ? {
+        status: propertyResult.value.status,
+        mediaHost: propertyResult.value.mediaHost,
+        propertyCount: propertyResult.value.propertyCount,
+        matchingPropertyType: propertyResult.value.matchingPropertyType,
+      }
+      : { status: "FAILED_CLOSED", errorCode: safeError(propertyResult.reason) };
     return response(200, {
       ok: true,
       status: "PASS",
@@ -85,6 +95,7 @@ export async function POST(request: Request) {
       schemaFrozen: client.connectionStatus().schemaFrozen,
       networkEnabled: client.connectionStatus().networkEnabled,
       settings,
+      urlProperty,
       duplicateCheck: duplicate.status,
       scannedCount: duplicate.scannedCount,
       duplicatePostId: duplicate.duplicate?.postId ?? null,

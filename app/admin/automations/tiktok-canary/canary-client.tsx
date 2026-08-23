@@ -22,10 +22,16 @@ export default function TikTokCanaryClient() {
       const settings = payload.settings && typeof payload.settings === "object"
         ? payload.settings as Record<string, unknown>
         : {};
+      const urlProperty = payload.urlProperty && typeof payload.urlProperty === "object"
+        ? payload.urlProperty as Record<string, unknown>
+        : {};
       const settingsSummary = settings.status === "PASS"
         ? `comments blocked: ${String(settings.commentDisabled)} · public posting: ${String(settings.publicPostingAvailable)}`
         : `settings: ${String(settings.errorCode ?? "FAILED_CLOSED")}`;
-      setResult(`PASS · ${String(payload.checkedPostId)} · duplicate-check: ${String(payload.duplicateCheck)} · შემოწმებული პოსტები: ${String(payload.scannedCount)} · ${settingsSummary}`);
+      const propertySummary = urlProperty.status === "FAILED_CLOSED"
+        ? String(urlProperty.errorCode ?? "FAILED_CLOSED")
+        : `${String(urlProperty.status)} (${String(urlProperty.mediaHost)})`;
+      setResult(`PASS · ${String(payload.checkedPostId)} · duplicate-check: ${String(payload.duplicateCheck)} · შემოწმებული პოსტები: ${String(payload.scannedCount)} · ${settingsSummary} · URL property: ${propertySummary}`);
     } catch (error) {
       setResult(`უსაფრთხოდ შეჩერდა: ${error instanceof Error ? error.message : "UNEXPECTED_FAILURE"}`);
     } finally {
