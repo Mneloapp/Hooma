@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { requirePermission } from "@/lib/supabase/server";
-import { TIKTOK_NINE_DAY_CAMPAIGN_ITEMS } from "@/lib/social/campaigns/tiktok-nine-day-2026-08-22";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  TIKTOK_NINE_DAY_CAMPAIGN_ITEMS,
+  tiktokNineDayCampaignItem,
+} from "@/lib/social/campaigns/tiktok-nine-day-2026-08-22";
 import { loadTikTokPublishingConnection } from "@/lib/social/connections";
 import {
   TikTokBusinessOrganicClient,
@@ -33,27 +37,54 @@ export async function POST(request: Request) {
   if (!actor) return response(401, { ok: false, status: "UNAUTHORIZED" });
   if (actor.role !== "owner") return response(403, { ok: false, status: "FORBIDDEN" });
   try {
+    const admin = createAdminClient();
+    const latestUncertain = admin
+      ? await admin
+        .from("social_publish_jobs")
+        .select("post_id")
+        .eq("provider", "tiktok")
+        .eq("state", "blocked_remote_uncertain")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      : { data: null, error: null };
+    if (latestUncertain.error) throw new Error("TIKTOK_CANARY_JOB_LOOKUP_FAILED");
     const connection = await loadTikTokPublishingConnection();
     const client = new TikTokBusinessOrganicClient({
       activation: tiktokOrganicActivation(connection),
       networkEnabled: true,
     });
-    const first = TIKTOK_NINE_DAY_CAMPAIGN_ITEMS[0]!;
-    const duplicate = await client.lookupOwnedPostDuplicate({
+    const target = tiktokNineDayCampaignItem(latestUncertain.data?.post_id)
+      ?? TIKTOK_NINE_DAY_CAMPAIGN_ITEMS[0]!;
+    const [settings, duplicate] = await Promise.all([
+      client.fetchVideoSettings({ accountId: connection.externalAccountId }, connection.accessToken),
+      client.lookupOwnedPostDuplicate({
       accountId: connection.externalAccountId,
-      captionSha256: createHash("sha256").update(first.caption, "utf8").digest("hex"),
-      notBefore: "2026-08-01T00:00:00.000Z",
+      captionSha256: createHash("sha256").update(target.caption, "utf8").digest("hex"),
+      notBefore: new Date(Date.parse(target.scheduledAt) - 72 * 60 * 60 * 1_000).toISOString(),
       maxPages: 5,
-    }, connection.accessToken);
+      }, connection.accessToken),
+    ]);
     return response(200, {
       ok: true,
       status: "PASS",
       account: "@hooma.ge",
+      checkedPostId: target.postId,
       schemaFrozen: client.connectionStatus().schemaFrozen,
       networkEnabled: client.connectionStatus().networkEnabled,
+      settings: {
+        commentDisabled: settings.commentDisabled,
+        duetDisabled: settings.duetDisabled,
+        stitchDisabled: settings.stitchDisabled,
+        maxVideoPostDurationSec: settings.maxVideoPostDurationSec,
+        publicPostingAvailable: settings.publicPostingAvailable,
+      },
       duplicateCheck: duplicate.status,
       scannedCount: duplicate.scannedCount,
-      providerRequestRecorded: duplicate.providerRequestId !== null,
+      duplicatePostId: duplicate.duplicate?.postId ?? null,
+      duplicateProviderUrl: duplicate.duplicate?.providerUrl ?? null,
+      providerRequestRecorded:
+        settings.providerRequestId !== null && duplicate.providerRequestId !== null,
     });
   } catch (error) {
     return response(503, { ok: false, status: "FAILED_CLOSED", errorCode: safeError(error) });

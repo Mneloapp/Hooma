@@ -18,6 +18,7 @@ const API_VERSION = "v1.3";
 const PUBLISH_PATH = "/open_api/v1.3/business/video/publish/";
 const STATUS_PATH = "/open_api/v1.3/business/publish/status/";
 const VIDEO_LIST_PATH = "/open_api/v1.3/business/video/list/";
+const VIDEO_SETTINGS_PATH = "/open_api/v1.3/business/video/settings/";
 const MAX_RESPONSE_BYTES = 1_000_000;
 const MIN_STAGING_TTL_MS = 30 * 60 * 1_000;
 const MIN_ACCESS_TOKEN_TTL_MS = 10 * 60 * 1_000;
@@ -58,6 +59,7 @@ type JsonObject = Record<string, unknown>;
 type TikTokOperation =
   | "publish"
   | "publish_status"
+  | "settings"
   | "metrics"
   | "duplicate_lookup"
   | "music"
@@ -1334,6 +1336,70 @@ export class TikTokBusinessOrganicClient {
       scannedCount,
       duplicate: null,
       providerRequestId: null,
+      collectedAt: this.now().toISOString(),
+    };
+  }
+
+  async fetchVideoSettings(
+    input: { accountId: string },
+    accessToken: string,
+  ) {
+    const activation = this.ready("settings");
+    const parsedInput = record(input);
+    if (
+      !hasExactKeys(parsedInput, ["accountId"])
+      || input.accountId !== activation.expectedAccountId
+    ) {
+      throw new TikTokOrganicError({
+        operation: "settings",
+        code: "VIDEO_SETTINGS_INPUT_INVALID",
+      });
+    }
+    const url = new URL(VIDEO_SETTINGS_PATH, API_ORIGIN);
+    url.searchParams.set("business_id", input.accountId);
+    const result = await this.send({
+      operation: "settings",
+      url,
+      method: "GET",
+      headers: accessTokenHeader(accessToken, "settings"),
+    });
+    const response = providerResponse("settings", result.status, result.body);
+    const privacyLevels = Array.isArray(response.data.privacy_level_options)
+      ? response.data.privacy_level_options
+      : null;
+    const allowedPrivacyLevels = new Set([
+      "PUBLIC_TO_EVERYONE",
+      "MUTUAL_FOLLOW_FRIENDS",
+      "SELF_ONLY",
+      "FOLLOWER_OF_CREATOR",
+    ]);
+    if (
+      typeof response.data.comment_disabled !== "boolean"
+      || typeof response.data.duet_disabled !== "boolean"
+      || typeof response.data.stitch_disabled !== "boolean"
+      || !Number.isInteger(response.data.max_video_post_duration_sec)
+      || Number(response.data.max_video_post_duration_sec) < 3
+      || Number(response.data.max_video_post_duration_sec) > 600
+      || !privacyLevels
+      || !privacyLevels.length
+      || privacyLevels.some((level) => typeof level !== "string" || !allowedPrivacyLevels.has(level))
+    ) {
+      throw new TikTokOrganicError({
+        operation: "settings",
+        code: "VIDEO_SETTINGS_RESPONSE_INVALID",
+        requestId: response.requestId,
+      });
+    }
+    return {
+      provider: "tiktok" as const,
+      operation: "settings" as const,
+      accountId: input.accountId,
+      commentDisabled: response.data.comment_disabled,
+      duetDisabled: response.data.duet_disabled,
+      stitchDisabled: response.data.stitch_disabled,
+      maxVideoPostDurationSec: Number(response.data.max_video_post_duration_sec),
+      publicPostingAvailable: privacyLevels.includes("PUBLIC_TO_EVERYONE"),
+      providerRequestId: response.requestId,
       collectedAt: this.now().toISOString(),
     };
   }
