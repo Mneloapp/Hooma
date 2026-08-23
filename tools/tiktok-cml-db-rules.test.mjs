@@ -7,6 +7,10 @@ const migration = await readFile(
   new URL("supabase/migrations/20260820000100_tiktok_cml_receipt_v1.sql", root),
   "utf8",
 );
+const lengthRepairMigration = await readFile(
+  new URL("supabase/migrations/20260823000700_fix_tiktok_cml_256_validation.sql", root),
+  "utf8",
+);
 const adapter = await readFile(
   new URL("lib/social/providers/tiktok-business-organic.ts", root),
   "utf8",
@@ -123,4 +127,11 @@ test("migration adds policy only and cannot invoke a provider", () => {
   assert.doesNotMatch(migration, /insert\s+into\s+public\.social_publish_jobs/i);
   assert.doesNotMatch(migration, /update\s+public\.social_publish_jobs/i);
   assert.doesNotMatch(migration, /delete\s+from\s+public\.social_publish_jobs/i);
+});
+
+test("CML 256-character IDs use PostgreSQL-safe character and length gates", () => {
+  assert.match(lengthRepairMigration, /char_length\(requested_account_id\) not between 1 and 256/);
+  assert.match(lengthRepairMigration, /char_length\(receipt #>> ''\{track,musicSoundId\}''\) not between 1 and 256/);
+  assert.match(lengthRepairMigration, /\^\[A-Za-z0-9\._:~-\]\+\$/);
+  assert.doesNotMatch(lengthRepairMigration, /http_post|net\.http|cron\.schedule/i);
 });

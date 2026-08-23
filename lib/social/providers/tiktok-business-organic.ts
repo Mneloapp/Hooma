@@ -306,6 +306,20 @@ function sha256Text(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+export function tiktokDuplicateCaptionSha256(value: string) {
+  const caption = boundedCaption(value);
+  if (!caption) {
+    throw new TikTokOrganicError({
+      operation: "duplicate_lookup",
+      code: "DUPLICATE_CAPTION_INVALID",
+    });
+  }
+  // TikTok's owned-video list normalizes line breaks and repeated whitespace
+  // in captions. Hash the canonical visible form on both sides so an already
+  // published caption cannot be missed solely because its newlines collapsed.
+  return sha256Text(caption.trim().replace(/\s+/gu, " "));
+}
+
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -1344,7 +1358,7 @@ export class TikTokBusinessOrganicClient {
           break;
         }
         scannedCount += 1;
-        if (sha256Text(caption) === input.captionSha256) {
+        if (tiktokDuplicateCaptionSha256(caption) === input.captionSha256) {
           return {
             provider: "tiktok" as const,
             operation: "duplicate_lookup" as const,

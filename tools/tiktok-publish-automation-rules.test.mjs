@@ -22,6 +22,18 @@ const propertyMigration = readFileSync(
   new URL("../supabase/migrations/20260823000300_tiktok_url_property_verification.sql", import.meta.url),
   "utf8",
 );
+const urlRejectionRepair = readFileSync(
+  new URL("../supabase/migrations/20260823000400_reconcile_tiktok_verified_url_rejection.sql", import.meta.url),
+  "utf8",
+);
+const visiblePublicationRepair = readFileSync(
+  new URL("../supabase/migrations/20260823000500_reconcile_visible_tiktok_publication.sql", import.meta.url),
+  "utf8",
+);
+const publishIdRepair = readFileSync(
+  new URL("../supabase/migrations/20260823000600_fix_tiktok_publish_id_validation.sql", import.meta.url),
+  "utf8",
+);
 
 test("TikTok lifecycle records immutable intent before the only publish dispatch", () => {
   assert.match(migration, /create table if not exists public\.social_tiktok_publish_lifecycles/);
@@ -68,7 +80,20 @@ test("provider refuses redirect-following and performs bounded owned-post duplic
   assert.match(provider, /maxPages > 5/);
   assert.match(provider, /url\.searchParams\.set\("max_count", "20"\)/);
   assert.match(provider, /status: "INCONCLUSIVE_PAGE_LIMIT"/);
-  assert.match(provider, /sha256Text\(caption\) === input\.captionSha256/);
+  assert.match(provider, /tiktokDuplicateCaptionSha256\(caption\) === input\.captionSha256/);
+  assert.match(provider, /caption\.trim\(\)\.replace\(\/\\s\+\/gu, " "\)/);
+});
+
+test("TikTok rejection and visible-post repairs are service-only and never redispatch", () => {
+  assert.match(urlRejectionRepair, /property_status <> 1/);
+  assert.match(urlRejectionRepair, /payload ->> 'error_code' is distinct from '40002'/);
+  assert.match(urlRejectionRepair, /delete from public\.social_tiktok_publish_lifecycles/);
+  assert.match(visiblePublicationRepair, /'REMOTE_VERIFIED'/);
+  assert.match(visiblePublicationRepair, /remote_dispatch_allowed', false/);
+  assert.match(visiblePublicationRepair, /provider_post_id = requested_provider_post_id/);
+  assert.doesNotMatch(`${urlRejectionRepair}\n${visiblePublicationRepair}`, /http_post|net\.http|fetch\s*\(|client\.publish/i);
+  assert.match(publishIdRepair, /char_length\(provider_publish_id\) between 1 and 256/);
+  assert.match(publishIdRepair, /requested_provider_publish_id !~ '\^\[A-Za-z0-9\._:~-\]\+\$'/);
 });
 
 test("read-only canary exposes only the provider's sanitized diagnostic code", () => {

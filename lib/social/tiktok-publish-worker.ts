@@ -16,6 +16,7 @@ import {
 import {
   TikTokBusinessOrganicClient,
   TikTokOrganicError,
+  tiktokDuplicateCaptionSha256,
   type TikTokOrganicPublishInput,
 } from "./providers/tiktok-business-organic";
 import { verifyAndSignTikTokStagedMedia } from "./staging";
@@ -206,7 +207,7 @@ async function duplicateLookup(
 ) {
   return client.lookupOwnedPostDuplicate({
     accountId: job.accountId,
-    captionSha256: captionSha256(job),
+    captionSha256: tiktokDuplicateCaptionSha256(job.caption),
     notBefore: new Date(Date.parse(job.scheduledAt) - 72 * 60 * 60 * 1_000).toISOString(),
     maxPages: 5,
   }, accessToken);
@@ -373,7 +374,7 @@ async function startNewJob(
     schema: "tiktok-owned-post-duplicate-v1",
     status: duplicate.status,
     scanned_count: duplicate.scannedCount,
-    caption_sha256: captionSha256(job),
+    normalized_caption_sha256: tiktokDuplicateCaptionSha256(job.caption),
     duplicate_post_id: duplicate.duplicate?.postId ?? null,
     duplicate_provider_url: duplicate.duplicate?.providerUrl ?? null,
   };
