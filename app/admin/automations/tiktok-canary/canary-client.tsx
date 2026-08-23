@@ -19,7 +19,10 @@ export default function TikTokCanaryClient() {
       });
       const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
       if (!response.ok || payload?.status !== "PASS") throw new Error(String(payload?.errorCode ?? "CANARY_FAILED"));
-      setResult(`PASS · @hooma.ge · duplicate-check: ${String(payload.duplicateCheck)} · შემოწმებული პოსტები: ${String(payload.scannedCount)}`);
+      const settings = payload.settings && typeof payload.settings === "object"
+        ? payload.settings as Record<string, unknown>
+        : {};
+      setResult(`PASS · ${String(payload.checkedPostId)} · duplicate-check: ${String(payload.duplicateCheck)} · შემოწმებული პოსტები: ${String(payload.scannedCount)} · comments blocked: ${String(settings.commentDisabled)} · public posting: ${String(settings.publicPostingAvailable)}`);
     } catch (error) {
       setResult(`უსაფრთხოდ შეჩერდა: ${error instanceof Error ? error.message : "UNEXPECTED_FAILURE"}`);
     } finally {

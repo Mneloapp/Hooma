@@ -778,3 +778,42 @@ test("owned-post duplicate lookup is bounded and hashes the exact caption", asyn
     delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
   }
 });
+
+test("video settings preflight returns only validated account capabilities", async () => {
+  installActivationEnvironment();
+  process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    now: () => NOW,
+    transport: async (request) => {
+      assert.equal(request.operation, "settings");
+      assert.equal(request.method, "GET");
+      assert.equal(request.url.pathname, "/open_api/v1.3/business/video/settings/");
+      assert.equal(request.url.searchParams.get("business_id"), ACCOUNT_ID);
+      return {
+        status: 200,
+        body: {
+          code: 0,
+          request_id: "req-settings-1",
+          data: {
+            privacy_level_options: ["PUBLIC_TO_EVERYONE", "SELF_ONLY"],
+            comment_disabled: true,
+            duet_disabled: false,
+            stitch_disabled: false,
+            max_video_post_duration_sec: 600,
+          },
+        },
+      };
+    },
+  });
+  try {
+    const result = await client.fetchVideoSettings({ accountId: ACCOUNT_ID }, "sensitive-token");
+    assert.equal(result.commentDisabled, true);
+    assert.equal(result.publicPostingAvailable, true);
+    assert.equal(result.maxVideoPostDurationSec, 600);
+    assert.equal(result.providerRequestId, "req-settings-1");
+  } finally {
+    delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
+  }
+});
