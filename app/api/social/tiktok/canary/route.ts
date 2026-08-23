@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     });
     const target = tiktokNineDayCampaignItem(latestUncertain.data?.post_id)
       ?? TIKTOK_NINE_DAY_CAMPAIGN_ITEMS[0]!;
-    const [settings, duplicate] = await Promise.all([
+    const [settingsResult, duplicateResult] = await Promise.allSettled([
       client.fetchVideoSettings({ accountId: connection.externalAccountId }, connection.accessToken),
       client.lookupOwnedPostDuplicate({
       accountId: connection.externalAccountId,
@@ -65,6 +65,18 @@ export async function POST(request: Request) {
       maxPages: 5,
       }, connection.accessToken),
     ]);
+    if (duplicateResult.status === "rejected") throw duplicateResult.reason;
+    const settings = settingsResult.status === "fulfilled"
+      ? {
+        status: "PASS",
+        commentDisabled: settingsResult.value.commentDisabled,
+        duetDisabled: settingsResult.value.duetDisabled,
+        stitchDisabled: settingsResult.value.stitchDisabled,
+        maxVideoPostDurationSec: settingsResult.value.maxVideoPostDurationSec,
+        publicPostingAvailable: settingsResult.value.publicPostingAvailable,
+      }
+      : { status: "FAILED_CLOSED", errorCode: safeError(settingsResult.reason) };
+    const duplicate = duplicateResult.value;
     return response(200, {
       ok: true,
       status: "PASS",
@@ -72,19 +84,12 @@ export async function POST(request: Request) {
       checkedPostId: target.postId,
       schemaFrozen: client.connectionStatus().schemaFrozen,
       networkEnabled: client.connectionStatus().networkEnabled,
-      settings: {
-        commentDisabled: settings.commentDisabled,
-        duetDisabled: settings.duetDisabled,
-        stitchDisabled: settings.stitchDisabled,
-        maxVideoPostDurationSec: settings.maxVideoPostDurationSec,
-        publicPostingAvailable: settings.publicPostingAvailable,
-      },
+      settings,
       duplicateCheck: duplicate.status,
       scannedCount: duplicate.scannedCount,
       duplicatePostId: duplicate.duplicate?.postId ?? null,
       duplicateProviderUrl: duplicate.duplicate?.providerUrl ?? null,
-      providerRequestRecorded:
-        settings.providerRequestId !== null && duplicate.providerRequestId !== null,
+      providerRequestRecorded: duplicate.providerRequestId !== null,
     });
   } catch (error) {
     return response(503, { ok: false, status: "FAILED_CLOSED", errorCode: safeError(error) });

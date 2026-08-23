@@ -22,7 +22,10 @@ export default function TikTokCanaryClient() {
       const settings = payload.settings && typeof payload.settings === "object"
         ? payload.settings as Record<string, unknown>
         : {};
-      setResult(`PASS · ${String(payload.checkedPostId)} · duplicate-check: ${String(payload.duplicateCheck)} · შემოწმებული პოსტები: ${String(payload.scannedCount)} · comments blocked: ${String(settings.commentDisabled)} · public posting: ${String(settings.publicPostingAvailable)}`);
+      const settingsSummary = settings.status === "PASS"
+        ? `comments blocked: ${String(settings.commentDisabled)} · public posting: ${String(settings.publicPostingAvailable)}`
+        : `settings: ${String(settings.errorCode ?? "FAILED_CLOSED")}`;
+      setResult(`PASS · ${String(payload.checkedPostId)} · duplicate-check: ${String(payload.duplicateCheck)} · შემოწმებული პოსტები: ${String(payload.scannedCount)} · ${settingsSummary}`);
     } catch (error) {
       setResult(`უსაფრთხოდ შეჩერდა: ${error instanceof Error ? error.message : "UNEXPECTED_FAILURE"}`);
     } finally {

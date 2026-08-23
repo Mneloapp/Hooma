@@ -1373,20 +1373,46 @@ export class TikTokBusinessOrganicClient {
       "SELF_ONLY",
       "FOLLOWER_OF_CREATOR",
     ]);
+    if (typeof response.data.comment_disabled !== "boolean") {
+      throw new TikTokOrganicError({
+        operation: "settings",
+        code: "VIDEO_SETTINGS_COMMENT_INVALID",
+        requestId: response.requestId,
+      });
+    }
+    if (typeof response.data.duet_disabled !== "boolean") {
+      throw new TikTokOrganicError({
+        operation: "settings",
+        code: "VIDEO_SETTINGS_DUET_INVALID",
+        requestId: response.requestId,
+      });
+    }
+    if (typeof response.data.stitch_disabled !== "boolean") {
+      throw new TikTokOrganicError({
+        operation: "settings",
+        code: "VIDEO_SETTINGS_STITCH_INVALID",
+        requestId: response.requestId,
+      });
+    }
     if (
-      typeof response.data.comment_disabled !== "boolean"
-      || typeof response.data.duet_disabled !== "boolean"
-      || typeof response.data.stitch_disabled !== "boolean"
-      || !Number.isInteger(response.data.max_video_post_duration_sec)
+      !Number.isInteger(response.data.max_video_post_duration_sec)
       || Number(response.data.max_video_post_duration_sec) < 3
       || Number(response.data.max_video_post_duration_sec) > 600
-      || !privacyLevels
+    ) {
+      throw new TikTokOrganicError({
+        operation: "settings",
+        code: "VIDEO_SETTINGS_DURATION_INVALID",
+        requestId: response.requestId,
+      });
+    }
+    if (
+      !privacyLevels
       || !privacyLevels.length
       || privacyLevels.some((level) => typeof level !== "string" || !allowedPrivacyLevels.has(level))
     ) {
       throw new TikTokOrganicError({
         operation: "settings",
-        code: "VIDEO_SETTINGS_RESPONSE_INVALID",
+        code: "VIDEO_SETTINGS_PRIVACY_INVALID",
         requestId: response.requestId,
       });
     }
