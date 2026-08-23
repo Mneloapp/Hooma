@@ -817,3 +817,46 @@ test("video settings preflight returns only validated account capabilities", asy
     delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
   }
 });
+
+test("URL property canary verifies the configured media host without exposing the app secret", async () => {
+  installActivationEnvironment();
+  process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    now: () => NOW,
+    transport: async (request) => {
+      assert.equal(request.operation, "property");
+      assert.equal(request.method, "GET");
+      assert.equal(request.url.pathname, "/open_api/v1.3/business/property/list/");
+      assert.ok(request.url.searchParams.get("app_id"));
+      assert.ok(request.url.searchParams.get("secret"));
+      return {
+        status: 200,
+        body: {
+          code: 0,
+          request_id: "req-property-1",
+          data: {
+            url_property_info_list: [{
+              property_type: 1,
+              url: "media.hooma.ge",
+              property_status: 1,
+              signature: "must-not-be-returned",
+              file_name: "must-not-be-returned",
+            }],
+          },
+        },
+      };
+    },
+  });
+  try {
+    const result = await client.fetchUrlPropertyStatus({
+      mediaBaseUrl: "https://media.hooma.ge/social/",
+    });
+    assert.equal(result.status, "VERIFIED");
+    assert.equal(result.mediaHost, "media.hooma.ge");
+    assert.equal(JSON.stringify(result).includes("must-not-be-returned"), false);
+  } finally {
+    delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
+  }
+});

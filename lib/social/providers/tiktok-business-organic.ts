@@ -19,6 +19,7 @@ const PUBLISH_PATH = "/open_api/v1.3/business/video/publish/";
 const STATUS_PATH = "/open_api/v1.3/business/publish/status/";
 const VIDEO_LIST_PATH = "/open_api/v1.3/business/video/list/";
 const VIDEO_SETTINGS_PATH = "/open_api/v1.3/business/video/settings/";
+const URL_PROPERTY_LIST_PATH = "/open_api/v1.3/business/property/list/";
 const MAX_RESPONSE_BYTES = 1_000_000;
 const MIN_STAGING_TTL_MS = 30 * 60 * 1_000;
 const MIN_ACCESS_TOKEN_TTL_MS = 10 * 60 * 1_000;
@@ -60,6 +61,7 @@ type TikTokOperation =
   | "publish"
   | "publish_status"
   | "settings"
+  | "property"
   | "metrics"
   | "duplicate_lookup"
   | "music"
@@ -737,6 +739,33 @@ function accessTokenHeader(
 
 function canonicalPostUrl(username: string, postId: string) {
   return `https://www.tiktok.com/@${username}/video/${postId}`;
+}
+
+function urlPropertyMatches(
+  mediaBaseUrl: URL,
+  propertyType: number,
+  propertyUrl: string,
+) {
+  try {
+    const candidate = new URL(propertyUrl.includes("://") ? propertyUrl : `https://${propertyUrl}`);
+    if (candidate.protocol !== "https:" || candidate.username || candidate.password || candidate.hash) {
+      return false;
+    }
+    if (propertyType === 1) {
+      return mediaBaseUrl.hostname === candidate.hostname
+        || mediaBaseUrl.hostname.endsWith(`.${candidate.hostname}`);
+    }
+    if (propertyType === 2) {
+      const prefix = candidate.toString().endsWith("/") ? candidate.toString() : `${candidate.toString()}/`;
+      const target = mediaBaseUrl.toString().endsWith("/")
+        ? mediaBaseUrl.toString()
+        : `${mediaBaseUrl.toString()}/`;
+      return target.startsWith(prefix);
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function optionalCount(value: unknown) {
@@ -1425,6 +1454,87 @@ export class TikTokBusinessOrganicClient {
       stitchDisabled: response.data.stitch_disabled,
       maxVideoPostDurationSec: Number(response.data.max_video_post_duration_sec),
       publicPostingAvailable: privacyLevels.includes("PUBLIC_TO_EVERYONE"),
+      providerRequestId: response.requestId,
+      collectedAt: this.now().toISOString(),
+    };
+  }
+
+  async fetchUrlPropertyStatus(
+    input: { mediaBaseUrl: string },
+  ) {
+    const activation = this.ready("property");
+    const parsedInput = record(input);
+    let mediaBaseUrl: URL;
+    try {
+      mediaBaseUrl = new URL(input.mediaBaseUrl);
+    } catch {
+      throw new TikTokOrganicError({ operation: "property", code: "URL_PROPERTY_INPUT_INVALID" });
+    }
+    if (
+      !hasExactKeys(parsedInput, ["mediaBaseUrl"])
+      || mediaBaseUrl.protocol !== "https:"
+      || mediaBaseUrl.username
+      || mediaBaseUrl.password
+      || mediaBaseUrl.hash
+      || !activation.verifiedMediaHosts.includes(mediaBaseUrl.hostname.toLowerCase())
+    ) {
+      throw new TikTokOrganicError({ operation: "property", code: "URL_PROPERTY_INPUT_INVALID" });
+    }
+    const configured = providerConfig("tiktok");
+    const url = new URL(URL_PROPERTY_LIST_PATH, API_ORIGIN);
+    url.searchParams.set("app_id", configured.clientId);
+    url.searchParams.set("secret", configured.clientSecret);
+    const result = await this.send({
+      operation: "property",
+      url,
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    const response = providerResponse("property", result.status, result.body);
+    const list = Array.isArray(response.data.url_property_info_list)
+      ? response.data.url_property_info_list
+      : null;
+    if (!list) {
+      throw new TikTokOrganicError({
+        operation: "property",
+        code: "URL_PROPERTY_RESPONSE_INVALID",
+        requestId: response.requestId,
+      });
+    }
+    const properties = list.map((value) => {
+      const property = record(value);
+      const propertyType = Number(property?.property_type);
+      const propertyStatus = Number(property?.property_status);
+      const propertyUrl = boundedString(property?.url, 2_048);
+      if (
+        !new Set([1, 2]).has(propertyType)
+        || !new Set([0, 1, 2]).has(propertyStatus)
+        || !propertyUrl
+      ) {
+        throw new TikTokOrganicError({
+          operation: "property",
+          code: "URL_PROPERTY_RESPONSE_INVALID",
+          requestId: response.requestId,
+        });
+      }
+      return { propertyType, propertyStatus, propertyUrl };
+    });
+    const matching = properties.find((property) => urlPropertyMatches(
+      mediaBaseUrl,
+      property.propertyType,
+      property.propertyUrl,
+    ));
+    return {
+      provider: "tiktok" as const,
+      operation: "property" as const,
+      mediaHost: mediaBaseUrl.hostname.toLowerCase(),
+      status: matching?.propertyStatus === 1
+        ? "VERIFIED" as const
+        : matching
+          ? "NOT_VERIFIED" as const
+          : "NOT_ADDED" as const,
+      propertyCount: properties.length,
+      matchingPropertyType: matching?.propertyType ?? null,
       providerRequestId: response.requestId,
       collectedAt: this.now().toISOString(),
     };
