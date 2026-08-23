@@ -8,12 +8,12 @@ import {
   tiktokNineDayCampaignItem,
 } from "@/lib/social/campaigns/tiktok-nine-day-2026-08-22";
 import { loadTikTokPublishingConnection } from "@/lib/social/connections";
-import { socialMediaBaseUrl } from "@/lib/social/config";
 import {
   TikTokBusinessOrganicClient,
   TikTokOrganicError,
 } from "@/lib/social/providers/tiktok-business-organic";
 import { tiktokOrganicActivation } from "@/lib/social/tiktok-activation";
+import { TIKTOK_MEDIA_PROXY_PREFIX } from "@/lib/social/tiktok-media-delivery";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       notBefore: new Date(Date.parse(target.scheduledAt) - 72 * 60 * 60 * 1_000).toISOString(),
       maxPages: 5,
       }, connection.accessToken),
-      client.fetchUrlPropertyStatus({ mediaBaseUrl: socialMediaBaseUrl() }),
+      client.fetchUrlPropertyStatus({ mediaBaseUrl: TIKTOK_MEDIA_PROXY_PREFIX }),
     ]);
     if (duplicateResult.status === "rejected") throw duplicateResult.reason;
     const settings = settingsResult.status === "fulfilled"

@@ -855,7 +855,55 @@ test("URL property canary verifies the configured media host without exposing th
     });
     assert.equal(result.status, "VERIFIED");
     assert.equal(result.mediaHost, "media.hooma.ge");
-    assert.equal(JSON.stringify(result).includes("must-not-be-returned"), false);
+    assert.equal(result.matchingSignature, "must-not-be-returned");
+    assert.equal(JSON.stringify(result).includes("test-client-secret"), false);
+  } finally {
+    delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
+  }
+});
+
+test("URL prefix provisioning is exact, idempotent-ready, and credential-redacted", async () => {
+  installActivationEnvironment();
+  process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
+  let calls = 0;
+  const propertyUrl = "https://media.hooma.ge/social/";
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    now: () => NOW,
+    transport: async (request) => {
+      calls += 1;
+      assert.equal(request.operation, "property");
+      assert.equal(request.method, "POST");
+      const body = JSON.parse(request.body ?? "null") as Record<string, any>;
+      assert.ok(body.app_id);
+      assert.ok(body.secret);
+      assert.deepEqual(body.url_property_meta, { property_type: 2, url: propertyUrl });
+      return {
+        status: 200,
+        body: {
+          code: 0,
+          request_id: `req-property-${calls}`,
+          data: {
+            url_property_info: {
+              property_type: 2,
+              url: propertyUrl,
+              property_status: calls === 1 ? 0 : 1,
+              signature: "public-verification-signature",
+              file_name: "tiktok-verification.txt",
+            },
+          },
+        },
+      };
+    },
+  });
+  try {
+    const added = await client.addUrlProperty({ propertyUrl });
+    const verified = await client.verifyUrlProperty({ propertyUrl });
+    assert.equal(added.propertyStatus, 0);
+    assert.equal(verified.propertyStatus, 1);
+    assert.equal(calls, 2);
+    assert.equal(JSON.stringify(verified).includes("test-client-secret"), false);
   } finally {
     delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
   }
