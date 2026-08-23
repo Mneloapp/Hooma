@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
-const [page, loader, permissions, sidebar, settings, oauthRoute] = await Promise.all([
+const [page, loader, permissions, sidebar, settings, oauthRoute, middleware] = await Promise.all([
   readFile(new URL("app/admin/automations/page.tsx", root), "utf8"),
   readFile(new URL("lib/social/automation-dashboard.ts", root), "utf8"),
   readFile(new URL("lib/auth/permissions.ts", root), "utf8"),
   readFile(new URL("components/admin/AdminSidebar.tsx", root), "utf8"),
   readFile(new URL("app/admin/settings/page.tsx", root), "utf8"),
   readFile(new URL("lib/social/oauth-route.ts", root), "utf8"),
+  readFile(new URL("middleware.ts", root), "utf8"),
 ]);
 
 test("automation dashboard is server-rendered and owner-only", () => {
@@ -107,4 +108,11 @@ test("dashboard shows today's schedule and never truncates the canonical queue",
   assert.match(page, /job\.productName/);
   assert.match(loader, /product:products!social_publish_jobs_product_id_fkey\(name_ka,hooma_name\)/);
   assert.match(loader, /productName: safeProductName\(row\.product\)/);
+});
+
+test("automation pages avoid the Edge auth timeout and keep owner checks server-side", () => {
+  assert.match(middleware, /pathname === "\/admin\/automations"/);
+  assert.match(middleware, /pathname\.startsWith\("\/admin\/automations\/"\)/);
+  assert.match(page, /requirePermission\("team\.manage"\)/);
+  assert.match(page, /actor\.role !== "owner"/);
 });

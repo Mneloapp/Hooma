@@ -4,7 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { instagramInsightsEnabled } from "./config";
 import { loadInstagramPublishingConnection } from "./connections";
 import { instagramReadActivation } from "./instagram-activation";
-import { InstagramReelsReadClient } from "./providers/instagram-reels-read";
+import {
+  InstagramReelsReadClient,
+  InstagramReelsReadError,
+} from "./providers/instagram-reels-read";
 
 type JsonObject = Record<string, unknown>;
 type AdminClient = ReturnType<typeof createAdminClient> & {
@@ -39,6 +42,13 @@ async function rpc(admin: AdminClient, name: string, args: JsonObject = {}) {
 }
 
 function safeError(error: unknown) {
+  if (error instanceof InstagramReelsReadError) {
+    const operation = error.operation.toUpperCase();
+    const detailed = `INSTAGRAM_${operation}_${error.code}`;
+    return /^[A-Z0-9_]{3,80}$/.test(detailed)
+      ? detailed
+      : "INSTAGRAM_REELS_READ_ERROR";
+  }
   const raw = error instanceof Error ? error.message.split(":", 1)[0] : "UNEXPECTED_FAILURE";
   return /^[A-Z0-9_]{3,80}$/.test(raw) ? raw : "UNEXPECTED_FAILURE";
 }

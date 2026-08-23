@@ -9,6 +9,14 @@ export async function middleware(request: NextRequest) {
   const protectedPath = pathname.startsWith("/admin") || pathname.startsWith("/account") || pathname.startsWith("/checkout");
   if (!protectedPath) return response;
 
+  // Every automation page performs its own owner/permission check in the Node
+  // runtime before loading data. Let that server-side gate handle these routes
+  // so a slow Supabase auth round-trip cannot exhaust the Edge middleware
+  // deadline and turn the control room into a 504 page.
+  if (pathname === "/admin/automations" || pathname.startsWith("/admin/automations/")) {
+    return response;
+  }
+
   const redirectToLogin = () => {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

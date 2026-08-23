@@ -20,6 +20,25 @@ function workerSummary(result: { status: string; externalActionsPerformed: boole
   };
 }
 
+const healthyPublishingResults = new Set([
+  "PUBLISHED",
+  "PROCESSING_REMOTE",
+  "CONTAINER_PROCESSING",
+]);
+
+function publishingWorkerHealthy(result: { status: string; result: unknown }) {
+  if (result.status === "DISABLED" || result.status === "IDLE") return true;
+  if (result.status !== "COMPLETE") return false;
+  const nested = result.result && typeof result.result === "object" && !Array.isArray(result.result)
+    ? result.result as Record<string, unknown>
+    : null;
+  return typeof nested?.status === "string" && healthyPublishingResults.has(nested.status);
+}
+
+function backgroundWorkerHealthy(result: { status: string }) {
+  return result.status === "DISABLED" || result.status === "IDLE" || result.status === "COMPLETE";
+}
+
 export async function GET(request: Request) {
   if (!authenticateSocialCronRequest(request)) {
     return NextResponse.json(
@@ -33,13 +52,20 @@ export async function GET(request: Request) {
     runTikTokPublishWorker(),
     runTikTokAnalyticsWorker(),
   ]);
-  const healthy = (status: string) => status === "DISABLED"
-    || status === "IDLE"
-    || status === "COMPLETE";
-  const ok = [instagramPublishing, instagramAnalytics, tiktokPublishing, tiktokAnalytics]
-    .every((result) => healthy(result.status));
+  const publishingOk = [instagramPublishing, tiktokPublishing]
+    .every((result) => publishingWorkerHealthy(result));
+  const analyticsOk = [instagramAnalytics, tiktokAnalytics]
+    .every((result) => backgroundWorkerHealthy(result));
+  const ok = publishingOk;
+  const status = !publishingOk
+    ? "FAILED_CLOSED"
+    : analyticsOk
+      ? "COMPLETE"
+      : "COMPLETE_WITH_ANALYTICS_DEGRADED";
   console.info("social_publish_cron_result", {
     ok,
+    status,
+    health: { publishing: publishingOk, analytics: analyticsOk },
     instagramPublishing: workerSummary(instagramPublishing),
     instagramAnalytics: workerSummary(instagramAnalytics),
     tiktokPublishing: workerSummary(tiktokPublishing),
@@ -48,7 +74,8 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       ok,
-      status: ok ? "COMPLETE" : "FAILED_CLOSED",
+      status,
+      health: { publishing: publishingOk, analytics: analyticsOk },
       instagram: { publishing: instagramPublishing, analytics: instagramAnalytics },
       tiktok: { publishing: tiktokPublishing, analytics: tiktokAnalytics },
     },

@@ -35,6 +35,7 @@ jobs:
           summary="$(jq -c '{
             ok,
             status,
+            health,
             instagram: {
               publishing: {status: .instagram.publishing.status, resultStatus: .instagram.publishing.result.status, errorCode: .instagram.publishing.result.errorCode},
               analytics: {status: .instagram.analytics.status, resultStatus: .instagram.analytics.result.status, errorCode: .instagram.analytics.result.errorCode}
@@ -46,4 +47,4 @@ jobs:
           }' "$response_file" 2>/dev/null || printf '%s' '{"status":"INVALID_JSON"}')"
           echo "Hooma social worker HTTP ${status}: ${summary}"
           test "$status" = "200"
-          jq -e '.ok == true and .status == "COMPLETE"' "$response_file" >/dev/null
+          jq -e '.ok == true and (.status == "COMPLETE" or .status == "COMPLETE_WITH_ANALYTICS_DEGRADED") and .health.publishing == true' "$response_file" >/dev/null
