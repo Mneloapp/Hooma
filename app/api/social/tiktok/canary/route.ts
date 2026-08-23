@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { requirePermission } from "@/lib/supabase/server";
@@ -11,6 +10,7 @@ import { loadTikTokPublishingConnection } from "@/lib/social/connections";
 import {
   TikTokBusinessOrganicClient,
   TikTokOrganicError,
+  tiktokDuplicateCaptionSha256,
 } from "@/lib/social/providers/tiktok-business-organic";
 import { tiktokOrganicActivation } from "@/lib/social/tiktok-activation";
 import { TIKTOK_MEDIA_PROXY_PREFIX } from "@/lib/social/tiktok-media-delivery";
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       client.fetchVideoSettings({ accountId: connection.externalAccountId }, connection.accessToken),
       client.lookupOwnedPostDuplicate({
       accountId: connection.externalAccountId,
-      captionSha256: createHash("sha256").update(target.caption, "utf8").digest("hex"),
+      captionSha256: tiktokDuplicateCaptionSha256(target.caption),
       notBefore: new Date(Date.parse(target.scheduledAt) - 72 * 60 * 60 * 1_000).toISOString(),
       maxPages: 5,
       }, connection.accessToken),

@@ -13,6 +13,7 @@ import {
   type TikTokTransportRequest,
   TIKTOK_ORGANIC_SCHEMA_ID,
   tiktokCmlSelectionFingerprint,
+  tiktokDuplicateCaptionSha256,
   validateTikTokCmlSelectionReceipt,
 } from "./tiktok-business-organic";
 
@@ -716,11 +717,13 @@ test("licensed pre-mixed owned master publishes without replacing audio", async 
   }
 });
 
-test("owned-post duplicate lookup is bounded and hashes the exact caption", async () => {
+test("owned-post duplicate lookup is bounded and matches TikTok-normalized caption whitespace", async () => {
   installActivationEnvironment();
   process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED = "1";
   let calls = 0;
-  const exactCaption = "exact approved caption";
+  const approvedCaption = "exact approved caption\n\n#Hooma   #საქართველო";
+  const providerCaption = "exact approved caption #Hooma #საქართველო";
+  assert.notEqual(hash(approvedCaption), hash(providerCaption));
   const createTime = Math.floor(NOW.getTime() / 1_000);
   const client = new TikTokBusinessOrganicClient({
     activation: activation(),
@@ -755,7 +758,7 @@ test("owned-post duplicate lookup is bounded and hashes the exact caption", asyn
           code: 0,
           request_id: "req-page-2",
           data: {
-            videos: [{ item_id: REMOTE_POST_ID, caption: exactCaption, create_time: createTime - 1 }],
+            videos: [{ item_id: REMOTE_POST_ID, caption: providerCaption, create_time: createTime - 1 }],
             cursor: 0,
             has_more: false,
           },
@@ -766,7 +769,7 @@ test("owned-post duplicate lookup is bounded and hashes the exact caption", asyn
   try {
     const result = await client.lookupOwnedPostDuplicate({
       accountId: ACCOUNT_ID,
-      captionSha256: hash(exactCaption),
+      captionSha256: tiktokDuplicateCaptionSha256(approvedCaption),
       notBefore: "2026-08-15T14:00:00.000Z",
       maxPages: 2,
     }, "sensitive-token");
