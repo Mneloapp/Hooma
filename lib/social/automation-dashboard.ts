@@ -26,6 +26,13 @@ type ConnectionRow = {
 type JobRow = {
   id: string;
   provider: AutomationProvider;
+  product: {
+    name_ka: string | null;
+    hooma_name: string | null;
+  } | Array<{
+    name_ka: string | null;
+    hooma_name: string | null;
+  }> | null;
   state: string;
   scheduled_at: string;
   publish_not_after: string;
@@ -92,6 +99,7 @@ export type AutomationSwitches = {
 
 export type JobSnapshot = {
   provider: AutomationProvider;
+  productName: string;
   state: string;
   scheduledAt: string;
   publishNotAfter: string;
@@ -308,6 +316,11 @@ function jobBlockers(
   return [...new Set(blockers)];
 }
 
+function safeProductName(row: JobRow["product"]) {
+  const product = Array.isArray(row) ? row[0] : row;
+  return product?.name_ka?.trim() || product?.hooma_name?.trim() || "პროდუქტი";
+}
+
 export async function loadSocialAutomationDashboard(): Promise<SocialAutomationDashboardData> {
   const generatedAt = new Date().toISOString();
   const now = Date.parse(generatedAt);
@@ -340,7 +353,7 @@ export async function loadSocialAutomationDashboard(): Promise<SocialAutomationD
       .select("provider,username,scopes,access_expires_at,refresh_after,status,last_refreshed_at,last_verified_at,last_error_code")
       .in("provider", providers),
     admin.from("social_publish_jobs")
-      .select("id,provider,state,scheduled_at,publish_not_after,publishing_allowed,approval_status,music_mode,rights_status,visual_claims_status,remote_duplicate_status,last_error_code")
+      .select("id,provider,product:products!social_publish_jobs_product_id_fkey(name_ka,hooma_name),state,scheduled_at,publish_not_after,publishing_allowed,approval_status,music_mode,rights_status,visual_claims_status,remote_duplicate_status,last_error_code")
       .order("scheduled_at", { ascending: false })
       .limit(120),
     admin.from("social_publish_receipts")
@@ -383,6 +396,7 @@ export async function loadSocialAutomationDashboard(): Promise<SocialAutomationD
   const jobProvider = new Map(rawJobs.map((job) => [job.id, job.provider]));
   const jobs = rawJobs.map((row) => ({
     provider: row.provider,
+    productName: safeProductName(row.product),
     state: row.state,
     scheduledAt: row.scheduled_at,
     publishNotAfter: row.publish_not_after,

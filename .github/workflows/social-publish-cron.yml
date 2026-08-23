@@ -21,6 +21,10 @@ jobs:
           HOOMA_CRON_SECRET: ${{ secrets.HOOMA_CRON_SECRET }}
         run: |
           set -euo pipefail
+          if [[ -z "${HOOMA_CRON_SECRET:-}" ]]; then
+            echo "::error::HOOMA_CRON_SECRET is not configured"
+            exit 1
+          fi
           response_file="$(mktemp)"
           status="$(curl --silent --show-error \
             --output "$response_file" \
@@ -28,5 +32,19 @@ jobs:
             --header "Authorization: Bearer ${HOOMA_CRON_SECRET}" \
             --header "Accept: application/json" \
             https://hooma.ge/api/cron/social-publish)"
+          summary="$(jq -c '{
+            ok,
+            status,
+            health,
+            instagram: {
+              publishing: {status: .instagram.publishing.status, resultStatus: .instagram.publishing.result.status, errorCode: .instagram.publishing.result.errorCode},
+              analytics: {status: .instagram.analytics.status, resultStatus: .instagram.analytics.result.status, errorCode: .instagram.analytics.result.errorCode}
+            },
+            tiktok: {
+              publishing: {status: .tiktok.publishing.status, resultStatus: .tiktok.publishing.result.status, gates: (.tiktok.publishing.result.gates // []), errorCode: .tiktok.publishing.result.errorCode},
+              analytics: {status: .tiktok.analytics.status, resultStatus: .tiktok.analytics.result.status, errorCode: .tiktok.analytics.result.errorCode}
+            }
+          }' "$response_file" 2>/dev/null || printf '%s' '{"status":"INVALID_JSON"}')"
+          echo "Hooma social worker HTTP ${status}: ${summary}"
           test "$status" = "200"
-          jq -e '.ok == true and .status == "COMPLETE"' "$response_file" >/dev/null
+          jq -e '.ok == true and (.status == "COMPLETE" or .status == "COMPLETE_WITH_ANALYTICS_DEGRADED") and .health.publishing == true' "$response_file" >/dev/null

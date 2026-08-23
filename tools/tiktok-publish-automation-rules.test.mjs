@@ -11,6 +11,10 @@ const provider = readFileSync(new URL("../lib/social/providers/tiktok-business-o
 const cron = readFileSync(new URL("../app/api/cron/social-publish/route.ts", import.meta.url), "utf8");
 const campaign = readFileSync(new URL("../lib/social/campaigns/tiktok-nine-day-2026-08-22.ts", import.meta.url), "utf8");
 const canary = readFileSync(new URL("../app/api/social/tiktok/canary/route.ts", import.meta.url), "utf8");
+const retryMigration = readFileSync(
+  new URL("../supabase/migrations/20260823000100_rearm_failed_tiktok_policy_job.sql", import.meta.url),
+  "utf8",
+);
 
 test("TikTok lifecycle records immutable intent before the only publish dispatch", () => {
   assert.match(migration, /create table if not exists public\.social_tiktok_publish_lifecycles/);
@@ -65,4 +69,17 @@ test("read-only canary exposes only the provider's sanitized diagnostic code", (
   assert.match(canary, /return error\.code/);
   assert.doesNotMatch(canary, /error\.message[^\n]*response/);
   assert.doesNotMatch(canary, /accessToken[^\n]*response/);
+});
+
+test("policy failures keep their exact safe gate and allow one pre-dispatch retry", () => {
+  assert.match(worker, /function policyGateError/);
+  assert.match(worker, /`POLICY_GATE_\$\{failures\[0\]/);
+  assert.match(worker, /throw policyGateError\(publishingFailures\)/);
+  assert.match(retryMigration, /create or replace function public\.rearm_failed_tiktok_policy_job_v1/);
+  assert.match(retryMigration, /selected_job\.last_error_code <> 'POLICY_GATE_MISMATCH'/);
+  assert.match(retryMigration, /selected_job\.attempts <> 1/);
+  assert.match(retryMigration, /social_tiktok_publish_lifecycles/);
+  assert.match(retryMigration, /remote_publish_intent_absent', true/);
+  assert.match(retryMigration, /grant execute[\s\S]*to service_role/);
+  assert.doesNotMatch(retryMigration, /to authenticated/);
 });

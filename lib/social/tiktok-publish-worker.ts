@@ -107,6 +107,11 @@ function safeErrorCode(error: unknown) {
   return SAFE_ERROR.test(raw) ? raw : "UNEXPECTED_FAILURE";
 }
 
+function policyGateError(failures: string[]) {
+  const detailed = `POLICY_GATE_${failures[0] ?? "UNKNOWN"}`;
+  return new Error(SAFE_ERROR.test(detailed) ? detailed : "POLICY_GATE_MISMATCH");
+}
+
 function parseLifecycle(value: unknown): TikTokLifecycle {
   const row = object(value);
   const phase = text(row?.phase) as TikTokLifecycle["phase"];
@@ -343,8 +348,9 @@ async function startNewJob(
 ) {
   const failures = tiktokPublishGateFailures(job, "claimed", now);
   if (failures.length) {
-    await failJob(admin, job, new Error("POLICY_GATE_MISMATCH"), false);
-    return { status: "BLOCKED_POLICY" as const, postId: job.postId, gates: failures, remoteMutationAttempted: false };
+    const error = policyGateError(failures);
+    await failJob(admin, job, error, false);
+    return { status: "BLOCKED_POLICY" as const, postId: job.postId, gates: failures, errorCode: safeErrorCode(error), remoteMutationAttempted: false };
   }
   const media = await verifyAndSignTikTokStagedMedia(admin, job, now);
   const duplicate = await duplicateLookup(client, job, accessToken);
@@ -387,7 +393,7 @@ async function startNewJob(
     preflight_payload: { qa: qaReceipt, duplicate: duplicatePayload },
   }));
   const publishingFailures = tiktokPublishGateFailures(authorized, "publishing", now);
-  if (publishingFailures.length) throw new Error("POLICY_GATE_MISMATCH");
+  if (publishingFailures.length) throw policyGateError(publishingFailures);
   const input = publishInput(
     authorized,
     media.video.signedUrl,

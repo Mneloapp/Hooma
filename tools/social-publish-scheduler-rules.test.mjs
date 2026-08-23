@@ -14,7 +14,13 @@ test("external heartbeat invokes the authenticated social worker every 30 minute
   assert.match(workflow, /Authorization: Bearer \$\{HOOMA_CRON_SECRET\}/);
   assert.match(workflow, /https:\/\/hooma\.ge\/api\/cron\/social-publish/);
   assert.match(workflow, /test "\$status" = "200"/);
-  assert.match(workflow, /\.ok == true and \.status == "COMPLETE"/);
+  assert.match(workflow, /COMPLETE_WITH_ANALYTICS_DEGRADED/);
+  assert.match(workflow, /\.health\.publishing == true/);
+  assert.match(workflow, /HOOMA_CRON_SECRET is not configured/);
+  assert.match(workflow, /Hooma social worker HTTP \$\{status\}: \$\{summary\}/);
+  assert.match(workflow, /errorCode: \.instagram\.publishing\.result\.errorCode/);
+  assert.match(workflow, /gates: \(\.tiktok\.publishing\.result\.gates \/\/ \[\]\)/);
+  assert.doesNotMatch(workflow, /cat "\$response_file"/);
 });
 
 test("cron emits sanitized worker heartbeat diagnostics", () => {
@@ -22,4 +28,8 @@ test("cron emits sanitized worker heartbeat diagnostics", () => {
   assert.match(route, /resultStatus/);
   assert.match(route, /errorCode/);
   assert.doesNotMatch(route, /postId.*console\.info/s);
+  assert.match(route, /publishingWorkerHealthy/);
+  assert.match(route, /healthyPublishingResults/);
+  assert.match(route, /COMPLETE_WITH_ANALYTICS_DEGRADED/);
+  assert.match(route, /health: \{ publishing: publishingOk, analytics: analyticsOk \}/);
 });

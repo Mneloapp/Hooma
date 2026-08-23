@@ -29,6 +29,8 @@ test("analytics records immutable T+2h, T+24h and T+72h null-aware snapshots", a
   assert.match(migration, /social_json_is_redacted\(payload\)/);
   assert.match(worker, /fetchMediaInsights/);
   assert.match(worker, /instagramInsightsEnabled\(\)/);
+  assert.match(worker, /error instanceof InstagramReelsReadError/);
+  assert.match(worker, /`INSTAGRAM_\$\{operation\}_\$\{error\.code\}`/);
   assert.match(worker, /views: snapshot\.metrics\.views/);
   assert.doesNotMatch(worker, /\?\?\s*0/);
   assert.doesNotMatch(worker, /delete|promote|boost/i);
