@@ -36,6 +36,16 @@ const dateTime = new Intl.DateTimeFormat("ka-GE", {
   timeStyle: "short",
   timeZone: "Asia/Tbilisi",
 });
+const dateOnly = new Intl.DateTimeFormat("ka-GE", {
+  dateStyle: "medium",
+  timeZone: "Asia/Tbilisi",
+});
+const dateParts = new Intl.DateTimeFormat("en", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "Asia/Tbilisi",
+});
 const number = new Intl.NumberFormat("ka-GE");
 
 const providerLabels: Record<AutomationProvider, string> = {
@@ -60,6 +70,19 @@ function formatDate(value: string | null) {
   if (!value) return "—";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "—" : dateTime.format(parsed);
+}
+
+function formatDay(value: string | null) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "—" : dateOnly.format(parsed);
+}
+
+function localDateKey(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const parts = Object.fromEntries(dateParts.formatToParts(parsed).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function singleValue(value: string | string[] | undefined) {
@@ -204,8 +227,8 @@ function QueueItem({ job }: { job: JobSnapshot }) {
   };
   const completionMessage = terminalMessage[job.state] ?? null;
   return (
-    <li className="grid gap-4 border-t border-hooma-text/10 py-4 first:border-t-0 first:pt-0 lg:grid-cols-[170px_minmax(180px,.75fr)_minmax(0,1.25fr)]">
-      <div className="flex items-center gap-3"><ProviderMark provider={job.provider} /><div><p className="font-semibold">{providerLabels[job.provider]}</p><p className="mt-1 text-xs text-hooma-muted">{formatDate(job.scheduledAt)}</p></div></div>
+    <li className="grid gap-4 border-t border-hooma-text/10 py-4 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(260px,1fr)_minmax(180px,.65fr)_minmax(0,1.15fr)]">
+      <div className="flex items-center gap-3"><ProviderMark provider={job.provider} /><div><p className="font-semibold">{job.productName}</p><p className="mt-1 text-xs text-hooma-muted">{providerLabels[job.provider]} · {formatDate(job.scheduledAt)}</p></div></div>
       <div>
         <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${job.state === "published" ? "bg-emerald-100 text-emerald-900" : job.state.startsWith("blocked_") ? "bg-amber-100 text-amber-950" : terminal ? "bg-slate-100 text-slate-700" : "bg-[#fff2e8] text-[#9a3412]"}`}>{stateLabels[job.state] ?? "მდგომარეობა განახლდა"}</span>
         <p className="mt-2 text-xs text-hooma-muted">მუსიკა: {job.musicMode === "TIKTOK_CML" ? "TikTok Commercial Music" : "ლიცენზირებული master"}</p>
@@ -230,6 +253,14 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
   const connectionReadyCount = data.availability.connections ? data.connections.filter((connection) => connection.connected).length : null;
   const eventsAvailable = data.availability.receipts && data.availability.audit;
   const systemArmed = data.switches.globalPublishing && Object.values(data.switches.providers).some((provider) => provider.publishing);
+  const queueJobs = data.availability.jobs
+    ? [...data.jobs].sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))
+    : [];
+  const todayKey = localDateKey(data.generatedAt);
+  const todayJobs = todayKey ? queueJobs.filter((job) => localDateKey(job.scheduledAt) === todayKey) : [];
+  const queueRange = queueJobs.length
+    ? `${formatDay(queueJobs[0]?.scheduledAt ?? null)} — ${formatDay(queueJobs.at(-1)?.scheduledAt ?? null)}`
+    : null;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-7">
@@ -255,6 +286,16 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
         {[["დასტურს ელოდება", waitingApproval, Clock3, "ზუსტი fingerprint-ის დასტური"], ["ბლოკერით", blockedJobs, LockKeyhole, "არცერთი არ გაიგზავნება"], ["გამოქვეყნებულია", publishedJobs, RadioTower, "დადასტურებული შედეგი"], ["აუდიტის ჩანაწერი", eventsAvailable ? data.events.length : null, ReceiptText, "უსაფრთხო ბოლო მოვლენები"]].map(([label, value, Icon, note]) => { const CardIcon = Icon as typeof Clock3; return <article key={String(label)} className="rounded-[1.5rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm"><CardIcon size={19} className="text-hooma-accent" /><p className="mt-7 text-xs text-hooma-muted">{label as string}</p><p className="mt-1 text-3xl font-semibold">{typeof value === "number" ? number.format(value) : "—"}</p><p className="mt-2 text-xs text-hooma-muted">{note as string}</p></article>; })}
       </section>
 
+      <section className="rounded-[1.75rem] border border-blue-200 bg-blue-50/80 p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-800">Today · Asia/Tbilisi</p><h2 className="mt-2 text-2xl font-semibold">დღევანდელი განრიგი</h2></div>
+          <span className="text-xs font-semibold text-blue-950">{formatDay(data.generatedAt)} · {todayJobs.length} ჩანაწერი</span>
+        </div>
+        <ul className="mt-6">
+          {!data.availability.jobs ? <li className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-10 text-center text-amber-950"><AlertTriangle className="mx-auto" /><p className="mt-3 font-semibold">დღევანდელი რიგის მონაცემები მიუწვდომელია</p><p className="mt-1 text-sm">უცნობი მდგომარეობა ცარიელ განრიგად არ ითვლება.</p></li> : todayJobs.length ? todayJobs.map((job, index) => <QueueItem key={`today-${job.provider}-${job.scheduledAt}-${index}`} job={job} />) : <li className="rounded-2xl border border-dashed border-blue-300 bg-white/60 px-5 py-10 text-center"><Clock3 className="mx-auto text-blue-700" /><p className="mt-3 font-semibold">დღეს პოსტი დაგეგმილი არ არის</p><p className="mt-1 text-sm text-hooma-muted">Facebook-ის ავტომატური გაზიარება გამორთულია.</p></li>}
+        </ul>
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-2">{data.connections.map((connection) => <ConnectionCard key={connection.provider} connection={connection} review={reviewForProvider(data.appReviews, connection.provider)} oauthEnabled={data.switches.providers[connection.provider].oauthMaintenance} publishing={data.switches.providers[connection.provider].publishing} apiNetwork={data.switches.providers[connection.provider].apiNetwork} dataAvailable={data.availability.connections} />)}</section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]">
@@ -265,7 +306,7 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
         <article className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Owner guidance</p><h2 className="mt-2 text-2xl font-semibold">რას აკონტროლებს აგენტი</h2><ol className="mt-6 space-y-4 text-sm leading-6">{["ამზადებს ვიდეოს, caption-ს, cover-სა და მუსიკის უფლებების ქვითარს.", "ამოწმებს ანგარიშს, პროდუქტს, დუბლიკატს, დასტურსა და უსაფრთხო ვადას.", "ზუსტ დროს აგზავნის მხოლოდ ერთხელ და ინახავს უცვლელ აუდიტს.", "აგროვებს შედეგებს; მიუწვდომელს აჩვენებს როგორც უცნობს და არა ნულს."].map((item, index) => <li key={item} className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-hooma-text text-xs font-semibold text-white">{index + 1}</span><span>{item}</span></li>)}</ol><p className="mt-6 rounded-2xl bg-blue-50 p-4 text-xs leading-5 text-blue-950"><strong className="block">Facebook გათიშულია.</strong>Instagram-ის ავტომატიზაცია Facebook-ზე არაფერს გადააზიარებს, სანამ ცალკე წესით არ დამტკიცდება.</p></article>
       </section>
 
-      <section className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Canonical queue</p><h2 className="mt-2 text-2xl font-semibold">გამოსაქვეყნებელი რიგი</h2></div><span className="text-xs text-hooma-muted">ნაჩვენებია მხოლოდ უსაფრთხო ოპერაციული სტატუსები</span></div><ul className="mt-6">{!data.availability.jobs ? <li className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-12 text-center text-amber-950"><AlertTriangle className="mx-auto" /><p className="mt-3 font-semibold">რიგის მონაცემები მიუწვდომელია</p><p className="mt-1 text-sm">უცნობი მდგომარეობა ცარიელ რიგად არ ითვლება.</p></li> : data.jobs.length ? data.jobs.slice(0, 10).map((job, index) => <QueueItem key={`${job.provider}-${job.scheduledAt}-${index}`} job={job} />) : <li className="rounded-2xl border border-dashed border-hooma-text/15 px-5 py-12 text-center"><UploadCloud className="mx-auto text-hooma-muted" /><p className="mt-3 font-semibold">რიგში ჩანაწერი არ არის</p><p className="mt-1 text-sm text-hooma-muted">ახალი პაკეტი გამოჩნდება მხოლოდ მომზადებისა და უსაფრთხო შემოწმებების შემდეგ.</p></li>}</ul></section>
+      <section className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Canonical queue</p><h2 className="mt-2 text-2xl font-semibold">სრული გამოსაქვეყნებელი რიგი</h2></div><span className="text-xs text-hooma-muted">{data.availability.jobs ? `${queueJobs.length} ჩანაწერი${queueRange ? ` · ${queueRange}` : ""}` : "რიგის მდგომარეობა მიუწვდომელია"}</span></div><ul className="mt-6">{!data.availability.jobs ? <li className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-12 text-center text-amber-950"><AlertTriangle className="mx-auto" /><p className="mt-3 font-semibold">რიგის მონაცემები მიუწვდომელია</p><p className="mt-1 text-sm">უცნობი მდგომარეობა ცარიელ რიგად არ ითვლება.</p></li> : queueJobs.length ? queueJobs.map((job, index) => <QueueItem key={`${job.provider}-${job.scheduledAt}-${index}`} job={job} />) : <li className="rounded-2xl border border-dashed border-hooma-text/15 px-5 py-12 text-center"><UploadCloud className="mx-auto text-hooma-muted" /><p className="mt-3 font-semibold">რიგში ჩანაწერი არ არის</p><p className="mt-1 text-sm text-hooma-muted">ახალი პაკეტი გამოჩნდება მხოლოდ მომზადებისა და უსაფრთხო შემოწმებების შემდეგ.</p></li>}</ul></section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,.85fr)_minmax(0,1.15fr)]">
         <article className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><div className="flex items-center gap-3"><BarChart3 className="text-hooma-accent" /><div><p className="text-xs uppercase tracking-[0.2em] text-hooma-muted">Performance</p><h2 className="mt-1 text-2xl font-semibold">ბოლო მეტრიკები</h2></div></div><div className="mt-6 space-y-3">{!data.availability.metrics ? <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-10 text-center text-sm text-amber-950">მეტრიკები დროებით მიუწვდომელია — ეს არ ნიშნავს ნულს.</div> : data.metrics.length ? data.metrics.map((metric, index) => <div key={`${metric.capturedAt}-${index}`} className="rounded-2xl bg-hooma-background p-4"><div className="flex items-center justify-between gap-3"><strong>{metric.provider ? providerLabels[metric.provider] : "პლატფორმა"}</strong><span className="text-xs text-hooma-muted">{formatDate(metric.capturedAt)}</span></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div><span className="block text-lg font-semibold">{metric.views === null ? "—" : number.format(metric.views)}</span>ნახვა</div><div><span className="block text-lg font-semibold">{metric.comments === null ? "—" : number.format(metric.comments)}</span>კომენტარი</div><div><span className="block text-lg font-semibold">{metric.clicks === null ? "—" : number.format(metric.clicks)}</span>გადასვლა</div></div></div>) : <div className="rounded-2xl border border-dashed border-hooma-text/15 px-5 py-10 text-center text-sm text-hooma-muted">მეტრიკები ჯერ არ არის ჩაწერილი.</div>}</div></article>

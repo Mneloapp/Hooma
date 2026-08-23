@@ -97,3 +97,14 @@ test("blocked terminal jobs never inflate the active queue or show a green no-bl
 test("due-time duplicate preflight is not reported as a waiting queue blocker", () => {
   assert.doesNotMatch(loader, /blockers\.push\("დისტანციური დუბლიკატი ჯერ არ შემოწმებულა"\)/);
 });
+
+test("dashboard shows today's schedule and never truncates the canonical queue", () => {
+  assert.match(page, /დღევანდელი განრიგი/);
+  assert.match(page, /Today · Asia\/Tbilisi/);
+  assert.match(page, /queueJobs\.map/);
+  assert.doesNotMatch(page, /data\.jobs\.slice\(0,\s*10\)/);
+  assert.match(page, /სრული გამოსაქვეყნებელი რიგი/);
+  assert.match(page, /job\.productName/);
+  assert.match(loader, /product:products!social_publish_jobs_product_id_fkey\(name_ka,hooma_name\)/);
+  assert.match(loader, /productName: safeProductName\(row\.product\)/);
+});
