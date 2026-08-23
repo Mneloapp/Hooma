@@ -464,6 +464,24 @@ test("publish request includes CML, Hooma-brand, AI, comment, and no-cross-post 
   });
 });
 
+test("publish accepts UTC timestamps returned by Supabase", () => {
+  enableNetworkAndPublishing();
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+  });
+  try {
+    assert.doesNotThrow(() => client.preparePublishVideo(publishInput({
+      scheduledAt: "2026-08-15T15:59:00+00:00",
+      publishNotAfter: "2026-08-15T16:05:00+00:00",
+    })));
+  } finally {
+    clearNetworkAndPublishing();
+  }
+});
+
 test("publish blocks stale staging URLs and invalid disclosure settings before transport", async () => {
   enableNetworkAndPublishing();
   let calls = 0;

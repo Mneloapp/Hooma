@@ -276,7 +276,10 @@ function boundedCaption(value: unknown, maximum = 2_200) {
 function canonicalIsoTimestamp(value: unknown) {
   if (typeof value !== "string") return null;
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
+  const normalizedUtc = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/.test(value)
+    ? `${value.slice(0, -6)}.000Z`
+    : value;
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === normalizedUtc
     ? timestamp
     : null;
 }
