@@ -18,6 +18,7 @@ test("external heartbeat invokes the authenticated social worker every 30 minute
   assert.match(workflow, /HOOMA_CRON_SECRET is not configured/);
   assert.match(workflow, /Hooma social worker HTTP \$\{status\}: \$\{summary\}/);
   assert.match(workflow, /errorCode: \.instagram\.publishing\.result\.errorCode/);
+  assert.match(workflow, /gates: \(\.tiktok\.publishing\.result\.gates \/\/ \[\]\)/);
   assert.doesNotMatch(workflow, /cat "\$response_file"/);
 });
 

@@ -36,12 +36,12 @@ jobs:
             ok,
             status,
             instagram: {
-              publishing: {status: .instagram.publishing.status, errorCode: .instagram.publishing.result.errorCode},
-              analytics: {status: .instagram.analytics.status, errorCode: .instagram.analytics.result.errorCode}
+              publishing: {status: .instagram.publishing.status, resultStatus: .instagram.publishing.result.status, errorCode: .instagram.publishing.result.errorCode},
+              analytics: {status: .instagram.analytics.status, resultStatus: .instagram.analytics.result.status, errorCode: .instagram.analytics.result.errorCode}
             },
             tiktok: {
-              publishing: {status: .tiktok.publishing.status, errorCode: .tiktok.publishing.result.errorCode},
-              analytics: {status: .tiktok.analytics.status, errorCode: .tiktok.analytics.result.errorCode}
+              publishing: {status: .tiktok.publishing.status, resultStatus: .tiktok.publishing.result.status, gates: (.tiktok.publishing.result.gates // []), errorCode: .tiktok.publishing.result.errorCode},
+              analytics: {status: .tiktok.analytics.status, resultStatus: .tiktok.analytics.result.status, errorCode: .tiktok.analytics.result.errorCode}
             }
           }' "$response_file" 2>/dev/null || printf '%s' '{"status":"INVALID_JSON"}')"
           echo "Hooma social worker HTTP ${status}: ${summary}"
