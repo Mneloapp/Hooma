@@ -1397,7 +1397,7 @@ export class TikTokBusinessOrganicClient {
     if (
       !Number.isInteger(response.data.max_video_post_duration_sec)
       || Number(response.data.max_video_post_duration_sec) < 3
-      || Number(response.data.max_video_post_duration_sec) > 600
+      || Number(response.data.max_video_post_duration_sec) > 3_600
     ) {
       throw new TikTokOrganicError({
         operation: "settings",

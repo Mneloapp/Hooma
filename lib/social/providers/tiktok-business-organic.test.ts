@@ -801,7 +801,7 @@ test("video settings preflight returns only validated account capabilities", asy
             comment_disabled: true,
             duet_disabled: false,
             stitch_disabled: false,
-            max_video_post_duration_sec: 600,
+            max_video_post_duration_sec: 900,
           },
         },
       };
@@ -811,7 +811,7 @@ test("video settings preflight returns only validated account capabilities", asy
     const result = await client.fetchVideoSettings({ accountId: ACCOUNT_ID }, "sensitive-token");
     assert.equal(result.commentDisabled, true);
     assert.equal(result.publicPostingAvailable, true);
-    assert.equal(result.maxVideoPostDurationSec, 600);
+    assert.equal(result.maxVideoPostDurationSec, 900);
     assert.equal(result.providerRequestId, "req-settings-1");
   } finally {
     delete process.env.HOOMA_TIKTOK_ORGANIC_NETWORK_ENABLED;
