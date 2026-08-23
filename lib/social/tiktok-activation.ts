@@ -3,7 +3,6 @@ import "server-only";
 import { createHash } from "node:crypto";
 import {
   providerConfig,
-  socialMediaBaseUrl,
   TIKTOK_APPROVED_APP_ID,
   tiktokAppReviewReceiptSha256,
   tiktokOAuthConnectionReceiptSha256,
@@ -14,6 +13,7 @@ import {
   TIKTOK_ORGANIC_SCHEMA_ID,
   type TikTokOrganicActivation,
 } from "./providers/tiktok-business-organic";
+import { TIKTOK_MEDIA_PROXY_PREFIX } from "./tiktok-media-delivery";
 
 type JsonObject = Record<string, unknown>;
 
@@ -41,7 +41,8 @@ export function tiktokOrganicActivation(
   connection: TikTokPublishingConnection,
 ): TikTokOrganicActivation {
   const configured = providerConfig("tiktok");
-  const mediaHost = new URL(socialMediaBaseUrl()).hostname.toLowerCase();
+  const mediaUrl = new URL(TIKTOK_MEDIA_PROXY_PREFIX);
+  const mediaHost = mediaUrl.hostname.toLowerCase();
   return {
     schemaId: TIKTOK_ORGANIC_SCHEMA_ID,
     apiVersion: "v1.3",
@@ -89,9 +90,11 @@ export function tiktokOrganicActivation(
     }),
     urlPropertyReceiptSha256: sha256({
       provider: "tiktok",
-      origin: new URL(socialMediaBaseUrl()).origin,
+      origin: mediaUrl.origin,
+      prefix: TIKTOK_MEDIA_PROXY_PREFIX,
       host: mediaHost,
-      bucketVisibility: "PRIVATE_SIGNED_URL_ONLY",
+      sourceBucketVisibility: "PRIVATE_SIGNED_URL_ONLY",
+      deliveryMode: "SAME_ORIGIN_STREAMING_PROXY",
       minimumTtlSeconds: 1_800,
     }),
     cmlSchemaReceiptSha256: sha256({

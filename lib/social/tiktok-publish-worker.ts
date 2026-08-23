@@ -20,6 +20,10 @@ import {
 } from "./providers/tiktok-business-organic";
 import { verifyAndSignTikTokStagedMedia } from "./staging";
 import { tiktokOrganicActivation } from "./tiktok-activation";
+import {
+  TIKTOK_MEDIA_PROXY_PREFIX,
+  tiktokMediaDeliveryUrl,
+} from "./tiktok-media-delivery";
 
 type JsonObject = Record<string, unknown>;
 type AdminClient = ReturnType<typeof createAdminClient> & {
@@ -353,6 +357,17 @@ async function startNewJob(
     return { status: "BLOCKED_POLICY" as const, postId: job.postId, gates: failures, errorCode: safeErrorCode(error), remoteMutationAttempted: false };
   }
   const media = await verifyAndSignTikTokStagedMedia(admin, job, now);
+  const [accountSettings, urlProperty] = await Promise.all([
+    client.fetchVideoSettings({ accountId: job.accountId }, accessToken),
+    client.fetchUrlPropertyStatus({ mediaBaseUrl: TIKTOK_MEDIA_PROXY_PREFIX }),
+  ]);
+  if (
+    !accountSettings.publicPostingAvailable
+    || (job.settings.commentsEnabled === true && accountSettings.commentDisabled)
+    || (job.settings.duetEnabled === true && accountSettings.duetDisabled)
+    || (job.settings.stitchEnabled === true && accountSettings.stitchDisabled)
+  ) throw new Error("TIKTOK_ACCOUNT_SETTINGS_CONFLICT");
+  if (urlProperty.status !== "VERIFIED") throw new Error("TIKTOK_URL_PROPERTY_NOT_VERIFIED");
   const duplicate = await duplicateLookup(client, job, accessToken);
   const duplicatePayload = {
     schema: "tiktok-owned-post-duplicate-v1",
@@ -396,7 +411,7 @@ async function startNewJob(
   if (publishingFailures.length) throw policyGateError(publishingFailures);
   const input = publishInput(
     authorized,
-    media.video.signedUrl,
+    tiktokMediaDeliveryUrl(media.video.signedUrl, media.video.sha256),
     media.expiresAt,
     urlPropertyReceiptSha256,
   );

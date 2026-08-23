@@ -15,6 +15,13 @@ const retryMigration = readFileSync(
   new URL("../supabase/migrations/20260823000100_rearm_failed_tiktok_policy_job.sql", import.meta.url),
   "utf8",
 );
+const mediaProxy = readFileSync(new URL("../app/api/social/tiktok/media/[asset]/route.ts", import.meta.url), "utf8");
+const mediaDelivery = readFileSync(new URL("../lib/social/tiktok-media-delivery.ts", import.meta.url), "utf8");
+const propertyRoute = readFileSync(new URL("../app/api/social/tiktok/url-property/route.ts", import.meta.url), "utf8");
+const propertyMigration = readFileSync(
+  new URL("../supabase/migrations/20260823000300_tiktok_url_property_verification.sql", import.meta.url),
+  "utf8",
+);
 
 test("TikTok lifecycle records immutable intent before the only publish dispatch", () => {
   assert.match(migration, /create table if not exists public\.social_tiktok_publish_lifecycles/);
@@ -82,4 +89,24 @@ test("policy failures keep their exact safe gate and allow one pre-dispatch retr
   assert.match(retryMigration, /remote_publish_intent_absent', true/);
   assert.match(retryMigration, /grant execute[\s\S]*to service_role/);
   assert.doesNotMatch(retryMigration, /to authenticated/);
+});
+
+test("TikTok media delivery uses an exact verified Hooma prefix and private source allowlist", () => {
+  assert.match(worker, /TIKTOK_MEDIA_PROXY_PREFIX/);
+  assert.match(worker, /TIKTOK_URL_PROPERTY_NOT_VERIFIED/);
+  assert.match(mediaDelivery, /social-publishing-staging/);
+  assert.match(mediaProxy, /redirect: "error"/);
+  assert.match(mediaProxy, /Content-Type": "video\/mp4"/);
+  assert.match(mediaProxy, /VIDEO_ASSET = \/\^\[a-f0-9\]\{64\}/);
+  assert.doesNotMatch(mediaProxy, /SUPABASE_SECRET_KEY/);
+});
+
+test("URL property provisioning is owner-only and persists no app credential", () => {
+  assert.match(propertyRoute, /requirePermission\("team\.manage"\)/);
+  assert.match(propertyRoute, /actor\.role !== "owner"/);
+  assert.match(propertyRoute, /client\.addUrlProperty/);
+  assert.match(propertyRoute, /client\.verifyUrlProperty/);
+  assert.match(propertyMigration, /enable row level security/);
+  assert.match(propertyMigration, /from public, anon, authenticated, service_role/);
+  assert.doesNotMatch(propertyMigration, /client_secret|app_secret|access_token/i);
 });
