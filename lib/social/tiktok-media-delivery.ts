@@ -23,13 +23,19 @@ function sourceUrl(value: string) {
   return source;
 }
 
+function sourceMatchesVideoSha(source: URL, expectedVideoSha256: string) {
+  const asset = decodeURIComponent(source.pathname).split("/").at(-1);
+  return asset === `${expectedVideoSha256}.mp4`
+    || asset === `video-${expectedVideoSha256}.mp4`;
+}
+
 export function tiktokMediaDeliveryUrl(
   signedSourceUrl: string,
   expectedVideoSha256: string,
 ) {
   if (!SHA256.test(expectedVideoSha256)) throw new Error("TIKTOK_MEDIA_SHA_INVALID");
   const source = sourceUrl(signedSourceUrl);
-  if (!decodeURIComponent(source.pathname).endsWith(`/${expectedVideoSha256}.mp4`)) {
+  if (!sourceMatchesVideoSha(source, expectedVideoSha256)) {
     throw new Error("TIKTOK_MEDIA_SOURCE_BINDING_MISMATCH");
   }
   const delivery = new URL(`${expectedVideoSha256}.mp4`, TIKTOK_MEDIA_PROXY_PREFIX);
@@ -52,7 +58,7 @@ export function decodeTikTokMediaSource(
     throw new Error("TIKTOK_MEDIA_DELIVERY_REQUEST_INVALID");
   }
   const source = sourceUrl(decoded);
-  if (!decodeURIComponent(source.pathname).endsWith(`/${match[1]}.mp4`)) {
+  if (!sourceMatchesVideoSha(source, match[1])) {
     throw new Error("TIKTOK_MEDIA_SOURCE_BINDING_MISMATCH");
   }
   return source;

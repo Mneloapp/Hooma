@@ -152,7 +152,7 @@ export type TikTokCmlSelectionReceipt = {
   selectionFingerprint: string;
 };
 
-export type TikTokOwnedMasterReceipt = {
+export type TikTokLegacyOwnedMasterReceipt = {
   schemaVersion: 1;
   receiptType: "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE";
   immutable: true;
@@ -181,6 +181,49 @@ export type TikTokOwnedMasterReceipt = {
     sourceVoiceSha256: string;
   };
 };
+
+export type TikTokMusicOnlyOwnedMasterReceipt = {
+  schemaVersion: 1;
+  receiptType: "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE";
+  immutable: true;
+  context: { platform: "tiktok"; postId: string };
+  track: {
+    id: string;
+    commercialUseAllowed: true;
+    trackSha256: string;
+    platforms: string[];
+    license: {
+      status: "VERIFIED";
+      commercialUseAllowed: true;
+      platforms: string[];
+      receiptSha256: string;
+    };
+  };
+  output: {
+    sha256: string;
+    videoStreamSha256: string;
+    audioCodec: string;
+    durationSeconds: number;
+  };
+  sourceSilentMaster: {
+    sha256: string;
+    videoStreamSha256: string;
+    durationSeconds: number;
+    preserved: true;
+  };
+  policy: { sha256: string };
+  selection: {
+    seedSha256: string;
+    candidateSetSha256: string;
+    selectedTrackId: string;
+  };
+  approval: { status: "WAITING_FOR_GIORGI" | "APPROVED_EXACT" };
+  provenanceSha256: string;
+};
+
+export type TikTokOwnedMasterReceipt =
+  | TikTokLegacyOwnedMasterReceipt
+  | TikTokMusicOnlyOwnedMasterReceipt;
 
 export type TikTokPublishSettings = {
   commentsEnabled: true;
@@ -616,41 +659,115 @@ export function validateTikTokOwnedMasterReceipt(
   const license = record(track?.license);
   const output = record(receipt?.output);
   const sourceReceipt = record(receipt?.sourceReceipt);
+  const sourceSilentMaster = record(receipt?.sourceSilentMaster);
+  const policy = record(receipt?.policy);
+  const selection = record(receipt?.selection);
+  const mix = record(receipt?.mix);
+  const approval = record(receipt?.approval);
   const platforms = Array.isArray(license?.platforms) ? license.platforms : [];
-  if (
-    !hasExactKeys(receipt, [
+  const trackPlatforms = Array.isArray(track?.platforms) ? track.platforms : [];
+  const legacyReceipt =
+    hasExactKeys(receipt, [
       "schemaVersion", "receiptType", "immutable", "context", "track", "output", "sourceReceipt",
     ])
-    || !hasExactKeys(context, ["platform", "account", "postId", "campaignId"])
-    || !hasExactKeys(track, ["id", "commercialUseAllowed", "trackSha256", "license"])
-    || !hasExactKeys(license, ["status", "commercialUseAllowed", "platforms", "receiptSha256"])
-    || !hasExactKeys(output, ["sha256", "audioPcmSha256"])
-    || !hasExactKeys(sourceReceipt, [
+    && hasExactKeys(context, ["platform", "account", "postId", "campaignId"])
+    && hasExactKeys(track, ["id", "commercialUseAllowed", "trackSha256", "license"])
+    && hasExactKeys(license, ["status", "commercialUseAllowed", "platforms", "receiptSha256"])
+    && hasExactKeys(output, ["sha256", "audioPcmSha256"])
+    && hasExactKeys(sourceReceipt, [
       "receiptType", "receiptSha256", "provenanceSha256", "sourceVoiceSha256",
     ])
-    || receipt?.schemaVersion !== 1
+    && context?.account === "@hooma.ge"
+    && safeId(context.campaignId, 160) !== null
+    && platforms.length === 1
+    && platforms[0] === "tiktok"
+    && SHA256.test(String(output?.audioPcmSha256 ?? ""))
+    && sourceReceipt?.receiptType === "HOOMA_LICENSED_VOICE_MUSIC_MASTER_PROVENANCE"
+    && SHA256.test(String(sourceReceipt.receiptSha256 ?? ""))
+    && SHA256.test(String(sourceReceipt.provenanceSha256 ?? ""))
+    && SHA256.test(String(sourceReceipt.sourceVoiceSha256 ?? ""));
+
+  const outputDuration = Number(output?.durationSeconds);
+  const sourceDuration = Number(sourceSilentMaster?.durationSeconds);
+  const musicOnlyReceipt =
+    sourceReceipt === null
+    && hasExactKeys(receipt, [
+      "schemaVersion", "receiptType", "immutable", "createdAt", "policy", "context",
+      "sourceSilentMaster", "selection", "track", "mix", "output", "approval",
+      "provenanceSha256",
+    ])
+    && hasExactKeys(context, ["platform", "mood", "postId", "creativeKey"])
+    && hasExactKeys(policy, ["policyId", "sha256"])
+    && hasExactKeys(sourceSilentMaster, [
+      "path", "sha256", "videoStreamSha256", "durationSeconds", "preserved",
+    ])
+    && hasExactKeys(selection, [
+      "algorithm", "seedSha256", "candidateSetSha256", "eligibleTrackIds", "selectedTrackId",
+    ])
+    && hasExactKeys(track, [
+      "id", "title", "creator", "sourcePath", "trackSha256", "commercialUseAllowed",
+      "moods", "platforms", "license",
+    ])
+    && hasExactKeys(license, [
+      "status", "licenseType", "licenseId", "issuedTo", "obtainedAt", "expiresAt",
+      "territories", "platforms", "commercialUseAllowed", "organicUseAllowed",
+      "receiptPath", "receiptSha256", "sourceGeneratorPath", "sourceGeneratorSha256",
+    ])
+    && hasExactKeys(mix, [
+      "preparationMode", "loopSegments", "sourceOffsetSeconds", "fadeSeconds", "fadeCurve",
+      "targetDurationSeconds", "targetIntegratedLufs", "truePeakDbtpMaximum",
+      "firstPassMeasurement", "finalMeasurement", "audioCodec", "audioBitrate",
+      "sampleRate", "channels", "filterSha256",
+    ])
+    && hasExactKeys(output, [
+      "path", "sha256", "videoStreamSha256", "durationSeconds", "videoCodec", "width",
+      "height", "framesPerSecond", "pixelFormat", "audioCodec", "sampleRate", "channels",
+    ])
+    && hasExactKeys(approval, ["status", "reason"])
+    && canonicalIsoTimestamp(receipt?.createdAt) !== null
+    && policy?.policyId === "HOOMA-LICENSED-MUSIC-V1"
+    && SHA256.test(String(receipt?.provenanceSha256 ?? ""))
+    && SHA256.test(String(policy?.sha256 ?? ""))
+    && selection?.algorithm === "SHA256_PLATFORM_MOOD_CREATIVE_V1"
+    && SHA256.test(String(selection?.seedSha256 ?? ""))
+    && SHA256.test(String(selection?.candidateSetSha256 ?? ""))
+    && Array.isArray(selection?.eligibleTrackIds)
+    && selection.eligibleTrackIds.includes(track?.id)
+    && selection?.selectedTrackId === track?.id
+    && trackPlatforms.includes("tiktok")
+    && license?.organicUseAllowed === true
+    && SHA256.test(String(license?.sourceGeneratorSha256 ?? ""))
+    && sourceSilentMaster?.preserved === true
+    && SHA256.test(String(sourceSilentMaster.sha256 ?? ""))
+    && SHA256.test(String(sourceSilentMaster.videoStreamSha256 ?? ""))
+    && sourceSilentMaster.videoStreamSha256 === output?.videoStreamSha256
+    && SHA256.test(String(output?.videoStreamSha256 ?? ""))
+    && output?.audioCodec === "aac"
+    && output?.videoCodec === "h264"
+    && output?.pixelFormat === "yuv420p"
+    && Number.isFinite(outputDuration)
+    && outputDuration > 0
+    && Number.isFinite(sourceDuration)
+    && Math.abs(outputDuration - sourceDuration) <= 0.01
+    && new Set(["WAITING_FOR_GIORGI", "APPROVED_EXACT"]).has(String(approval?.status ?? ""));
+
+  if (
+    receipt?.schemaVersion !== 1
     || receipt.receiptType !== "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE"
     || receipt.immutable !== true
     || context?.platform !== "tiktok"
-    || context.account !== "@hooma.ge"
     || context.postId !== expected.postId
-    || !safeId(context.campaignId, 160)
     || track?.commercialUseAllowed !== true
     || !safeId(track.id, 160)
     || !SHA256.test(String(track.trackSha256 ?? ""))
     || license?.status !== "VERIFIED"
     || license.commercialUseAllowed !== true
-    || platforms.length !== 1
-    || platforms[0] !== "tiktok"
+    || !platforms.includes("tiktok")
     || !SHA256.test(String(license.receiptSha256 ?? ""))
     || output?.sha256 !== expected.videoSha256
-    || !SHA256.test(String(output.audioPcmSha256 ?? ""))
-    || sourceReceipt?.receiptType !== "HOOMA_LICENSED_VOICE_MUSIC_MASTER_PROVENANCE"
-    || !SHA256.test(String(sourceReceipt.receiptSha256 ?? ""))
-    || !SHA256.test(String(sourceReceipt.provenanceSha256 ?? ""))
-    || !SHA256.test(String(sourceReceipt.sourceVoiceSha256 ?? ""))
     || !safeId(expected.postId, 160)
     || !SHA256.test(expected.videoSha256)
+    || (!legacyReceipt && !musicOnlyReceipt)
   ) {
     throw new TikTokOrganicError({ operation: "music", code: "OWNED_MASTER_RECEIPT_INVALID" });
   }
