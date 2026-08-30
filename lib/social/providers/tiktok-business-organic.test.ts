@@ -136,6 +136,98 @@ function ownedMasterReceipt() {
   };
 }
 
+function musicOnlyOwnedMasterReceipt() {
+  return {
+    schemaVersion: 1,
+    receiptType: "HOOMA_LICENSED_MUSIC_MASTER_PROVENANCE",
+    immutable: true,
+    createdAt: "2026-08-29T17:05:26.865Z",
+    policy: { policyId: "HOOMA-LICENSED-MUSIC-V1", sha256: hash("policy") },
+    context: {
+      platform: "tiktok",
+      mood: "playful",
+      postId: POST_ID,
+      creativeKey: "pop-eyed-mouse",
+    },
+    sourceSilentMaster: {
+      path: "/private/silent-master.mp4",
+      sha256: hash("silent-master"),
+      videoStreamSha256: hash("video-stream"),
+      durationSeconds: 11.7,
+      preserved: true,
+    },
+    selection: {
+      algorithm: "SHA256_PLATFORM_MOOD_CREATIVE_V1",
+      seedSha256: hash("seed"),
+      candidateSetSha256: hash("candidate-set"),
+      eligibleTrackIds: ["hooma-original-playful-discovery-v1"],
+      selectedTrackId: "hooma-original-playful-discovery-v1",
+    },
+    track: {
+      id: "hooma-original-playful-discovery-v1",
+      title: "Hooma Playful Discovery",
+      creator: "Hooma",
+      sourcePath: "/private/music.wav",
+      trackSha256: hash("track"),
+      commercialUseAllowed: true,
+      moods: ["playful"],
+      platforms: ["tiktok", "instagram"],
+      license: {
+        status: "VERIFIED",
+        licenseType: "HOOMA_ORIGINAL_PROCEDURAL",
+        licenseId: "HOOMA-ORIGINAL-PLAYFUL-DISCOVERY-V1",
+        issuedTo: "Hooma",
+        obtainedAt: "2026-08-15T18:15:00+04:00",
+        expiresAt: null,
+        territories: ["WORLDWIDE"],
+        commercialUseAllowed: true,
+        organicUseAllowed: true,
+        platforms: ["tiktok", "instagram"],
+        receiptPath: "/private/music.rights.json",
+        receiptSha256: hash("license"),
+        sourceGeneratorPath: "/private/generate-original-music.mjs",
+        sourceGeneratorSha256: hash("source-generator"),
+      },
+    },
+    mix: {
+      preparationMode: "DETERMINISTIC_CUT",
+      loopSegments: 1,
+      sourceOffsetSeconds: 5.3,
+      fadeSeconds: 0.12,
+      fadeCurve: "qsin",
+      targetDurationSeconds: 11.7,
+      targetIntegratedLufs: -18,
+      truePeakDbtpMaximum: -1.5,
+      firstPassMeasurement: { input_i: "-15.89" },
+      finalMeasurement: { integratedLufs: -18, truePeakDbtp: -4.5 },
+      audioCodec: "aac",
+      audioBitrate: "192k",
+      sampleRate: 48000,
+      channels: 2,
+      filterSha256: hash("filter"),
+    },
+    output: {
+      path: "/private/final-master.mp4",
+      sha256: hash("video"),
+      videoStreamSha256: hash("video-stream"),
+      durationSeconds: 11.7,
+      videoCodec: "h264",
+      width: 1080,
+      height: 1920,
+      framesPerSecond: 30,
+      pixelFormat: "yuv420p",
+      audioCodec: "aac",
+      sampleRate: 48000,
+      channels: 2,
+    },
+    approval: {
+      status: "WAITING_FOR_GIORGI",
+      reason: "The immutable binary receives exact approval at the publish-job gate.",
+    },
+    provenanceSha256: hash("provenance"),
+  };
+}
+
 function publishInput(overrides: Partial<TikTokOrganicPublishInput> = {}): TikTokOrganicPublishInput {
   return {
     accountId: ACCOUNT_ID,
@@ -712,6 +804,62 @@ test("licensed pre-mixed owned master publishes without replacing audio", async 
     assert.equal("music_sound_info" in postInfo, false);
     assert.equal(postInfo.is_ai_generated, true);
     assert.equal(postInfo.is_brand_organic, true);
+  } finally {
+    clearNetworkAndPublishing();
+  }
+});
+
+test("licensed music-only campaign master publishes without inventing voice provenance", async () => {
+  enableNetworkAndPublishing();
+  let observedBody: any = null;
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async (request) => {
+      observedBody = JSON.parse(request.body ?? "null") as Record<string, unknown>;
+      return { status: 200, body: { code: 0, request_id: "req-music-only", data: { share_id: "share-music-only" } } };
+    },
+  });
+  try {
+    const input = publishInput({
+      musicMode: "HOOMA_OWNED_MASTER",
+      musicReceipt: musicOnlyOwnedMasterReceipt(),
+    });
+    const prepared = client.preparePublishVideo(input);
+    const result = await client.publishVideo(input, "sensitive-token");
+    assert.equal(result.providerRequestSha256, prepared.providerRequestSha256);
+    assert.equal(result.musicMode, "HOOMA_OWNED_MASTER");
+    assert.equal(result.cmlSelectionFingerprint, null);
+    const postInfo = observedBody?.post_info as Record<string, unknown>;
+    assert.equal("music_sound_info" in postInfo, false);
+  } finally {
+    clearNetworkAndPublishing();
+  }
+});
+
+test("music-only campaign receipt fails closed when the silent video stream changes", () => {
+  enableNetworkAndPublishing();
+  const client = new TikTokBusinessOrganicClient({
+    activation: activation(),
+    networkEnabled: true,
+    publishingEnabled: true,
+    now: () => NOW,
+    transport: async () => {
+      throw new Error("transport must not run");
+    },
+  });
+  try {
+    const musicReceipt = musicOnlyOwnedMasterReceipt();
+    musicReceipt.sourceSilentMaster.videoStreamSha256 = hash("different-video-stream");
+    assert.throws(
+      () => client.preparePublishVideo(publishInput({
+        musicMode: "HOOMA_OWNED_MASTER",
+        musicReceipt,
+      })),
+      /OWNED_MASTER_RECEIPT_INVALID/,
+    );
   } finally {
     clearNetworkAndPublishing();
   }
