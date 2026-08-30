@@ -39,6 +39,8 @@ test("refresh orchestration claims and completes each enabled provider", async (
   const queues: Record<SocialProvider, TestClaim[]> = {
     instagram: [{ provider: "instagram", id: "ig-1" }],
     tiktok: [{ provider: "tiktok", id: "tt-1" }],
+    facebook: [],
+    youtube: [],
   };
   const refreshed: string[] = [];
   const markedFailed: string[] = [];
@@ -64,6 +66,8 @@ test("a failed provider is marked and does not block the other provider", async 
   const queues: Record<SocialProvider, TestClaim[]> = {
     instagram: [{ provider: "instagram", id: "ig-1" }],
     tiktok: [{ provider: "tiktok", id: "tt-1" }],
+    facebook: [],
+    youtube: [],
   };
   const refreshed: string[] = [];
   const markedFailed: string[] = [];

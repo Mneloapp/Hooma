@@ -24,10 +24,12 @@ export type SocialTokenRefreshResult = {
 export function enabledSocialRefreshProviders(input: {
   instagramOAuthEnabled: boolean;
   tiktokOAuthEnabled: boolean;
+  youtubeOAuthEnabled?: boolean;
 }) {
   const providers: SocialProvider[] = [];
   if (input.instagramOAuthEnabled) providers.push("instagram");
   if (input.tiktokOAuthEnabled) providers.push("tiktok");
+  if (input.youtubeOAuthEnabled) providers.push("youtube");
   return providers;
 }
 

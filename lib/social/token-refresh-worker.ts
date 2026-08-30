@@ -12,6 +12,10 @@ import type {
   TikTokOAuthIdentity,
   TikTokOAuthToken,
 } from "./providers/tiktok-oauth";
+import type {
+  YouTubeChannelIdentity,
+  YouTubeRefreshedToken,
+} from "./providers/youtube-oauth";
 
 type InstagramRefreshToken = {
   accessToken: string;
@@ -36,11 +40,56 @@ export type SocialTokenRefreshDependencies = {
     accessToken: string,
     expectedAccountId: string,
   ) => Promise<TikTokOAuthIdentity>;
+  refreshYouTube?: (refreshToken: string) => Promise<YouTubeRefreshedToken>;
+  getYouTubeIdentity?: (accessToken: string) => Promise<YouTubeChannelIdentity>;
   complete: (
     claim: SocialConnectionRefreshClaim,
     input: NewSocialConnection,
   ) => Promise<void>;
 };
+
+type YouTubeTokenRefreshDependencies = Pick<
+  SocialTokenRefreshDependencies,
+  "decrypt" | "refreshYouTube" | "getYouTubeIdentity" | "complete"
+>;
+
+export async function refreshClaimedYouTubeConnection(
+  claim: SocialConnectionRefreshClaim,
+  dependencies: YouTubeTokenRefreshDependencies,
+) {
+  if (claim.provider !== "youtube") {
+    throw new Error("YOUTUBE_REFRESH_PROVIDER_MISMATCH");
+  }
+  if (!dependencies.refreshYouTube || !dependencies.getYouTubeIdentity) {
+    throw new Error("YOUTUBE_REFRESH_DEPENDENCIES_MISSING");
+  }
+  const currentRefreshToken = dependencies.decrypt(claim, "refresh");
+  const token = await dependencies.refreshYouTube(currentRefreshToken);
+  const identity = await dependencies.getYouTubeIdentity(token.accessToken);
+  if (identity.accountId !== claim.externalAccountId) {
+    throw new Error("REFRESH_IDENTITY_MISMATCH");
+  }
+  await dependencies.complete(claim, {
+    provider: "youtube",
+    tokenType: "Bearer",
+    scopes: token.scopes,
+    accessToken: token.accessToken,
+    // Google retains the existing refresh token unless it explicitly rotates.
+    refreshToken: null,
+    expiresIn: token.expiresIn,
+    refreshTokenExpiresIn: null,
+    identity: {
+      accountId: identity.accountId,
+      username: identity.username,
+      snapshot: {
+        channel_id: identity.accountId,
+        channel_handle: identity.username,
+        title: identity.title,
+        channel_url: identity.channelUrl,
+      },
+    },
+  });
+}
 
 export async function refreshClaimedSocialConnection(
   claim: SocialConnectionRefreshClaim,
@@ -73,6 +122,15 @@ export async function refreshClaimedSocialConnection(
       },
     });
     return;
+  }
+
+  if (claim.provider === "youtube") {
+    await refreshClaimedYouTubeConnection(claim, dependencies);
+    return;
+  }
+
+  if (claim.provider !== "tiktok") {
+    throw new Error("SOCIAL_REFRESH_PROVIDER_UNSUPPORTED");
   }
 
   const currentRefreshToken = dependencies.decrypt(claim, "refresh");

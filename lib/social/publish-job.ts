@@ -38,6 +38,14 @@ export type TikTokPublishJob = Omit<InstagramPublishJob, "state"> & {
   state: "claimed" | "publishing";
 };
 
+export type FacebookPublishJob = Omit<InstagramPublishJob, "state"> & {
+  state: "claimed" | "publishing";
+};
+
+export type YouTubePublishJob = Omit<InstagramPublishJob, "state"> & {
+  state: "claimed" | "publishing";
+};
+
 function object(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -63,10 +71,10 @@ function safeObjectPath(value: string) {
 
 function parseSocialPublishJob(
   value: unknown,
-  provider: "instagram" | "tiktok",
-): InstagramPublishJob | TikTokPublishJob {
+  provider: "instagram" | "tiktok" | "facebook" | "youtube",
+): InstagramPublishJob | TikTokPublishJob | FacebookPublishJob | YouTubePublishJob {
   const row = object(value);
-  const errorCode = provider === "instagram" ? "INSTAGRAM_JOB_INVALID" : "TIKTOK_JOB_INVALID";
+  const errorCode = `${provider.toUpperCase()}_JOB_INVALID`;
   if (!row || row.provider !== provider) throw new Error(errorCode);
   const coverObjectPath = nullableText(row.cover_object_path);
   const coverSha256 = nullableText(row.cover_sha256);
@@ -104,9 +112,11 @@ function parseSocialPublishJob(
     !UUID.test(job.id)
     || !UUID.test(job.claimId)
     || !job.postId
-    || (provider === "instagram"
+    || (provider === "instagram" || provider === "facebook"
       ? !/^[1-9]\d{0,255}$/.test(job.accountId)
-      : !/^[A-Za-z0-9._:~-]{1,256}$/.test(job.accountId))
+      : provider === "youtube"
+        ? !/^UC[A-Za-z0-9_-]{22}$/.test(job.accountId)
+        : !/^[A-Za-z0-9._:~-]{1,256}$/.test(job.accountId))
     || !safeObjectPath(job.videoObjectPath)
     || !SHA256.test(job.videoSha256)
     || !SHA256.test(job.contentFingerprint)
@@ -135,6 +145,14 @@ export function parseTikTokPublishJob(value: unknown): TikTokPublishJob {
   return parseSocialPublishJob(value, "tiktok") as TikTokPublishJob;
 }
 
+export function parseFacebookPublishJob(value: unknown): FacebookPublishJob {
+  return parseSocialPublishJob(value, "facebook") as FacebookPublishJob;
+}
+
+export function parseYouTubePublishJob(value: unknown): YouTubePublishJob {
+  return parseSocialPublishJob(value, "youtube") as YouTubePublishJob;
+}
+
 export function instagramPublishGateFailures(
   job: InstagramPublishJob,
   expectedState: InstagramPublishJob["state"],
@@ -151,8 +169,24 @@ export function tiktokPublishGateFailures(
   return socialPublishGateFailures(job, expectedState, now);
 }
 
+export function facebookPublishGateFailures(
+  job: FacebookPublishJob,
+  expectedState: FacebookPublishJob["state"],
+  now = new Date(),
+) {
+  return socialPublishGateFailures(job, expectedState, now);
+}
+
+export function youtubePublishGateFailures(
+  job: YouTubePublishJob,
+  expectedState: YouTubePublishJob["state"],
+  now = new Date(),
+) {
+  return socialPublishGateFailures(job, expectedState, now);
+}
+
 function socialPublishGateFailures(
-  job: InstagramPublishJob | TikTokPublishJob,
+  job: InstagramPublishJob | TikTokPublishJob | FacebookPublishJob | YouTubePublishJob,
   expectedState: "claimed" | "publishing",
   now: Date,
 ) {

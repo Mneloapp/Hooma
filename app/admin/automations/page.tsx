@@ -7,6 +7,7 @@ import {
   Bot,
   Check,
   Clock3,
+  Facebook,
   Instagram,
   LockKeyhole,
   Music2,
@@ -15,6 +16,7 @@ import {
   ShieldCheck,
   UploadCloud,
   X,
+  Youtube,
 } from "lucide-react";
 import { requirePermission } from "@/lib/supabase/server";
 import {
@@ -51,6 +53,8 @@ const number = new Intl.NumberFormat("ka-GE");
 const providerLabels: Record<AutomationProvider, string> = {
   tiktok: "TikTok",
   instagram: "Instagram",
+  facebook: "Facebook",
+  youtube: "YouTube",
 };
 
 const stateLabels: Record<string, string> = {
@@ -106,9 +110,16 @@ function reviewDetail(review: AppReviewSnapshot) {
 }
 
 function ProviderMark({ provider }: { provider: AutomationProvider }) {
-  return provider === "instagram"
-    ? <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 via-rose-500 to-amber-400 text-white"><Instagram size={20} /></span>
-    : <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-slate-950 text-xs font-black tracking-tight text-white">TT</span>;
+  if (provider === "instagram") {
+    return <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 via-rose-500 to-amber-400 text-white"><Instagram size={20} /></span>;
+  }
+  if (provider === "facebook") {
+    return <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white"><Facebook size={20} /></span>;
+  }
+  if (provider === "youtube") {
+    return <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-red-600 text-white"><Youtube size={21} /></span>;
+  }
+  return <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-slate-950 text-xs font-black tracking-tight text-white">TT</span>;
 }
 
 function Gate({ ready, label }: { ready: boolean; label: string }) {
@@ -154,6 +165,8 @@ function ConnectionCard({
 }) {
   const healthy = dataAvailable && connection.connected && !connection.needsAttention;
   const connectHref = `/api/social/oauth/${connection.provider}/start`;
+  const oauthCanPrecedeReview = connection.provider === "facebook" || connection.provider === "youtube";
+  const oauthCanStart = review.status === "approved" || oauthCanPrecedeReview;
   return (
     <article className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6">
       <div className="flex items-start justify-between gap-4">
@@ -204,13 +217,13 @@ function ConnectionCard({
             <Link href="/admin/automations/tiktok-launch" className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-slate-950 px-4 text-center text-xs font-semibold text-white sm:w-auto">9 ვიდეოს TikTok launch</Link>
           </>
         ) : null}
-        {dataAvailable && !connection.connected && review.status === "approved" && oauthEnabled ? (
+        {dataAvailable && !connection.connected && oauthCanStart && oauthEnabled ? (
           <a href={connectHref} className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-hooma-text px-4 text-center text-xs font-semibold text-white sm:ml-auto sm:w-auto">{providerLabels[connection.provider]}-ის დაკავშირება</a>
         ) : null}
-        {dataAvailable && !connection.connected && review.status === "approved" && !oauthEnabled ? (
+        {dataAvailable && !connection.connected && oauthCanStart && !oauthEnabled ? (
           <span className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-slate-100 px-4 text-center text-xs font-semibold text-slate-500 sm:ml-auto sm:w-auto" aria-disabled="true">OAuth gate ჯერ გამორთულია</span>
         ) : null}
-        {!dataAvailable && review.status === "approved" ? <span className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-slate-100 px-4 text-center text-xs font-semibold text-slate-500 sm:ml-auto sm:w-auto" aria-disabled="true">OAuth მდგომარეობა ჯერ ვერ მოწმდება</span> : null}
+        {!dataAvailable && oauthCanStart ? <span className="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-slate-100 px-4 text-center text-xs font-semibold text-slate-500 sm:ml-auto sm:w-auto" aria-disabled="true">OAuth მდგომარეობა ჯერ ვერ მოწმდება</span> : null}
       </div>
     </article>
   );
@@ -244,7 +257,9 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
   const [data, query] = await Promise.all([loadSocialAutomationDashboard(), searchParams]);
   const resultProvider = singleValue(query.social_provider);
   const result = singleValue(query.social_result);
-  const validProvider = resultProvider === "instagram" || resultProvider === "tiktok" ? resultProvider : null;
+  const validProvider = new Set<AutomationProvider>(["instagram", "tiktok", "facebook", "youtube"]).has(resultProvider as AutomationProvider)
+    ? resultProvider as AutomationProvider
+    : null;
   const validResult = new Set(["connected", "denied", "failed", "state_rejected"]).has(result ?? "") ? result : null;
   const activeJobs = data.availability.jobs ? data.jobs.filter((job) => !isTerminalAutomationJobState(job.state)) : [];
   const waitingApproval = data.availability.jobs ? activeJobs.filter((job) => job.approvalStatus !== "APPROVED_EXACT").length : null;
@@ -272,9 +287,9 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
               <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${systemArmed ? "bg-emerald-400/20 text-emerald-200" : "bg-amber-300/15 text-amber-200"}`}><span className={`size-2 rounded-full ${systemArmed ? "bg-emerald-300" : "bg-amber-300"}`} />{systemArmed ? "გამომქვეყნებელი შეიარაღებულია" : "გამოქვეყნება უსაფრთხოდ ჩაკეტილია"}</span>
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">სოციალური ავტომატიზაციები</h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">TikTok-ისა და Instagram-ის აპის დამტკიცება, OAuth კავშირი და გამოქვეყნების gate ერთმანეთისგან მკაფიოდ არის გამოყოფილი. ამ გვერდიდან არაფერი ქვეყნდება და არაფერი იშლება.</p>
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">TikTok, Instagram, Facebook და YouTube ცალ-ცალკე OAuth კავშირით, ქსელის ჩამკეტითა და ზუსტი გამოქვეყნების gate-ით იმართება. ამ გვერდიდან არაფერი ქვეყნდება და არაფერი იშლება.</p>
           </div>
-          <div className="grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/50">ანგარიშები</p><p className="mt-2 text-3xl font-semibold">{connectionReadyCount === null ? "—" : `${connectionReadyCount}/2`}</p><p className="mt-1 text-xs text-white/55">OAuth მზადაა</p></div><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/50">აქტიური რიგი</p><p className="mt-2 text-3xl font-semibold">{data.availability.jobs ? activeJobs.length : "—"}</p><p className="mt-1 text-xs text-white/55">ჩანაწერი</p></div></div>
+          <div className="grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/50">ანგარიშები</p><p className="mt-2 text-3xl font-semibold">{connectionReadyCount === null ? "—" : `${connectionReadyCount}/4`}</p><p className="mt-1 text-xs text-white/55">OAuth მზადაა</p></div><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/50">აქტიური რიგი</p><p className="mt-2 text-3xl font-semibold">{data.availability.jobs ? activeJobs.length : "—"}</p><p className="mt-1 text-xs text-white/55">ჩანაწერი</p></div></div>
         </div>
       </header>
 
@@ -292,7 +307,7 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
           <span className="text-xs font-semibold text-blue-950">{formatDay(data.generatedAt)} · {todayJobs.length} ჩანაწერი</span>
         </div>
         <ul className="mt-6">
-          {!data.availability.jobs ? <li className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-10 text-center text-amber-950"><AlertTriangle className="mx-auto" /><p className="mt-3 font-semibold">დღევანდელი რიგის მონაცემები მიუწვდომელია</p><p className="mt-1 text-sm">უცნობი მდგომარეობა ცარიელ განრიგად არ ითვლება.</p></li> : todayJobs.length ? todayJobs.map((job, index) => <QueueItem key={`today-${job.provider}-${job.scheduledAt}-${index}`} job={job} />) : <li className="rounded-2xl border border-dashed border-blue-300 bg-white/60 px-5 py-10 text-center"><Clock3 className="mx-auto text-blue-700" /><p className="mt-3 font-semibold">დღეს პოსტი დაგეგმილი არ არის</p><p className="mt-1 text-sm text-hooma-muted">Facebook-ის ავტომატური გაზიარება გამორთულია.</p></li>}
+          {!data.availability.jobs ? <li className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-10 text-center text-amber-950"><AlertTriangle className="mx-auto" /><p className="mt-3 font-semibold">დღევანდელი რიგის მონაცემები მიუწვდომელია</p><p className="mt-1 text-sm">უცნობი მდგომარეობა ცარიელ განრიგად არ ითვლება.</p></li> : todayJobs.length ? todayJobs.map((job, index) => <QueueItem key={`today-${job.provider}-${job.scheduledAt}-${index}`} job={job} />) : <li className="rounded-2xl border border-dashed border-blue-300 bg-white/60 px-5 py-10 text-center"><Clock3 className="mx-auto text-blue-700" /><p className="mt-3 font-semibold">დღეს პოსტი დაგეგმილი არ არის</p><p className="mt-1 text-sm text-hooma-muted">ოთხივე პლატფორმის რიგი ამჟამად ცარიელია.</p></li>}
         </ul>
       </section>
 
@@ -303,7 +318,7 @@ export default async function SocialAutomationsPage({ searchParams }: { searchPa
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Publishing safety</p><h2 className="mt-2 text-2xl font-semibold">ჩამკეტები და მზადყოფნა</h2></div><span className={`w-fit rounded-full px-3 py-1.5 text-xs font-semibold ${data.switches.globalPublishing ? "bg-emerald-100 text-emerald-900" : "bg-slate-100 text-slate-700"}`}>გლობალური switch: {data.switches.globalPublishing ? "ON" : "OFF"}</span></div>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">{[[ShieldCheck, "Owner approval", "მხოლოდ APPROVED_EXACT და უცვლელი fingerprint"], [Music2, "Music gate", "ჩუმი ვიდეო აკრძალულია; საჭიროა CML ან ლიცენზიის ქვითარი"], [UploadCloud, "Media staging", data.switches.stagingConfigured ? "HTTPS staging origin მზადაა" : "უსაფრთხო staging origin ჯერ არ არის მზად"], [LockKeyhole, "Idempotency", "დუბლიკატის შემოწმება და მხოლოდ ერთჯერადი გაგზავნა"]].map(([Icon, label, note]) => { const ItemIcon = Icon as typeof ShieldCheck; return <div key={String(label)} className="rounded-2xl bg-hooma-background p-4"><ItemIcon size={18} className="text-hooma-accent" /><strong className="mt-4 block text-sm">{label as string}</strong><p className="mt-1 text-xs leading-5 text-hooma-muted">{note as string}</p></div>; })}</div>
         </article>
-        <article className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Owner guidance</p><h2 className="mt-2 text-2xl font-semibold">რას აკონტროლებს აგენტი</h2><ol className="mt-6 space-y-4 text-sm leading-6">{["ამზადებს ვიდეოს, caption-ს, cover-სა და მუსიკის უფლებების ქვითარს.", "ამოწმებს ანგარიშს, პროდუქტს, დუბლიკატს, დასტურსა და უსაფრთხო ვადას.", "ზუსტ დროს აგზავნის მხოლოდ ერთხელ და ინახავს უცვლელ აუდიტს.", "აგროვებს შედეგებს; მიუწვდომელს აჩვენებს როგორც უცნობს და არა ნულს."].map((item, index) => <li key={item} className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-hooma-text text-xs font-semibold text-white">{index + 1}</span><span>{item}</span></li>)}</ol><p className="mt-6 rounded-2xl bg-blue-50 p-4 text-xs leading-5 text-blue-950"><strong className="block">Facebook გათიშულია.</strong>Instagram-ის ავტომატიზაცია Facebook-ზე არაფერს გადააზიარებს, სანამ ცალკე წესით არ დამტკიცდება.</p></article>
+        <article className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Owner guidance</p><h2 className="mt-2 text-2xl font-semibold">რას აკონტროლებს აგენტი</h2><ol className="mt-6 space-y-4 text-sm leading-6">{["ამზადებს ვიდეოს, caption-ს, cover-სა და მუსიკის უფლებების ქვითარს.", "ამოწმებს ანგარიშს, პროდუქტს, დუბლიკატს, დასტურსა და უსაფრთხო ვადას.", "ზუსტ დროს აგზავნის მხოლოდ ერთხელ და ინახავს უცვლელ აუდიტს.", "აგროვებს შედეგებს; მიუწვდომელს აჩვენებს როგორც უცნობს და არა ნულს."].map((item, index) => <li key={item} className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-hooma-text text-xs font-semibold text-white">{index + 1}</span><span>{item}</span></li>)}</ol><p className="mt-6 rounded-2xl bg-blue-50 p-4 text-xs leading-5 text-blue-950"><strong className="block">ცალკე პლატფორმის კავშირები.</strong>Instagram-ის Share to Facebook კვლავ გამორთულია; Facebook Reels და YouTube Shorts მხოლოდ საკუთარი OAuth-ითა და საკუთარი დასტურით იმუშავებს.</p></article>
       </section>
 
       <section className="rounded-[1.75rem] border border-hooma-text/10 bg-white/80 p-5 shadow-sm sm:p-6"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-hooma-muted">Canonical queue</p><h2 className="mt-2 text-2xl font-semibold">სრული გამოსაქვეყნებელი რიგი</h2></div><span className="text-xs text-hooma-muted">{data.availability.jobs ? `${queueJobs.length} ჩანაწერი${queueRange ? ` · ${queueRange}` : ""}` : "რიგის მდგომარეობა მიუწვდომელია"}</span></div><ul className="mt-6">{!data.availability.jobs ? <li className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-12 text-center text-amber-950"><AlertTriangle className="mx-auto" /><p className="mt-3 font-semibold">რიგის მონაცემები მიუწვდომელია</p><p className="mt-1 text-sm">უცნობი მდგომარეობა ცარიელ რიგად არ ითვლება.</p></li> : queueJobs.length ? queueJobs.map((job, index) => <QueueItem key={`${job.provider}-${job.scheduledAt}-${index}`} job={job} />) : <li className="rounded-2xl border border-dashed border-hooma-text/15 px-5 py-12 text-center"><UploadCloud className="mx-auto text-hooma-muted" /><p className="mt-3 font-semibold">რიგში ჩანაწერი არ არის</p><p className="mt-1 text-sm text-hooma-muted">ახალი პაკეტი გამოჩნდება მხოლოდ მომზადებისა და უსაფრთხო შემოწმებების შემდეგ.</p></li>}</ul></section>

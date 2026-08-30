@@ -2,7 +2,12 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { socialMediaBaseUrl } from "./config";
-import type { InstagramPublishJob, TikTokPublishJob } from "./publish-job";
+import type {
+  FacebookPublishJob,
+  InstagramPublishJob,
+  TikTokPublishJob,
+  YouTubePublishJob,
+} from "./publish-job";
 
 export const SOCIAL_STAGING_BUCKET = "social-publishing-staging";
 // Meta can fetch the Reel asynchronously after container creation. Keep the
@@ -88,9 +93,25 @@ export async function verifyAndSignTikTokStagedMedia(
   return verifyAndSignSocialStagedMedia(admin, job, now);
 }
 
+export async function verifyAndSignFacebookStagedMedia(
+  admin: StorageAdmin,
+  job: FacebookPublishJob,
+  now = new Date(),
+): Promise<VerifiedSocialStagedMedia> {
+  return verifyAndSignSocialStagedMedia(admin, job, now);
+}
+
+export async function verifyAndSignYouTubeStagedMedia(
+  admin: StorageAdmin,
+  job: YouTubePublishJob,
+  now = new Date(),
+): Promise<VerifiedSocialStagedMedia> {
+  return verifyAndSignSocialStagedMedia(admin, job, now);
+}
+
 async function verifyAndSignSocialStagedMedia(
   admin: StorageAdmin,
-  job: InstagramPublishJob | TikTokPublishJob,
+  job: InstagramPublishJob | TikTokPublishJob | FacebookPublishJob | YouTubePublishJob,
   now: Date,
 ): Promise<VerifiedSocialStagedMedia> {
   const video = await verifyAndSign(admin, job.videoObjectPath, job.videoSha256, MAX_VIDEO_BYTES);
