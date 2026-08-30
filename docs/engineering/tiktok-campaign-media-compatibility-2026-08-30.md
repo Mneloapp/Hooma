@@ -48,3 +48,21 @@ provider, or global kill-switch gates.
 Tests cover the canonical prefixed staging name, rejection of another prefix,
 the unchanged legacy owned-master path, and a music-only master publish that
 does not emit `music_sound_info`.
+
+## Audited same-day retry boundary
+
+The compatibility repair does not make failed or expired jobs generally
+retryable. A service-only database function can re-arm only the first failed
+attempt whose immutable failure receipt records
+`TIKTOK_MEDIA_SOURCE_BINDING_MISMATCH`, no provider request identifiers, and
+`remote_side_effect_possible: false`. It also requires the exact prior content,
+campaign-approval, and video fingerprints; the canonical prefixed path; an
+active product; the exact active `@hooma.ge` connection; no TikTok lifecycle;
+and no success or remote-verification receipt.
+
+Because extending the same-day window changes the content fingerprint, the
+function revokes the old approval before changing content, lets the database
+recalculate the fingerprint, and then records a fresh exact approval and audit
+event for the active owner. The replacement deadline must be 15 minutes to
+three hours ahead and remain on the current Asia/Tbilisi date. A fresh remote
+duplicate check remains mandatory on the next attempt.
