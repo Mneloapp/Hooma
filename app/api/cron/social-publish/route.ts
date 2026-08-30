@@ -4,6 +4,14 @@ import { runInstagramPublishWorker } from "@/lib/social/instagram-publish-worker
 import { runInstagramAnalyticsWorker } from "@/lib/social/instagram-analytics-worker";
 import { runTikTokPublishWorker } from "@/lib/social/tiktok-publish-worker";
 import { runTikTokAnalyticsWorker } from "@/lib/social/tiktok-analytics-worker";
+import {
+  runFacebookPublishWorker,
+  runYouTubePublishWorker,
+} from "@/lib/social/external-social-publish-worker";
+import {
+  runFacebookAnalyticsWorker,
+  runYouTubeAnalyticsWorker,
+} from "@/lib/social/external-social-analytics-worker";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,15 +54,28 @@ export async function GET(request: Request) {
       { status: 401, headers: { "Cache-Control": "no-store" } },
     );
   }
-  const [instagramPublishing, instagramAnalytics, tiktokPublishing, tiktokAnalytics] = await Promise.all([
+  const [
+    instagramPublishing,
+    instagramAnalytics,
+    tiktokPublishing,
+    tiktokAnalytics,
+    facebookPublishing,
+    facebookAnalytics,
+    youtubePublishing,
+    youtubeAnalytics,
+  ] = await Promise.all([
     runInstagramPublishWorker(),
     runInstagramAnalyticsWorker(),
     runTikTokPublishWorker(),
     runTikTokAnalyticsWorker(),
+    runFacebookPublishWorker(),
+    runFacebookAnalyticsWorker(),
+    runYouTubePublishWorker(),
+    runYouTubeAnalyticsWorker(),
   ]);
-  const publishingOk = [instagramPublishing, tiktokPublishing]
+  const publishingOk = [instagramPublishing, tiktokPublishing, facebookPublishing, youtubePublishing]
     .every((result) => publishingWorkerHealthy(result));
-  const analyticsOk = [instagramAnalytics, tiktokAnalytics]
+  const analyticsOk = [instagramAnalytics, tiktokAnalytics, facebookAnalytics, youtubeAnalytics]
     .every((result) => backgroundWorkerHealthy(result));
   const ok = publishingOk;
   const status = !publishingOk
@@ -70,6 +91,10 @@ export async function GET(request: Request) {
     instagramAnalytics: workerSummary(instagramAnalytics),
     tiktokPublishing: workerSummary(tiktokPublishing),
     tiktokAnalytics: workerSummary(tiktokAnalytics),
+    facebookPublishing: workerSummary(facebookPublishing),
+    facebookAnalytics: workerSummary(facebookAnalytics),
+    youtubePublishing: workerSummary(youtubePublishing),
+    youtubeAnalytics: workerSummary(youtubeAnalytics),
   });
   return NextResponse.json(
     {
@@ -78,6 +103,8 @@ export async function GET(request: Request) {
       health: { publishing: publishingOk, analytics: analyticsOk },
       instagram: { publishing: instagramPublishing, analytics: instagramAnalytics },
       tiktok: { publishing: tiktokPublishing, analytics: tiktokAnalytics },
+      facebook: { publishing: facebookPublishing, analytics: facebookAnalytics },
+      youtube: { publishing: youtubePublishing, analytics: youtubeAnalytics },
     },
     {
       status: ok ? 200 : 503,

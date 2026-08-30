@@ -129,7 +129,10 @@ export function parseProviderScopes(value: unknown) {
   const parsed = raw
     .filter((entry): entry is string => typeof entry === "string")
     .map((entry) => entry.trim())
-    .filter((entry) => /^[A-Za-z0-9._:-]{2,120}$/.test(entry));
+    .filter((entry) => (
+      /^[A-Za-z0-9._:-]{2,120}$/.test(entry)
+      || /^https:\/\/www\.googleapis\.com\/auth\/[A-Za-z0-9._-]{2,120}$/.test(entry)
+    ));
   return [...new Set(parsed)].sort();
 }
 
@@ -224,6 +227,12 @@ export function isProviderAuthenticationFailure(error: unknown) {
   if (error.provider === "instagram") {
     return error.code === "190" || error.code === "INVALID_TOKEN";
   }
+  if (error.provider === "facebook") {
+    return error.code === "190" || error.code === "META_190" || error.code === "INVALID_TOKEN";
+  }
+  if (error.provider === "youtube") {
+    return ["invalid_grant", "UNAUTHENTICATED", "INVALID_TOKEN"].includes(error.code);
+  }
   return ["40100", "40101", "40105", "40001", "INVALID_TOKEN"].includes(error.code);
 }
 
@@ -235,7 +244,10 @@ function errorFromBody(
 ) {
   const record = asRecord(body);
   const nested = asRecord(record?.error);
-  const code = nested?.code ?? record?.code ?? `HTTP_${status}`;
+  const code = nested?.code
+    ?? (typeof record?.error === "string" ? record.error : null)
+    ?? record?.code
+    ?? `HTTP_${status}`;
   const requestId = record?.request_id ?? nested?.fbtrace_id ?? null;
   return new SocialProviderError({
     provider,

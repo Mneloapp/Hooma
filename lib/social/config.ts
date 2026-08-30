@@ -1,6 +1,6 @@
 import "server-only";
 
-export type SocialProvider = "tiktok" | "instagram";
+export type SocialProvider = "tiktok" | "instagram" | "facebook" | "youtube";
 
 export type TikTokProviderConfig = {
   provider: "tiktok";
@@ -21,7 +21,34 @@ export type InstagramProviderConfig = {
   expectedUsername: string;
 };
 
-export type SocialProviderConfig = TikTokProviderConfig | InstagramProviderConfig;
+export type FacebookProviderConfig = {
+  provider: "facebook";
+  clientId: string;
+  clientSecret: string;
+  graphApiVersion: string;
+  authorizationUrl: string;
+  redirectUri: string;
+  requiredScopes: string[];
+  expectedAccountId: string;
+  expectedUsername: string;
+};
+
+export type YouTubeProviderConfig = {
+  provider: "youtube";
+  clientId: string;
+  clientSecret: string;
+  authorizationUrl: string;
+  redirectUri: string;
+  requiredScopes: string[];
+  expectedAccountId: string;
+  expectedUsername: string;
+};
+
+export type SocialProviderConfig =
+  | TikTokProviderConfig
+  | InstagramProviderConfig
+  | FacebookProviderConfig
+  | YouTubeProviderConfig;
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -38,6 +65,18 @@ export const TIKTOK_APPROVED_ACCOUNT_SCOPES = [
   "video.upload",
   "video.list",
   "video.insights",
+] as const;
+
+export const FACEBOOK_REQUIRED_SCOPES = [
+  "pages_manage_posts",
+  "pages_read_engagement",
+  "pages_show_list",
+  "read_insights",
+] as const;
+
+export const YOUTUBE_REQUIRED_SCOPES = [
+  "https://www.googleapis.com/auth/youtube.readonly",
+  "https://www.googleapis.com/auth/youtube.upload",
 ] as const;
 
 function required(name: string) {
@@ -162,6 +201,64 @@ export function instagramInsightsEnabled() {
     && process.env.HOOMA_INSTAGRAM_INSIGHTS_ENABLED === "1";
 }
 
+export function facebookOAuthEnabled() {
+  return process.env.HOOMA_FACEBOOK_OAUTH_ENABLED === "1";
+}
+
+export function facebookApiNetworkEnabled() {
+  return process.env.HOOMA_FACEBOOK_API_NETWORK_ENABLED === "1";
+}
+
+export function facebookAppReviewReceiptSha256() {
+  return configuredReceiptSha256("FACEBOOK_APP_REVIEW_RECEIPT_SHA256");
+}
+
+export function facebookAppReviewApproved() {
+  return process.env.FACEBOOK_APP_REVIEW_STATUS === "APPROVED"
+    && facebookAppReviewReceiptSha256() !== null;
+}
+
+export function facebookPublishingEnabled() {
+  return socialPublishingEnabled()
+    && facebookApiNetworkEnabled()
+    && facebookAppReviewApproved()
+    && process.env.HOOMA_FACEBOOK_PUBLISHING_ENABLED === "1";
+}
+
+export function facebookInsightsEnabled() {
+  return facebookApiNetworkEnabled()
+    && process.env.HOOMA_FACEBOOK_INSIGHTS_ENABLED === "1";
+}
+
+export function youtubeOAuthEnabled() {
+  return process.env.HOOMA_YOUTUBE_OAUTH_ENABLED === "1";
+}
+
+export function youtubeApiNetworkEnabled() {
+  return process.env.HOOMA_YOUTUBE_API_NETWORK_ENABLED === "1";
+}
+
+export function youtubeApiAuditReceiptSha256() {
+  return configuredReceiptSha256("YOUTUBE_API_AUDIT_RECEIPT_SHA256");
+}
+
+export function youtubeApiAuditApproved() {
+  return process.env.YOUTUBE_API_AUDIT_STATUS === "APPROVED"
+    && youtubeApiAuditReceiptSha256() !== null;
+}
+
+export function youtubePublishingEnabled() {
+  return socialPublishingEnabled()
+    && youtubeApiNetworkEnabled()
+    && youtubeApiAuditApproved()
+    && process.env.HOOMA_YOUTUBE_PUBLISHING_ENABLED === "1";
+}
+
+export function youtubeInsightsEnabled() {
+  return youtubeApiNetworkEnabled()
+    && process.env.HOOMA_YOUTUBE_INSIGHTS_ENABLED === "1";
+}
+
 export function tiktokOAuthEnabled() {
   return process.env.HOOMA_TIKTOK_OAUTH_ENABLED === "1"
     && tiktokAppReviewApproved();
@@ -179,6 +276,8 @@ export function tiktokOrganicPublishingEnabled() {
 
 export function providerConfig(provider: "tiktok"): TikTokProviderConfig;
 export function providerConfig(provider: "instagram"): InstagramProviderConfig;
+export function providerConfig(provider: "facebook"): FacebookProviderConfig;
+export function providerConfig(provider: "youtube"): YouTubeProviderConfig;
 export function providerConfig(provider: SocialProvider): SocialProviderConfig;
 export function providerConfig(provider: SocialProvider): SocialProviderConfig {
   if (provider === "tiktok") {
@@ -206,16 +305,73 @@ export function providerConfig(provider: SocialProvider): SocialProviderConfig {
     };
   }
 
+  if (provider === "instagram") {
+    return {
+      provider,
+      clientId: required("INSTAGRAM_APP_ID"),
+      clientSecret: required("INSTAGRAM_APP_SECRET"),
+      redirectUri: requiredOAuthRedirect(
+        "INSTAGRAM_REDIRECT_URI",
+        "/api/social/oauth/instagram/callback",
+      ),
+      requiredScopes: scopes("INSTAGRAM_REQUIRED_SCOPES"),
+      expectedUsername: required("INSTAGRAM_EXPECTED_USERNAME").replace(/^@/, "").toLowerCase(),
+    };
+  }
+
+  if (provider === "facebook") {
+    const graphApiVersion = required("FACEBOOK_GRAPH_API_VERSION");
+    if (!/^v[1-9][0-9]{0,2}\.0$/.test(graphApiVersion)) {
+      throw new Error("SOCIAL_CONFIG_INVALID_APP:FACEBOOK_GRAPH_API_VERSION");
+    }
+    const expectedAccountId = required("FACEBOOK_EXPECTED_PAGE_ID");
+    if (!/^[1-9][0-9]{4,255}$/.test(expectedAccountId)) {
+      throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:FACEBOOK_EXPECTED_PAGE_ID");
+    }
+    const expectedUsername = required("FACEBOOK_EXPECTED_PAGE_USERNAME")
+      .replace(/^@/, "")
+      .toLowerCase();
+    if (expectedUsername !== "hooma.ge") {
+      throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:FACEBOOK_EXPECTED_PAGE_USERNAME");
+    }
+    return {
+      provider,
+      clientId: required("FACEBOOK_APP_ID"),
+      clientSecret: required("FACEBOOK_APP_SECRET"),
+      graphApiVersion,
+      authorizationUrl: `https://www.facebook.com/${graphApiVersion}/dialog/oauth`,
+      redirectUri: requiredOAuthRedirect(
+        "FACEBOOK_REDIRECT_URI",
+        "/api/social/oauth/facebook/callback",
+      ),
+      requiredScopes: [...FACEBOOK_REQUIRED_SCOPES],
+      expectedAccountId,
+      expectedUsername,
+    };
+  }
+
+  const expectedAccountId = required("YOUTUBE_EXPECTED_CHANNEL_ID");
+  if (!/^UC[A-Za-z0-9_-]{22}$/.test(expectedAccountId)) {
+    throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:YOUTUBE_EXPECTED_CHANNEL_ID");
+  }
+  const expectedUsername = required("YOUTUBE_EXPECTED_CHANNEL_HANDLE")
+    .replace(/^@/, "")
+    .toLowerCase();
+  if (expectedUsername !== "hooma.ge") {
+    throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:YOUTUBE_EXPECTED_CHANNEL_HANDLE");
+  }
   return {
     provider,
-    clientId: required("INSTAGRAM_APP_ID"),
-    clientSecret: required("INSTAGRAM_APP_SECRET"),
+    clientId: required("YOUTUBE_CLIENT_ID"),
+    clientSecret: required("YOUTUBE_CLIENT_SECRET"),
+    authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     redirectUri: requiredOAuthRedirect(
-      "INSTAGRAM_REDIRECT_URI",
-      "/api/social/oauth/instagram/callback",
+      "YOUTUBE_REDIRECT_URI",
+      "/api/social/oauth/youtube/callback",
     ),
-    requiredScopes: scopes("INSTAGRAM_REQUIRED_SCOPES"),
-    expectedUsername: required("INSTAGRAM_EXPECTED_USERNAME").replace(/^@/, "").toLowerCase(),
+    requiredScopes: [...YOUTUBE_REQUIRED_SCOPES],
+    expectedAccountId,
+    expectedUsername,
   };
 }
 

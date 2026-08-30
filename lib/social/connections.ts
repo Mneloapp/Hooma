@@ -21,6 +21,8 @@ import { canonicalSocialConnectionTimestamp } from "./social-connection-timestam
 
 const TIKTOK_REFRESH_MARGIN_SECONDS = 6 * 60 * 60;
 const INSTAGRAM_REFRESH_AFTER_SECONDS = 45 * 24 * 60 * 60;
+const FACEBOOK_REAUTHORIZE_MARGIN_SECONDS = 7 * 24 * 60 * 60;
+const YOUTUBE_REFRESH_MARGIN_SECONDS = 10 * 60;
 const TRANSIENT_RETRY_SECONDS = 15 * 60;
 
 type SocialIdentity = {
@@ -69,6 +71,26 @@ export type TikTokPublishingConnection = {
   accessToken: string;
   accessExpiresAt: string;
   lastVerifiedAt: string;
+  tokenVersion: number;
+};
+
+export type FacebookPublishingConnection = {
+  provider: "facebook";
+  externalAccountId: string;
+  username: "hooma.ge";
+  scopes: string[];
+  accessToken: string;
+  accessExpiresAt: string;
+  tokenVersion: number;
+};
+
+export type YouTubePublishingConnection = {
+  provider: "youtube";
+  externalAccountId: string;
+  username: "hooma.ge";
+  scopes: string[];
+  accessToken: string;
+  accessExpiresAt: string;
   tokenVersion: number;
 };
 
@@ -210,6 +232,73 @@ export async function loadTikTokPublishingConnection(
   };
 }
 
+async function loadExternalPublishingConnection<P extends "facebook" | "youtube">(
+  provider: P,
+  now: Date,
+): Promise<P extends "facebook" ? FacebookPublishingConnection : YouTubePublishingConnection> {
+  const admin = adminClient();
+  const { data, error } = await admin
+    .from("social_connections")
+    .select("provider,external_account_id,username,scopes,access_token_enc,access_expires_at,token_version,status")
+    .eq("provider", provider)
+    .eq("status", "active")
+    .limit(2);
+  if (error || !Array.isArray(data) || data.length !== 1) {
+    throw new Error(`${provider.toUpperCase()}_CONNECTION_UNAVAILABLE`);
+  }
+  const row = data[0] as Record<string, unknown>;
+  const externalAccountId = safeIdentifier(row.external_account_id);
+  const username = normalizedUsername(row.username);
+  const tokenEnvelope = envelope(row.access_token_enc);
+  const accessExpiresAt = canonicalSocialConnectionTimestamp(row.access_expires_at);
+  const tokenVersion = Number.isInteger(row.token_version) && Number(row.token_version) > 0
+    ? Number(row.token_version)
+    : null;
+  const config = provider === "facebook"
+    ? providerConfig("facebook")
+    : providerConfig("youtube");
+  const scopes = Array.isArray(row.scopes)
+    ? row.scopes.filter((scope): scope is string => typeof scope === "string").sort()
+    : [];
+  const scopeSet = new Set(scopes);
+  if (
+    row.provider !== provider
+    || !externalAccountId
+    || externalAccountId !== config.expectedAccountId
+    || username !== config.expectedUsername
+    || username !== "hooma.ge"
+    || !tokenEnvelope
+    || !accessExpiresAt
+    || !tokenVersion
+    || Date.parse(accessExpiresAt) <= now.getTime() + 10 * 60 * 1_000
+    || config.requiredScopes.some((scope) => !scopeSet.has(scope))
+  ) {
+    throw new Error(`${provider.toUpperCase()}_CONNECTION_INVALID`);
+  }
+  return {
+    provider,
+    externalAccountId,
+    username: "hooma.ge",
+    scopes,
+    accessToken: decryptSocialToken(
+      tokenEnvelope,
+      provider,
+      externalAccountId,
+      "access_token",
+    ),
+    accessExpiresAt,
+    tokenVersion,
+  } as P extends "facebook" ? FacebookPublishingConnection : YouTubePublishingConnection;
+}
+
+export function loadFacebookPublishingConnection(now = new Date()) {
+  return loadExternalPublishingConnection("facebook", now);
+}
+
+export function loadYouTubePublishingConnection(now = new Date()) {
+  return loadExternalPublishingConnection("youtube", now);
+}
+
 function databaseErrorCode(error: unknown) {
   const raw = providerErrorCode(error)
     .toUpperCase()
@@ -229,11 +318,15 @@ function futureIso(now: Date, seconds: number) {
 function refreshAfterIso(provider: SocialProvider, now: Date, expiresIn: number) {
   const offset = provider === "tiktok"
     ? Math.max(5 * 60, expiresIn - TIKTOK_REFRESH_MARGIN_SECONDS)
-    : Math.min(INSTAGRAM_REFRESH_AFTER_SECONDS, Math.max(24 * 60 * 60, expiresIn - 7 * 24 * 60 * 60));
+    : provider === "youtube"
+      ? Math.max(5 * 60, expiresIn - YOUTUBE_REFRESH_MARGIN_SECONDS)
+      : provider === "facebook"
+        ? Math.max(24 * 60 * 60, expiresIn - FACEBOOK_REAUTHORIZE_MARGIN_SECONDS)
+        : Math.min(INSTAGRAM_REFRESH_AFTER_SECONDS, Math.max(24 * 60 * 60, expiresIn - 7 * 24 * 60 * 60));
   return futureIso(now, offset);
 }
 
-function validateConnection(input: NewSocialConnection) {
+function validateConnection(input: NewSocialConnection, refreshCompletion = false) {
   const config = providerConfig(input.provider);
   const username = normalizedUsername(input.identity.username);
   if (
@@ -243,7 +336,8 @@ function validateConnection(input: NewSocialConnection) {
     || input.tokenType !== "Bearer"
     || !input.accessToken
     || (input.provider === "tiktok" && !input.refreshToken)
-    || (input.provider === "instagram" && input.refreshToken !== null)
+    || (input.provider === "youtube" && !refreshCompletion && !input.refreshToken)
+    || ((input.provider === "instagram" || input.provider === "facebook") && input.refreshToken !== null)
   ) {
     throw new SocialProviderError({
       provider: input.provider,
@@ -294,7 +388,10 @@ export async function storeSocialConnection(input: NewSocialConnection, actorId:
     ? encryptSocialToken(input.refreshToken, input.provider, accountId, "refresh_token")
     : null;
   const admin = adminClient();
-  const { data, error } = await admin.rpc("upsert_social_connection", {
+  const rpcName = input.provider === "facebook" || input.provider === "youtube"
+    ? "upsert_external_social_connection_v1"
+    : "upsert_social_connection";
+  const { data, error } = await admin.rpc(rpcName, {
     requested_provider: input.provider,
     requested_external_account_id: accountId,
     requested_username: username,
@@ -318,7 +415,10 @@ export async function storeSocialConnection(input: NewSocialConnection, actorId:
 
 export async function claimSocialConnectionRefresh(provider: SocialProvider) {
   const admin = adminClient();
-  const { data, error } = await admin.rpc("claim_social_connection_refresh", {
+  const rpcName = provider === "youtube"
+    ? "claim_external_social_connection_refresh_v1"
+    : "claim_social_connection_refresh";
+  const { data, error } = await admin.rpc(rpcName, {
     requested_provider: provider,
     requested_lease_seconds: 120,
   });
@@ -344,7 +444,7 @@ export async function claimSocialConnectionRefresh(provider: SocialProvider) {
     || !externalAccountId
     || !username
     || !accessTokenEnvelope
-    || (provider === "tiktok" && !refreshTokenEnvelope)
+    || ((provider === "tiktok" || provider === "youtube") && !refreshTokenEnvelope)
     || !tokenVersion
     || !refreshLeaseId
   ) {
@@ -393,7 +493,7 @@ export async function completeSocialConnectionRefresh(
       code: "REFRESH_IDENTITY_MISMATCH",
     });
   }
-  const { accountId, username } = validateConnection(input);
+  const { accountId, username } = validateConnection(input, claim.provider === "youtube");
   const now = new Date();
   const accessTokenEnvelope = encryptSocialToken(
     input.accessToken,
@@ -405,7 +505,10 @@ export async function completeSocialConnectionRefresh(
     ? encryptSocialToken(input.refreshToken, input.provider, accountId, "refresh_token")
     : null;
   const admin = adminClient();
-  const { data, error } = await admin.rpc("complete_social_connection_refresh", {
+  const rpcName = claim.provider === "youtube"
+    ? "complete_external_social_connection_refresh_v1"
+    : "complete_social_connection_refresh";
+  const { data, error } = await admin.rpc(rpcName, {
     requested_provider: claim.provider,
     requested_lease_id: claim.refreshLeaseId,
     requested_token_version: claim.tokenVersion,
@@ -434,7 +537,10 @@ export async function failSocialConnectionRefresh(
   const admin = adminClient();
   const errorCode = databaseErrorCode(error);
   const retryAfter = new Date(Date.now() + TRANSIENT_RETRY_SECONDS * 1_000).toISOString();
-  const { data, error: databaseError } = await admin.rpc("fail_social_connection_refresh", {
+  const rpcName = claim.provider === "youtube"
+    ? "fail_external_social_connection_refresh_v1"
+    : "fail_social_connection_refresh";
+  const { data, error: databaseError } = await admin.rpc(rpcName, {
     requested_provider: claim.provider,
     requested_lease_id: claim.refreshLeaseId,
     requested_token_version: claim.tokenVersion,

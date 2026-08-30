@@ -1,15 +1,29 @@
 import "server-only";
 
 import {
+  facebookApiNetworkEnabled,
+  facebookAppReviewApproved,
+  facebookInsightsEnabled,
+  facebookOAuthEnabled,
+  facebookPublishingEnabled,
+  instagramApiNetworkEnabled,
+  instagramInsightsEnabled,
+  instagramOAuthEnabled,
+  instagramPublishingEnabled,
   socialPublishingEnabled,
   tiktokAppReviewApproved,
   tiktokOAuthEnabled,
   tiktokOrganicNetworkEnabled,
   tiktokOrganicPublishingEnabled,
+  youtubeApiAuditApproved,
+  youtubeApiNetworkEnabled,
+  youtubeInsightsEnabled,
+  youtubeOAuthEnabled,
+  youtubePublishingEnabled,
 } from "@/lib/social/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type AutomationProvider = "tiktok" | "instagram";
+export type AutomationProvider = "tiktok" | "instagram" | "facebook" | "youtube";
 
 type ConnectionRow = {
   provider: AutomationProvider;
@@ -143,7 +157,7 @@ export type SocialAutomationDashboardData = {
   events: SafeAutomationEvent[];
 };
 
-const providers: AutomationProvider[] = ["tiktok", "instagram"];
+const providers: AutomationProvider[] = ["tiktok", "instagram", "facebook", "youtube"];
 const terminalStates = new Set(["published", "failed", "cancelled", "blocked_policy", "blocked_remote_uncertain"]);
 const stagedStates = new Set(["media_staged", "claimed", "publishing", "published"]);
 
@@ -168,9 +182,8 @@ function hasSafeStagingOrigin() {
 
 function readSwitches(): AutomationSwitches {
   const globalPublishing = socialPublishingEnabled();
-  const instagramNetwork = enabled("HOOMA_INSTAGRAM_API_NETWORK_ENABLED");
+  const instagramNetwork = instagramApiNetworkEnabled();
   const tiktokNetwork = tiktokOrganicNetworkEnabled();
-  const instagramOAuthSetting = process.env.HOOMA_INSTAGRAM_OAUTH_ENABLED;
   return {
     globalPublishing,
     stagingConfigured: hasSafeStagingOrigin(),
@@ -182,12 +195,22 @@ function readSwitches(): AutomationSwitches {
         insights: tiktokNetwork && enabled("HOOMA_TIKTOK_INSIGHTS_ENABLED"),
       },
       instagram: {
-        oauthMaintenance: instagramOAuthSetting === undefined
-          ? globalPublishing
-          : instagramOAuthSetting.trim() === "1",
-        publishing: globalPublishing && enabled("HOOMA_INSTAGRAM_PUBLISHING_ENABLED"),
+        oauthMaintenance: instagramOAuthEnabled(),
+        publishing: instagramPublishingEnabled(),
         apiNetwork: instagramNetwork,
-        insights: instagramNetwork && enabled("HOOMA_INSTAGRAM_INSIGHTS_ENABLED"),
+        insights: instagramInsightsEnabled(),
+      },
+      facebook: {
+        oauthMaintenance: facebookOAuthEnabled(),
+        publishing: facebookPublishingEnabled(),
+        apiNetwork: facebookApiNetworkEnabled(),
+        insights: facebookInsightsEnabled(),
+      },
+      youtube: {
+        oauthMaintenance: youtubeOAuthEnabled(),
+        publishing: youtubePublishingEnabled(),
+        apiNetwork: youtubeApiNetworkEnabled(),
+        insights: youtubeInsightsEnabled(),
       },
     },
   };
@@ -196,6 +219,8 @@ function readSwitches(): AutomationSwitches {
 function readAppReviews(instagramConnection?: ConnectionSnapshot): AppReviewSnapshot[] {
   const tiktokApproved = tiktokAppReviewApproved();
   const instagramConnected = instagramConnection?.connected ?? false;
+  const facebookApproved = facebookAppReviewApproved();
+  const youtubeApproved = youtubeApiAuditApproved();
   return [
     {
       provider: "tiktok",
@@ -208,6 +233,18 @@ function readAppReviews(instagramConnection?: ConnectionSnapshot): AppReviewSnap
       status: instagramConnected ? "approved" : "unknown",
       verifiedAt: instagramConnection?.lastVerifiedAt ?? null,
       evidence: instagramConnected ? "connection_proven" : "unavailable",
+    },
+    {
+      provider: "facebook",
+      status: facebookApproved ? "approved" : "pending",
+      verifiedAt: null,
+      evidence: facebookApproved ? "configuration_receipt" : "unavailable",
+    },
+    {
+      provider: "youtube",
+      status: youtubeApproved ? "approved" : "pending",
+      verifiedAt: null,
+      evidence: youtubeApproved ? "configuration_receipt" : "unavailable",
     },
   ];
 }
@@ -311,7 +348,7 @@ function jobBlockers(
   if (!switches.providers[row.provider].publishing) blockers.push("პლატფორმის kill-switch გამორთულია");
   if (!switches.stagingConfigured || (!stagedStates.has(row.state) && Date.parse(row.scheduled_at) <= now)) blockers.push("მედია staging-ზე მზად არ არის");
   if (Date.parse(row.publish_not_after) < now) blockers.push("გამოქვეყნების უსაფრთხო ვადა გასულია");
-  if (row.provider === "instagram" && row.music_mode !== "HOOMA_OWNED_MASTER") blockers.push("Instagram-ს ლიცენზირებული შერეული მუსიკა სჭირდება");
+  if (row.provider !== "tiktok" && row.music_mode !== "HOOMA_OWNED_MASTER") blockers.push(`${row.provider === "instagram" ? "Instagram" : row.provider === "facebook" ? "Facebook" : "YouTube"}-ს ლიცენზირებული შერეული მუსიკა სჭირდება`);
   if (row.provider === "tiktok" && !new Set(["TIKTOK_CML", "HOOMA_OWNED_MASTER"]).has(row.music_mode)) blockers.push("TikTok-ის მუსიკის ქვითარი არ არის მზად");
   return [...new Set(blockers)];
 }

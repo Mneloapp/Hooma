@@ -36,6 +36,22 @@ function instagramClaim() {
   } satisfies SocialConnectionRefreshClaim;
 }
 
+function youtubeClaim() {
+  return {
+    provider: "youtube",
+    externalAccountId: "UCabcdefghijklmnopqrstuv",
+    username: "hooma.ge",
+    scopes: [
+      "https://www.googleapis.com/auth/youtube.readonly",
+      "https://www.googleapis.com/auth/youtube.upload",
+    ],
+    accessTokenEnvelope: {} as SocialConnectionRefreshClaim["accessTokenEnvelope"],
+    refreshTokenEnvelope: {} as NonNullable<SocialConnectionRefreshClaim["refreshTokenEnvelope"]>,
+    tokenVersion: 3,
+    refreshLeaseId: "00000000-0000-4000-8000-000000000003",
+  } satisfies SocialConnectionRefreshClaim;
+}
+
 test("Instagram refresh verifies the professional account ID and preserves both ID namespaces", async () => {
   const claim = instagramClaim();
   const completed: NewSocialConnection[] = [];
@@ -159,4 +175,60 @@ test("TikTok refresh worker persists the returned rotated refresh token", async 
       },
     },
   });
+});
+
+test("YouTube refresh keeps the offline grant and re-verifies the exact Hooma channel", async () => {
+  const claim = youtubeClaim();
+  const completed: NewSocialConnection[] = [];
+  const dependencies: SocialTokenRefreshDependencies = {
+    decrypt: (claimed, kind) => {
+      assert.equal(claimed, claim);
+      assert.equal(kind, "refresh");
+      return "stored-google-refresh-token";
+    },
+    refreshInstagram: async () => {
+      throw new Error("INSTAGRAM_REFRESH_MUST_NOT_RUN");
+    },
+    getInstagramIdentity: async () => {
+      throw new Error("INSTAGRAM_IDENTITY_MUST_NOT_RUN");
+    },
+    refreshTikTok: async () => {
+      throw new Error("TIKTOK_REFRESH_MUST_NOT_RUN");
+    },
+    getTikTokIdentity: async () => {
+      throw new Error("TIKTOK_IDENTITY_MUST_NOT_RUN");
+    },
+    refreshYouTube: async (refreshToken) => {
+      assert.equal(refreshToken, "stored-google-refresh-token");
+      return {
+        accessToken: "new-google-access-token",
+        refreshToken: null,
+        tokenType: "Bearer",
+        scopes: claim.scopes,
+        expiresIn: 3_600,
+      };
+    },
+    getYouTubeIdentity: async (accessToken) => {
+      assert.equal(accessToken, "new-google-access-token");
+      return {
+        accountId: claim.externalAccountId,
+        username: "hooma.ge",
+        title: "Hooma",
+        channelUrl: "https://www.youtube.com/@hooma.ge",
+      };
+    },
+    complete: async (completedClaim, input) => {
+      assert.equal(completedClaim, claim);
+      completed.push(input);
+    },
+  };
+
+  await refreshClaimedSocialConnection(claim, dependencies);
+
+  assert.equal(completed.length, 1);
+  assert.equal(completed[0]?.provider, "youtube");
+  assert.equal(completed[0]?.refreshToken, null);
+  assert.deepEqual(completed[0]?.scopes, claim.scopes);
+  assert.equal(completed[0]?.identity.accountId, claim.externalAccountId);
+  assert.equal(completed[0]?.identity.username, "hooma.ge");
 });

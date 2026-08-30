@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { instagramOAuthEnabled, tiktokOAuthEnabled } from "@/lib/social/config";
+import { instagramOAuthEnabled, tiktokOAuthEnabled, youtubeOAuthEnabled } from "@/lib/social/config";
 import {
   claimSocialConnectionRefresh,
   completeSocialConnectionRefresh,
@@ -17,6 +17,10 @@ import {
   refreshTikTokAccessToken,
 } from "@/lib/social/providers/tiktok-oauth";
 import {
+  getYouTubeChannelIdentity,
+  refreshYouTubeAccessToken,
+} from "@/lib/social/providers/youtube-oauth";
+import {
   enabledSocialRefreshProviders,
   runSocialTokenRefreshes,
 } from "@/lib/social/token-refresh-orchestrator";
@@ -33,6 +37,8 @@ const refreshDependencies = {
   getInstagramIdentity,
   refreshTikTok: refreshTikTokAccessToken,
   getTikTokIdentity: getTikTokOAuthIdentity,
+  refreshYouTube: refreshYouTubeAccessToken,
+  getYouTubeIdentity: getYouTubeChannelIdentity,
   complete: completeSocialConnectionRefresh,
 };
 
@@ -43,6 +49,7 @@ export async function GET(request: Request) {
   const providers = enabledSocialRefreshProviders({
     instagramOAuthEnabled: instagramOAuthEnabled(),
     tiktokOAuthEnabled: tiktokOAuthEnabled(),
+    youtubeOAuthEnabled: youtubeOAuthEnabled(),
   });
   if (providers.length === 0) {
     return NextResponse.json(
