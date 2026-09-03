@@ -76,6 +76,14 @@ export async function GET(request: Request) {
     return oauthResultRedirect("facebook", "connected");
   } catch (error) {
     const diagnostic = providerErrorAuditDiagnostic(error, failureStage);
+    console.error(JSON.stringify({
+      level: "error",
+      message: "social_oauth_callback_failed",
+      provider: "facebook",
+      failure_stage: diagnostic.failureStage,
+      error_code: diagnostic.errorCode,
+      provider_request_id: diagnostic.providerRequestId,
+    }));
     await recordSocialOAuthEvent(
       actor.id,
       "facebook",

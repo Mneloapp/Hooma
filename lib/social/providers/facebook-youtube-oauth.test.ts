@@ -58,7 +58,7 @@ test("Facebook token exchange stores only the exact Hooma Page token", async () 
   const originalFetch = globalThis.fetch;
   const responses = [
     { access_token: "short-user-token" },
-    { access_token: "long-user-token", expires_in: 5_184_000 },
+    { access_token: "long-user-token", token_type: "bearer", expires_in: 5_184_000 },
     { data: FACEBOOK_REQUIRED_SCOPES.map((permission) => ({ permission, status: "granted" })) },
     { data: [{ id: pageId, name: "Hooma", username: "HoomaGeorgia", access_token: "page-token", tasks: ["CREATE_CONTENT"] }] },
     { id: pageId, name: "Hooma", username: "HoomaGeorgia", link: "https://www.facebook.com/HoomaGeorgia" },
@@ -74,6 +74,28 @@ test("Facebook token exchange stores only the exact Hooma Page token", async () 
     const identity = await getFacebookPageIdentity(token.accessToken);
     assert.equal(identity.accountId, pageId);
     assert.equal(identity.username, FACEBOOK_CANONICAL_PAGE_USERNAME);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Facebook uses a conservative reauthorization horizon when Meta omits expires_in", async () => {
+  installEnvironment();
+  const originalFetch = globalThis.fetch;
+  const responses = [
+    { access_token: "short-user-token" },
+    { access_token: "long-user-token", token_type: "bearer" },
+    { data: FACEBOOK_REQUIRED_SCOPES.map((permission) => ({ permission, status: "granted" })) },
+    { data: [{ id: pageId, name: "Hooma", username: "HoomaGeorgia", access_token: "page-token", tasks: ["CREATE_CONTENT"] }] },
+  ];
+  globalThis.fetch = async () => new Response(JSON.stringify(responses.shift()), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+  try {
+    const token = await exchangeFacebookAuthorizationCode("authorization-code");
+    assert.equal(token.accessToken, "page-token");
+    assert.equal(token.expiresIn, 45 * 24 * 60 * 60);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -10,6 +10,10 @@ const identityMigration = fs.readFileSync(
   new URL("../supabase/migrations/20260903000100_align_facebook_youtube_identity_handles.sql", import.meta.url),
   "utf8",
 );
+const usernameMigration = fs.readFileSync(
+  new URL("../supabase/migrations/20260903000200_allow_pinned_external_social_usernames.sql", import.meta.url),
+  "utf8",
+);
 const config = fs.readFileSync(new URL("../lib/social/config.ts", import.meta.url), "utf8");
 const cron = fs.readFileSync(new URL("../app/api/cron/social-publish/route.ts", import.meta.url), "utf8");
 const publishWorker = fs.readFileSync(
@@ -66,6 +70,9 @@ test("OAuth and database writes are pinned to the verified provider-specific ide
   assert.match(identityMigration, /external_account_id = 'UCDv_CqLgtUlMUfFg7VAs4aQ'/);
   assert.match(identityMigration, /revoke all on function public\.upsert_external_social_connection_v1/);
   assert.match(identityMigration, /to service_role/);
+  assert.match(usernameMigration, /provider in \('tiktok', 'instagram'\) and username = 'hooma\.ge'/);
+  assert.match(usernameMigration, /provider = 'facebook' and username = 'hoomageorgia'/);
+  assert.match(usernameMigration, /provider = 'youtube' and username = 'hoomastore'/);
 });
 
 test("database requires owned music, exact lifecycle intent and immutable analytics horizons", () => {

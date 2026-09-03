@@ -12,6 +12,7 @@ import {
 } from "../provider-client";
 
 const FACEBOOK_ID = /^[1-9][0-9]{4,255}$/;
+const CONSERVATIVE_LONG_LIVED_USER_TOKEN_SECONDS = 45 * 24 * 60 * 60;
 
 export type FacebookOAuthToken = {
   accessToken: string;
@@ -121,8 +122,21 @@ export async function exchangeFacebookAuthorizationCode(code: string) {
     { method: "GET", redirect: "error" },
   ));
   const userAccessToken = boundedString(longBody?.access_token);
-  const expiresIn = positiveInteger(longBody?.expires_in);
-  if (!userAccessToken || !expiresIn) {
+  const tokenType = typeof longBody?.token_type === "string"
+    ? longBody.token_type.toLowerCase()
+    : null;
+  const expiresIn = longBody?.expires_in === undefined
+    ? CONSERVATIVE_LONG_LIVED_USER_TOKEN_SECONDS
+    : positiveInteger(longBody.expires_in);
+  if (!userAccessToken || tokenType !== "bearer" || !expiresIn) {
+    console.error(JSON.stringify({
+      level: "error",
+      message: "facebook_long_token_response_invalid",
+      has_access_token: Boolean(userAccessToken),
+      expires_in_type: typeof longBody?.expires_in,
+      expires_in_positive_integer: Boolean(expiresIn),
+      has_token_type: typeof longBody?.token_type === "string",
+    }));
     throw new SocialProviderError({
       provider: "facebook",
       stage: "token_exchange",
