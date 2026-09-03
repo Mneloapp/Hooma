@@ -15,8 +15,8 @@ test("Facebook Reels uses the owned-video read edge and the documented hosted-up
   process.env.FACEBOOK_APP_SECRET = "facebook-app-secret";
   process.env.FACEBOOK_GRAPH_API_VERSION = "v25.0";
   process.env.FACEBOOK_REDIRECT_URI = "https://hooma.ge/api/social/oauth/facebook/callback";
-  process.env.FACEBOOK_EXPECTED_PAGE_ID = "123456789012345";
-  process.env.FACEBOOK_EXPECTED_PAGE_USERNAME = "hooma.ge";
+  process.env.FACEBOOK_EXPECTED_PAGE_ID = "1183394631514623";
+  process.env.FACEBOOK_EXPECTED_PAGE_USERNAME = "HoomaGeorgia";
   const originalFetch = globalThis.fetch;
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const responses = [

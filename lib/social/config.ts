@@ -74,10 +74,16 @@ export const FACEBOOK_REQUIRED_SCOPES = [
   "read_insights",
 ] as const;
 
+export const FACEBOOK_CANONICAL_PAGE_ID = "1183394631514623" as const;
+export const FACEBOOK_CANONICAL_PAGE_USERNAME = "hoomageorgia" as const;
+
 export const YOUTUBE_REQUIRED_SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/youtube.upload",
 ] as const;
+
+export const YOUTUBE_CANONICAL_CHANNEL_ID = "UCDv_CqLgtUlMUfFg7VAs4aQ" as const;
+export const YOUTUBE_CANONICAL_CHANNEL_HANDLE = "hoomastore" as const;
 
 function required(name: string) {
   const value = process.env[name]?.trim();
@@ -325,13 +331,13 @@ export function providerConfig(provider: SocialProvider): SocialProviderConfig {
       throw new Error("SOCIAL_CONFIG_INVALID_APP:FACEBOOK_GRAPH_API_VERSION");
     }
     const expectedAccountId = required("FACEBOOK_EXPECTED_PAGE_ID");
-    if (!/^[1-9][0-9]{4,255}$/.test(expectedAccountId)) {
+    if (expectedAccountId !== FACEBOOK_CANONICAL_PAGE_ID) {
       throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:FACEBOOK_EXPECTED_PAGE_ID");
     }
     const expectedUsername = required("FACEBOOK_EXPECTED_PAGE_USERNAME")
       .replace(/^@/, "")
       .toLowerCase();
-    if (expectedUsername !== "hooma.ge") {
+    if (expectedUsername !== FACEBOOK_CANONICAL_PAGE_USERNAME) {
       throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:FACEBOOK_EXPECTED_PAGE_USERNAME");
     }
     return {
@@ -351,13 +357,13 @@ export function providerConfig(provider: SocialProvider): SocialProviderConfig {
   }
 
   const expectedAccountId = required("YOUTUBE_EXPECTED_CHANNEL_ID");
-  if (!/^UC[A-Za-z0-9_-]{22}$/.test(expectedAccountId)) {
+  if (expectedAccountId !== YOUTUBE_CANONICAL_CHANNEL_ID) {
     throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:YOUTUBE_EXPECTED_CHANNEL_ID");
   }
   const expectedUsername = required("YOUTUBE_EXPECTED_CHANNEL_HANDLE")
     .replace(/^@/, "")
     .toLowerCase();
-  if (expectedUsername !== "hooma.ge") {
+  if (expectedUsername !== YOUTUBE_CANONICAL_CHANNEL_HANDLE) {
     throw new Error("SOCIAL_CONFIG_INVALID_ACCOUNT:YOUTUBE_EXPECTED_CHANNEL_HANDLE");
   }
   return {

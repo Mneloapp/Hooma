@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   new URL("../supabase/migrations/20260830000200_facebook_youtube_social_automation.sql", import.meta.url),
   "utf8",
 );
+const identityMigration = fs.readFileSync(
+  new URL("../supabase/migrations/20260903000100_align_facebook_youtube_identity_handles.sql", import.meta.url),
+  "utf8",
+);
 const config = fs.readFileSync(new URL("../lib/social/config.ts", import.meta.url), "utf8");
 const cron = fs.readFileSync(new URL("../app/api/cron/social-publish/route.ts", import.meta.url), "utf8");
 const publishWorker = fs.readFileSync(
@@ -46,6 +50,22 @@ test("new providers are separate and remain fail-closed behind independent switc
   ]) assert.match(config, new RegExp(marker));
   assert.match(instagramCampaign, /shareToFacebook:\s*false/);
   assert.match(instagramCampaign, /facebookEnabled:\s*false/);
+});
+
+test("OAuth and database writes are pinned to the verified provider-specific identities", () => {
+  assert.match(config, /FACEBOOK_CANONICAL_PAGE_ID = "1183394631514623"/);
+  assert.match(config, /FACEBOOK_CANONICAL_PAGE_USERNAME = "hoomageorgia"/);
+  assert.match(config, /YOUTUBE_CANONICAL_CHANNEL_ID = "UCDv_CqLgtUlMUfFg7VAs4aQ"/);
+  assert.match(config, /YOUTUBE_CANONICAL_CHANNEL_HANDLE = "hoomastore"/);
+  for (const value of [
+    "1183394631514623",
+    "hoomageorgia",
+    "UCDv_CqLgtUlMUfFg7VAs4aQ",
+    "hoomastore",
+  ]) assert.match(identityMigration, new RegExp(value));
+  assert.match(identityMigration, /external_account_id = 'UCDv_CqLgtUlMUfFg7VAs4aQ'/);
+  assert.match(identityMigration, /revoke all on function public\.upsert_external_social_connection_v1/);
+  assert.match(identityMigration, /to service_role/);
 });
 
 test("database requires owned music, exact lifecycle intent and immutable analytics horizons", () => {

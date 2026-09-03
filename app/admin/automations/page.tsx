@@ -174,7 +174,7 @@ function ConnectionCard({
           <ProviderMark provider={connection.provider} />
           <div>
             <h2 className="text-xl font-semibold">{providerLabels[connection.provider]}</h2>
-            <p className="mt-0.5 text-xs text-hooma-muted">{!dataAvailable ? "კავშირის მონაცემი მიუწვდომელია" : connection.username ?? "@hooma.ge OAuth ჯერ არ დასრულებულა"}</p>
+            <p className="mt-0.5 text-xs text-hooma-muted">{!dataAvailable ? "კავშირის მონაცემი მიუწვდომელია" : connection.username ?? `${connection.expectedUsername} OAuth ჯერ არ დასრულებულა`}</p>
           </div>
         </div>
         <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${healthy ? "bg-emerald-100 text-emerald-900" : dataAvailable ? "bg-amber-100 text-amber-950" : "bg-slate-100 text-slate-700"}`}>
@@ -184,7 +184,7 @@ function ConnectionCard({
 
       <div className="mt-6 grid gap-2 sm:grid-cols-3">
         <Stage index={1} label="აპის დამტკიცება" detail={reviewDetail(review)} ready={review.status === "approved"} />
-        <Stage index={2} label="ანგარიშის OAuth" detail={!dataAvailable ? "კავშირის მდგომარეობა დროებით მიუწვდომელია" : connection.connected ? "@hooma.ge უსაფრთხოდ არის მიბმული" : "მფლობელის ერთჯერადი ავტორიზაციაა საჭირო"} ready={dataAvailable && connection.connected} current={dataAvailable && review.status === "approved" && !connection.connected} />
+        <Stage index={2} label="ანგარიშის OAuth" detail={!dataAvailable ? "კავშირის მდგომარეობა დროებით მიუწვდომელია" : connection.connected ? `${connection.expectedUsername} უსაფრთხოდ არის მიბმული` : "მფლობელის ერთჯერადი ავტორიზაციაა საჭირო"} ready={dataAvailable && connection.connected} current={dataAvailable && review.status === "approved" && !connection.connected} />
         <Stage index={3} label="გამოქვეყნება" detail={publishing ? "ავტომატური gate ჩართულია" : "kill-switch გამორთულია"} ready={publishing} current={connection.connected && !publishing} />
       </div>
 
@@ -202,7 +202,7 @@ function ConnectionCard({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Gate ready={connection.identityVerified} label="@hooma.ge" />
+        <Gate ready={connection.identityVerified} label={connection.expectedUsername} />
         <Gate ready={apiNetwork} label="API ქსელი" />
         <Gate ready={publishing} label="გამოქვეყნება" />
         {connection.provider === "instagram" && dataAvailable && connection.connected && apiNetwork ? (
