@@ -1,6 +1,6 @@
 # Facebook and YouTube social automation — threat review
 
-Reviewed: 2026-08-30
+Reviewed: 2026-09-03
 
 ## Scope and isolation
 
@@ -21,9 +21,11 @@ requires an immutable app-review receipt whose exact SHA-256 is configured;
 YouTube publishing requires the corresponding immutable YouTube API audit
 receipt. Both also require the global social-publishing gate.
 
-An OAuth connection is accepted only when the provider returns the exact
-configured `@hooma.ge` Page/channel identity and the exact least-privilege scope
-set. OAuth state is single-use, stored server-side, time-bounded, and tied to an
+An OAuth connection is accepted only when the provider returns Facebook Page
+`@HoomaGeorgia` with ID `1183394631514623`, or YouTube channel `@Hoomastore`
+with ID `UCDv_CqLgtUlMUfFg7VAs4aQ`, plus the exact least-privilege scope set.
+These public identities were verified against their canonical provider pages on
+2026-09-03. OAuth state is single-use, stored server-side, time-bounded, and tied to an
 HttpOnly browser cookie; YouTube also uses S256 PKCE and offline access. Tokens
 are encrypted in the existing connection store and are never returned to the
 browser, audit log, receipt ledger, URL, or exception message.
@@ -84,8 +86,8 @@ published-content reconciliation data.
 Publishing must remain disabled until all of the following are complete:
 
 1. An authorized Hooma administrator completes Meta OAuth for the exact
-   `@hooma.ge` Facebook Page and Google OAuth for the exact Hooma YouTube
-   channel.
+   `@HoomaGeorgia` Facebook Page and Google OAuth for the exact `@Hoomastore`
+   YouTube channel.
 2. Meta grants the requested Page permissions and the approved decision is
    retained as a redacted immutable receipt with its SHA-256 configured.
 3. Google's OAuth consent/app configuration and YouTube API audit are complete;

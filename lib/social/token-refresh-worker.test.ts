@@ -39,8 +39,8 @@ function instagramClaim() {
 function youtubeClaim() {
   return {
     provider: "youtube",
-    externalAccountId: "UCabcdefghijklmnopqrstuv",
-    username: "hooma.ge",
+    externalAccountId: "UCDv_CqLgtUlMUfFg7VAs4aQ",
+    username: "hoomastore",
     scopes: [
       "https://www.googleapis.com/auth/youtube.readonly",
       "https://www.googleapis.com/auth/youtube.upload",
@@ -212,9 +212,9 @@ test("YouTube refresh keeps the offline grant and re-verifies the exact Hooma ch
       assert.equal(accessToken, "new-google-access-token");
       return {
         accountId: claim.externalAccountId,
-        username: "hooma.ge",
+        username: "hoomastore",
         title: "Hooma",
-        channelUrl: "https://www.youtube.com/@hooma.ge",
+        channelUrl: "https://www.youtube.com/@Hoomastore",
       };
     },
     complete: async (completedClaim, input) => {
@@ -230,5 +230,5 @@ test("YouTube refresh keeps the offline grant and re-verifies the exact Hooma ch
   assert.equal(completed[0]?.refreshToken, null);
   assert.deepEqual(completed[0]?.scopes, claim.scopes);
   assert.equal(completed[0]?.identity.accountId, claim.externalAccountId);
-  assert.equal(completed[0]?.identity.username, "hooma.ge");
+  assert.equal(completed[0]?.identity.username, "hoomastore");
 });

@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  FACEBOOK_CANONICAL_PAGE_USERNAME,
+  YOUTUBE_CANONICAL_CHANNEL_HANDLE,
   facebookApiNetworkEnabled,
   facebookAppReviewApproved,
   facebookInsightsEnabled,
@@ -90,7 +92,8 @@ export type ConnectionSnapshot = {
   connected: boolean;
   identityVerified: boolean;
   status: "active" | "reauth_required" | "revoked" | "not_connected";
-  username: "@hooma.ge" | null;
+  expectedUsername: "@hooma.ge" | "@HoomaGeorgia" | "@Hoomastore";
+  username: "@hooma.ge" | "@HoomaGeorgia" | "@Hoomastore" | null;
   permissionCount: number;
   tokenHealth: "healthy" | "expiring" | "expired" | "unavailable";
   accessExpiresAt: string | null;
@@ -158,6 +161,21 @@ export type SocialAutomationDashboardData = {
 };
 
 const providers: AutomationProvider[] = ["tiktok", "instagram", "facebook", "youtube"];
+const expectedIdentity: Record<AutomationProvider, {
+  normalized: string;
+  display: ConnectionSnapshot["expectedUsername"];
+}> = {
+  tiktok: { normalized: "hooma.ge", display: "@hooma.ge" },
+  instagram: { normalized: "hooma.ge", display: "@hooma.ge" },
+  facebook: {
+    normalized: FACEBOOK_CANONICAL_PAGE_USERNAME,
+    display: "@HoomaGeorgia",
+  },
+  youtube: {
+    normalized: YOUTUBE_CANONICAL_CHANNEL_HANDLE,
+    display: "@Hoomastore",
+  },
+};
 const terminalStates = new Set(["published", "failed", "cancelled", "blocked_policy", "blocked_remote_uncertain"]);
 const stagedStates = new Set(["media_staged", "claimed", "publishing", "published"]);
 
@@ -257,7 +275,8 @@ function tokenHealth(row: ConnectionRow | undefined, now: number): ConnectionSna
 }
 
 function safeConnection(provider: AutomationProvider, row: ConnectionRow | undefined, now: number): ConnectionSnapshot {
-  const identityVerified = row?.username?.replace(/^@/, "").toLowerCase() === "hooma.ge";
+  const expected = expectedIdentity[provider];
+  const identityVerified = row?.username?.replace(/^@/, "").toLowerCase() === expected.normalized;
   const health = tokenHealth(row, now);
   const status = row?.status ?? "not_connected";
   return {
@@ -265,7 +284,8 @@ function safeConnection(provider: AutomationProvider, row: ConnectionRow | undef
     connected: status === "active" && identityVerified && health !== "expired",
     identityVerified,
     status,
-    username: identityVerified ? "@hooma.ge" : null,
+    expectedUsername: expected.display,
+    username: identityVerified ? expected.display : null,
     permissionCount: Array.isArray(row?.scopes) ? row.scopes.length : 0,
     tokenHealth: health,
     accessExpiresAt: row?.access_expires_at ?? null,

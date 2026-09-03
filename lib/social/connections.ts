@@ -1,7 +1,12 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { providerConfig, type SocialProvider } from "./config";
+import {
+  FACEBOOK_CANONICAL_PAGE_USERNAME,
+  YOUTUBE_CANONICAL_CHANNEL_HANDLE,
+  providerConfig,
+  type SocialProvider,
+} from "./config";
 import {
   decryptSocialToken,
   encryptSocialToken,
@@ -77,7 +82,7 @@ export type TikTokPublishingConnection = {
 export type FacebookPublishingConnection = {
   provider: "facebook";
   externalAccountId: string;
-  username: "hooma.ge";
+  username: typeof FACEBOOK_CANONICAL_PAGE_USERNAME;
   scopes: string[];
   accessToken: string;
   accessExpiresAt: string;
@@ -87,7 +92,7 @@ export type FacebookPublishingConnection = {
 export type YouTubePublishingConnection = {
   provider: "youtube";
   externalAccountId: string;
-  username: "hooma.ge";
+  username: typeof YOUTUBE_CANONICAL_CHANNEL_HANDLE;
   scopes: string[];
   accessToken: string;
   accessExpiresAt: string;
@@ -257,6 +262,9 @@ async function loadExternalPublishingConnection<P extends "facebook" | "youtube"
   const config = provider === "facebook"
     ? providerConfig("facebook")
     : providerConfig("youtube");
+  const canonicalUsername = provider === "facebook"
+    ? FACEBOOK_CANONICAL_PAGE_USERNAME
+    : YOUTUBE_CANONICAL_CHANNEL_HANDLE;
   const scopes = Array.isArray(row.scopes)
     ? row.scopes.filter((scope): scope is string => typeof scope === "string").sort()
     : [];
@@ -266,7 +274,7 @@ async function loadExternalPublishingConnection<P extends "facebook" | "youtube"
     || !externalAccountId
     || externalAccountId !== config.expectedAccountId
     || username !== config.expectedUsername
-    || username !== "hooma.ge"
+    || username !== canonicalUsername
     || !tokenEnvelope
     || !accessExpiresAt
     || !tokenVersion
@@ -278,7 +286,7 @@ async function loadExternalPublishingConnection<P extends "facebook" | "youtube"
   return {
     provider,
     externalAccountId,
-    username: "hooma.ge",
+    username: canonicalUsername,
     scopes,
     accessToken: decryptSocialToken(
       tokenEnvelope,
